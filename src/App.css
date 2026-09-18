@@ -4114,6 +4114,17 @@ button {
   gap: 14px;
 }
 
+.library-import-row .library-import-info {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.library-import-row .library-import-info .settings-label,
+.library-import-row .library-import-info .settings-desc {
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
 .library-import-info {
   min-width: 0;
 }

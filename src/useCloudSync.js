@@ -27,6 +27,14 @@ function traduzErro(e) {
   if (/rate limit|too many/i.test(msg)) return 'Muitas tentativas. Espere um pouco.'
   if (/maximum allowed size/i.test(msg))
     return 'Arquivo grande demais para um único envio. Tente de novo — o envio agora é dividido.'
+  if (/limit exceeded|resource exhausted/i.test(msg))
+    return 'Limite de armazenamento da nuvem atingido. Considere liberar espaço ou apagar backups antigos.'
+  if (/failed to fetch|networkerror|network error|load failed|typeerror.*fetch|econnreset|timeout/i.test(msg))
+    return 'Sem conexão com a nuvem agora. Verifique o Wi‑Fi/dados móveis e tente de novo em instantes.'
+  if (/cors|origin.*not allowed|blocked by cors/i.test(msg))
+    return 'O servidor da nuvem bloqueou este aparelho. Se o problema persistir, reabra o app.'
+  if (/invalid api key|apikey|invalid.*key|anon key|project not found/i.test(msg))
+    return 'Configuração da nuvem precisa ser atualizada. Reabra o app ou nos avise.'
   return msg || 'Algo deu errado. Tente de novo.'
 }
 
