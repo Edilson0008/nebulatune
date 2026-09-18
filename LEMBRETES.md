@@ -39,7 +39,8 @@
   próprio app atualiza.
 
 ## Versões (importante)
-- Versão atual publicada: **1.3.0** (login com Google dentro do app).
+- Versão atual publicada: **1.4.0** (rodada de melhorias 2: playlists, stats,
+  tradução de letras, timer de desligar, halo, importar músicas, recentes, fila).
 - Ao lançar versão nova, manter em sincronia:
   `APP_VERSION` (`src/app-config.js`), `versionName`/`versionCode`
   (`android/app/build.gradle`). O `version.json` do site é gerado sozinho a
