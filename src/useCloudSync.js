@@ -93,25 +93,17 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
   const doPush = useCallback(async (id, force = false) => {
     if (!cloudEnabled || !id || busyRef.current) return
     const sig = signature(dataRef.current)
-    console.log(
-      '[nt-sync] doPush ' +
-        JSON.stringify({ force, busy: busyRef.current, same: sig === pushedSigRef.current }),
-    )
     if (!force && sig === pushedSigRef.current) return
     busyRef.current = true
     setStatus('syncing')
     try {
-      const t0 = Date.now()
       const backup = await buildBackup(dataRef.current)
-      console.log('[nt-sync] backup montado em ms: ' + (Date.now() - t0))
       const updatedAt = await pushBackup(id, backup)
-      console.log('[nt-sync] upload total ms: ' + (Date.now() - t0))
       pushedSigRef.current = sig
       if (updatedAt) lastRemoteRef.current = updatedAt
       setLastSync(new Date())
       setStatus('ok')
       setMessage('')
-      console.log('[nt-sync] push OK', updatedAt)
     } catch (e) {
       setStatus('error')
       setMessage(traduzErro(e))
@@ -199,27 +191,11 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
   }, [userId, loading, doPush, doPull])
 
   useEffect(() => {
-    console.log(
-      '[nt-sync] effect ' +
-        JSON.stringify({
-          user: userId ? userId.slice(0, 6) : null,
-          armed: armedRef.current,
-          applying: applyingRef.current,
-          loading,
-          same: dataSig === pushedSigRef.current,
-        }) +
-        ' DATA=' +
-        dataSig,
-    )
     if (!cloudEnabled || !userId || !armedRef.current || applyingRef.current || loading)
       return undefined
-    console.log('[nt-sync] agendar push')
     if (dataSig === pushedSigRef.current) return undefined
     const t = setTimeout(() => doPush(userId), 5000)
-    return () => {
-      console.log('[nt-sync] cancela timer')
-      clearTimeout(t)
-    }
+    return () => clearTimeout(t)
   }, [dataSig, userId, loading, doPush])
 
   useEffect(() => {

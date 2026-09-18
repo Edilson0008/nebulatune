@@ -30,3 +30,5 @@ android/app/build
 android/local.properties
 android/keystore
 public/apk
+
+.ctest/
