@@ -12,8 +12,14 @@
 ## Login e sincronização (feito)
 - Servidor: Supabase (projeto `omusoirnpyduuyeirreo`). Chaves em `src/app-config.js`
   (`SUPABASE_URL` + `SUPABASE_ANON_KEY`, anon pública).
-- Ativo: login por e-mail/senha e sincronização de tudo (biblioteca com áudio,
-  favoritos, ajustes, equalizador, sincronia de letras).
+- Ativo: login por e-mail/senha e sincronização automática nos dois sentidos.
+  Ao entrar, o app baixa tudo sozinho (biblioteca com áudio, favoritos, ajustes,
+  equalizador, sincronia de letras); qualquer mudança feita no aparelho sobe
+  sozinha em ~5s. O app também confere novidades a cada 15s e ao voltar para a
+  tela. Nada de botão manual no dia a dia (existe "Sincronizar agora" só por
+  garantia).
+- Conta de teste usada nas verificações: `bot-teste-nebulatune@example.com`
+  (senha `teste123456`). Pode apagar quando quiser; não afeta a conta do usuário.
 - Backups: bucket privado `backups`, por usuário. Cada música é enviada como
   arquivo separado (`tracks/`, `covers/`) e só o que mudou é reenviado; o
   `index.json` guarda os metadados. Isso evita o limite de arquivo de 50MB do
@@ -33,6 +39,7 @@
   próprio app atualiza.
 
 ## Versões (importante)
+- Versão atual publicada: **1.2.0** (sincronização automática + correções).
 - Ao lançar versão nova, manter em sincronia:
   `APP_VERSION` (`src/app-config.js`), `versionName`/`versionCode`
   (`android/app/build.gradle`). O `version.json` do site é gerado sozinho a
@@ -40,4 +47,5 @@
 - `versionName`/`versionCode` ainda são atualizados à mão no `build.gradle`.
 
 ## Ação recorrente
-- De tempos em tempos, lembrar o usuário dos itens pendentes (agora: login/sync).
+- De tempos em tempos, lembrar o usuário dos itens pendentes (agora: login com
+  Google e, se quiser, religar a confirmação de e-mail).
