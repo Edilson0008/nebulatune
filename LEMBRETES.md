@@ -49,3 +49,28 @@
 ## Ação recorrente
 - De tempos em tempos, lembrar o usuário dos itens pendentes (agora: login com
   Google e, se quiser, religar a confirmação de e-mail).
+
+## Rodada de melhorias 2 (feito)
+- Fundo da tela "Tocando agora" usa as cores da capa + um brilho (aura) ao redor
+  da capa.
+- Visualizador de áudio no app nativo: anéis que dançam ao redor da capa enquanto
+  toca (desligado quando pesquisa aberta).
+- Timer de desligar: 10/20/30/60 min ou "ao final desta música" (exige internet).
+  Botão no canto superior da tela "Tocando agora" e atalho na barra do player.
+- Fila: dá para arrastar músicas para reordenar (segura e solta).
+- Playlists: criar, renomear, excluir e adicionar músicas (inclusive "adicionar
+  todas"). Guardadas no aparelho e sincronizadas na conta.
+- Estatísticas de reprodução no Perfil: músicas mais ouvidas por semana/mês/ano.
+- Buscas recentes: chips dos últimos termos, apagar na hora.
+- Tradução automática da letra (PT) dentro do app; guarda traduções para não
+  repetir pedido.
+- Controles de mídia do navegador (teclas multimídia/media). Botão dormir/halos…
+- Importar músicas: pasta no PC (web) e "Importar músicas do aparelho" no app
+  (plugin Android `MediaImporter`, permissões `READ_MEDIA_AUDIO`/`READ_EXTERNAL_STORAGE`).
+- Para o app nativo, o plugin resolve 1 arquivo por chamada (base64 é pesado para
+  a ponte); o `local.properties` precisa de `sdk.dir=/opt/android-sdk` (lote local).
+
+## Pendente: repetição A-B (feature 14)
+- Ainda nÃO implementada (usuário pediu para deixar para depois).
+- Ideia: marcar ponto A (início) e ponto B (fim) de um trecho na tela "Tocando
+  agora" (botões ao lado do timer de desligar) e repetir só esse trecho em loop.

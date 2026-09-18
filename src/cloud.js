@@ -168,6 +168,7 @@ export async function pullBackup(userId) {
       settings: index.settings || null,
       equalizer: index.equalizer || null,
       lyricSync: index.lyricSync || null,
+      playlists: Array.isArray(index.playlists) ? index.playlists : null,
     }
   }
 
@@ -237,6 +238,7 @@ export async function pushBackup(userId, backup) {
     settings: backup.settings || null,
     equalizer: backup.equalizer || null,
     lyricSync: backup.lyricSync || null,
+    playlists: Array.isArray(backup.playlists) ? backup.playlists : null,
     tracks: metas,
   }
   const { error } = await storage().upload(

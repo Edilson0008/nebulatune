@@ -21,7 +21,7 @@ export function dataUrlToBlob(data) {
   return new Blob([bytes], { type: mime })
 }
 
-export async function buildBackup({ library = [], settings, equalizer, lyricSync } = {}) {
+export async function buildBackup({ library = [], settings, equalizer, lyricSync, playlists = null } = {}) {
   const items = []
   for (const t of library) {
     items.push({
@@ -33,6 +33,7 @@ export async function buildBackup({ library = [], settings, equalizer, lyricSync
       cover: t.cover,
       fav: t.fav === true,
       plays: t.plays || 0,
+      playDays: t.playDays || {},
       addedAt: t.addedAt || Date.now(),
       audioData: await blobToDataUrl(t.audioBlob),
       coverData: await blobToDataUrl(t.coverBlob),
@@ -48,6 +49,7 @@ export async function buildBackup({ library = [], settings, equalizer, lyricSync
     settings: settings || null,
     equalizer: equalizer || null,
     lyricSync: lyricSync || null,
+    playlists: Array.isArray(playlists) ? playlists : null,
   }
 }
 
@@ -75,6 +77,7 @@ export function tracksFromBackup(data, startAt = Date.now()) {
         cover: Array.isArray(t.cover) ? t.cover : null,
         fav: t.fav === true,
         plays: t.plays || 0,
+        playDays: t.playDays && typeof t.playDays === 'object' ? t.playDays : {},
         addedAt: t.addedAt || now + i,
         audioBlob,
         coverBlob,

@@ -23,6 +23,7 @@ import {
   wasUpdatePrompted,
 } from './updater'
 import { exchangeOAuthCode } from './cloud'
+import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
 
 const IS_NATIVE = !!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.())
 
@@ -35,6 +36,51 @@ function formatTime(sec) {
   const m = Math.floor(sec / 60)
   const s = Math.floor(sec % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function fmtSleep(sec) {
+  return formatTime(sec)
+}
+
+function coverPalette(track) {
+  const c = Array.isArray(track?.cover) && track.cover.length ? track.cover : null
+  return {
+    c1: (c && c[0]) || '#8b5cf6',
+    c2: (c && c[1]) || '#2a2450',
+    c3: (c && c[2]) || '#c084fc',
+  }
+}
+
+function sumPlayDays(track, fromMs, toMs) {
+  const days = track?.playDays || {}
+  let sum = 0
+  for (const [key, n] of Object.entries(days)) {
+    const ts = Date.parse(key)
+    if (!Number.isNaN(ts) && ts >= fromMs && ts <= toMs) sum += n
+  }
+  return sum
+}
+
+function playsInPeriod(track, period) {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  if (period === 'week') return sumPlayDays(track, today - 6 * 86400000, now.getTime())
+  if (period === 'month')
+    return sumPlayDays(track, new Date(now.getFullYear(), now.getMonth(), 1).getTime(), now.getTime())
+  if (period === 'year')
+    return sumPlayDays(track, new Date(now.getFullYear(), 0, 1).getTime(), now.getTime())
+  return track?.plays || 0
+}
+
+const PERIOD_LABELS = [
+  ['week', 'Semana'],
+  ['month', 'Mês'],
+  ['year', 'Ano'],
+  ['all', 'Tudo'],
+]
+
+function nf(n) {
+  return new Intl.NumberFormat('pt-BR').format(n || 0)
 }
 
 function Cover({ colors, image, size = 40, radius = 8 }) {
@@ -209,6 +255,7 @@ function BackgroundFX({ bgAnimated, cosmosAnimated }) {
 
 function Profile({ settings, api, library, onPlay }) {
   const avatarInputRef = useRef(null)
+  const [statsPeriod, setStatsPeriod] = useState('week')
 
   const displayName = settings.userName.trim() || 'Seu nome'
 
@@ -226,8 +273,10 @@ function Profile({ settings, api, library, onPlay }) {
   }
 
   const mostPlayed = library
-    .filter((t) => t.plays > 0)
-    .sort((a, b) => (b.plays || 0) - (a.plays || 0))
+    .filter((t) => playsInPeriod(t, statsPeriod) > 0)
+    .sort((a, b) => playsInPeriod(b, statsPeriod) - playsInPeriod(a, statsPeriod))
+
+  const totalPlaysPeriod = mostPlayed.reduce((acc, t) => acc + playsInPeriod(t, statsPeriod), 0)
 
   return (
     <section className="view">
@@ -304,23 +353,49 @@ function Profile({ settings, api, library, onPlay }) {
       </div>
 
       <div className="settings-card">
-        <h2 className="section-title">Músicas mais ouvidas</h2>
+        <h2 className="section-title">Estatísticas de reprodução</h2>
         <div className="settings-row">
+          <div className="stats-tabs" role="tablist" aria-label="Período das estatísticas">
+            {PERIOD_LABELS.map(([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={statsPeriod === key}
+                className={`stats-tab ${statsPeriod === key ? 'active' : ''}`}
+                onClick={() => setStatsPeriod(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="stats-summary">
+          <span>
+            <strong>{nf(totalPlaysPeriod)}</strong> reproduções {statsPeriod === 'all' ? 'no total' : `neste ${statsPeriod === 'week' ? 'período' : statsPeriod}`}
+          </span>
+        </div>
+        <div className="settings-row">
+          <h3 className="stats-list-title">
+            Mais tocadas{statsPeriod === 'all' ? '' : ` na ${PERIOD_LABELS.find(([k]) => k === statsPeriod)?.[1]?.toLowerCase()}`}
+          </h3>
           {mostPlayed.length ? (
             <div className="most-played">
-              {mostPlayed.map((t, i) => (
-                <button key={t.id} className="most-played-row" onClick={() => onPlay?.(t.id)}>
-                  <span className="most-played-num">{i + 1}</span>
-                  <Cover colors={t.cover} image={t.coverUrl} size={38} />
-                  <span className="most-played-main">
-                    <span className="track-title">{t.title}</span>
-                    <span className="track-artist">{t.artist}</span>
-                  </span>
-                  <span className="most-played-count">
-                    {t.plays} {t.plays === 1 ? 'vez' : 'vezes'}
-                  </span>
-                </button>
-              ))}
+              {mostPlayed.map((t, i) => {
+                const n = playsInPeriod(t, statsPeriod)
+                return (
+                  <button key={t.id} className="most-played-row" onClick={() => onPlay?.(t.id)}>
+                    <span className="most-played-num">{i + 1}</span>
+                    <Cover colors={t.cover} image={t.coverUrl} size={38} />
+                    <span className="most-played-main">
+                      <span className="track-title">{t.title}</span>
+                      <span className="track-artist">{t.artist}</span>
+                    </span>
+                    <span className="most-played-count">
+                      {n} {n === 1 ? 'vez' : 'vezes'}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           ) : (
             <p className="settings-desc">As músicas que você mais tocar vão aparecendo aqui.</p>
@@ -343,6 +418,7 @@ function TrackList({
   onEdit,
   onShare,
   onOpenSource,
+  onAddToPlaylist,
 }) {
   const [openMenu, setOpenMenu] = useState(null)
   const [menuPos, setMenuPos] = useState(null)
@@ -508,6 +584,21 @@ function TrackList({
                 onClick={(e) => {
                   e.stopPropagation()
                   closeMenu()
+                  onAddToPlaylist?.(t)
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 6h7M13.5 6h7.5" />
+                  <path d="M3 12h7M13.5 12h7.5" />
+                  <path d="M3 18h7M10 18h4" />
+                  <path d="M18 15v6M15 18h6" />
+                </svg>
+                Adicionar à playlist
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  closeMenu()
                   onSearchOnline?.(t)
                 }}
               >
@@ -626,7 +717,193 @@ function TrackEdit({ track, onSave, onClose }) {
   )
 }
 
-function PlayerBar({ track, playing, onToggle, onNext, onPrev, progress, elapsed, duration, onSeek, onOpen, fav = false, onToggleFavorite, onOpenQueue, isOnline = false }) {
+function NameModal({ title, initial = '', placeholder, onSave, onClose }) {
+  const [v, setV] = useState(initial)
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onClose()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const submit = (e) => {
+    e.preventDefault()
+    const n = v.trim()
+    if (!n) return
+    onSave(n)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3 className="modal-title">{title}</h3>
+        <form onSubmit={submit}>
+          <label className="modal-field">
+            <span>{placeholder || 'Nome'}</span>
+            <input value={v} onChange={(e) => setV(e.target.value)} maxLength={60} autoFocus />
+          </label>
+          <div className="modal-actions">
+            <button type="button" className="btn-ghost" onClick={onClose}>
+              Cancelar
+            </button>
+            <button type="submit" className="btn-primary" disabled={!v.trim()}>
+              Salvar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function PlaylistPicker({ playlists, track, onCreate, onAdd, onClose }) {
+  const [name, setName] = useState('')
+
+  const submit = (e) => {
+    e.preventDefault()
+    const n = name.trim()
+    if (!n || !track) return
+    const id = onCreate(n)
+    if (id) onAdd(id, track.id)
+    onClose()
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3 className="modal-title">Adicionar à playlist</h3>
+        {track && (
+          <p className="modal-text">
+            {track.title} — {track.artist}
+          </p>
+        )}
+        <form onSubmit={submit} className="playlist-new-form">
+          <label className="modal-field">
+            <span>Nova playlist</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome da nova playlist" maxLength={60} autoFocus />
+          </label>
+          <button className="btn-primary" type="submit" disabled={!name.trim()}>
+            Criar e adicionar
+          </button>
+        </form>
+        <div className="playlist-picker-list">
+          {playlists.length === 0 && (
+            <p className="modal-text">Você ainda não tem playlists.</p>
+          )}
+          {playlists.map((p) => (
+            <button key={p.id} className="playlist-picker-row" onClick={() => { onAdd(p.id, track.id); onClose() }}>
+              <span className="playlist-picker-name">{p.name}</span>
+              <span className="playlist-picker-count">{p.trackIds.length} músicas</span>
+            </button>
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button className="btn-ghost" onClick={onClose}>
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TrackPicker({ tracks, playlist, onAdd, onAddMany, onClose }) {
+  const options = (tracks || []).filter(
+    (t) => !playlist?.trackIds?.includes(t.id),
+  )
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3 className="modal-title">Adicionar música a {playlist?.name || 'playlist'}</h3>
+        {options.length > 0 && (
+          <button className="btn-ghost" onClick={() => onAddMany?.(playlist.id, options.map((t) => t.id))}>
+            Adicionar todas ({options.length})
+          </button>
+        )}
+        <div className="playlist-picker-list track-picker-list">
+          {options.length === 0 && (
+            <p className="modal-text">Todas as músicas já estão nesta playlist.</p>
+          )}
+          {options.map((t) => (
+            <button key={t.id} className="playlist-picker-row" onClick={() => onAdd(playlist.id, t.id)}>
+              <Cover colors={t.cover} image={t.coverUrl} size={36} radius={7} />
+              <span className="playlist-picker-name">{t.title}</span>
+              <span className="playlist-picker-count">{t.artist}</span>
+            </button>
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button className="btn-ghost" onClick={onClose}>
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DeviceImport({ tracks, selection, onToggle, onSelectAll, importing, onImport, onClose }) {
+  const selCount = Object.values(selection).filter(Boolean).length
+  const list = tracks || []
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal device-import-modal" onClick={(e) => e.stopPropagation()}>
+        <h3 className="modal-title">Músicas do aparelho</h3>
+        <p className="modal-text">
+          {list.length} {list.length === 1 ? 'música encontrada' : 'músicas encontradas'}. Selecione as que deseja importar.
+        </p>
+        <div className="device-import-controls">
+          <label className="device-import-all">
+            <input
+              type="checkbox"
+              checked={list.length > 0 && selCount === list.length}
+              onChange={(e) => onSelectAll(e.target.checked)}
+            />
+            Selecionar todas ({list.length})
+          </label>
+          <span className="device-import-count">{selCount} selecionadas</span>
+        </div>
+        <div className="playlist-picker-list device-import-list">
+          {list.length === 0 && (
+            <p className="modal-text">Nenhuma música encontrada no aparelho.</p>
+          )}
+          {list.map((t) => (
+            <button key={t.id} className="playlist-picker-row" onClick={() => onToggle(t.id)}>
+              <input
+                type="checkbox"
+                checked={!!selection[t.id]}
+                onChange={() => onToggle(t.id)}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <span className="playlist-picker-name">{t.title}</span>
+              <span className="playlist-picker-count">
+                {t.artist}
+                {t.duration ? ` · ${formatTime(t.duration)}` : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button className="btn-ghost" disabled={importing} onClick={onClose}>
+            Cancelar
+          </button>
+          <button className="btn-primary" disabled={importing || selCount === 0} onClick={onImport}>
+            {importing ? 'Importando…' : `Importar${selCount ? ` ${selCount}` : ''} música${selCount !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PlayerBar({ track, playing, onToggle, onNext, onPrev, progress, elapsed, duration, onSeek, onOpen, fav = false, onToggleFavorite, onOpenQueue, isOnline = false, sleepMode = null, sleepRemaining = null, onCancelSleep }) {
   const pct = Math.round((progress || 0) * 100)
   const barRef = useRef(null)
   const draggingRef = useRef(false)
@@ -727,6 +1004,23 @@ function PlayerBar({ track, playing, onToggle, onNext, onPrev, progress, elapsed
       </div>
 
       <div className="player-right">
+        {sleepMode && onCancelSleep && (
+          <button
+            className="icon-btn np-sleep-mini"
+            aria-label="Tirar o timer de desligar"
+            title={`Timer de desligar ativo${sleepMode === 'end' ? '' : ` (${fmtSleep(sleepRemaining)})`} — toque para cancelar`}
+            onClick={onCancelSleep}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M19.6 16.7A8.5 8.5 0 0 0 7.3 4.4a7 7 0 1 1-1.7 13.7l1.2-.9a5.4 5.4 0 1 0 1.5-8.3 8.5 8.5 0 0 0 11.3 7.8z" />
+              <path d="M12 7v5l3 2" />
+              <path d="M12.3 3.2 13 1.5M9.4 4 8 2.9" />
+            </svg>
+            {sleepMode !== 'end' && sleepRemaining != null && (
+              <span className="np-sleep-mini-time">{fmtSleep(sleepRemaining)}</span>
+            )}
+          </button>
+        )}
         <button className="icon-btn" aria-label="Fila" title="Fila" onClick={onOpenQueue} hidden={isOnline}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 6h13M8 12h13M8 18h13" /><path d="M3 6h.01M3 12h.01M3 18h.01" /></svg>
         </button>
@@ -769,6 +1063,10 @@ function NowPlaying({
   depth = '',
   onSetDepth,
   isOnline = false,
+  sleepMode = null,
+  sleepRemaining = null,
+  onStartSleep,
+  onCancelSleep,
 }) {
   const barRef = useRef(null)
   const draggingRef = useRef(false)
@@ -776,6 +1074,7 @@ function NowPlaying({
   const depthMenuRef = useRef(null)
   const menuRef = useRef(null)
   const lyricsRef = useRef(null)
+  const sleepMenuRef = useRef(null)
   const [dragRatio, setDragRatio] = useState(null)
   const [showEq, setShowEq] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -784,6 +1083,8 @@ function NowPlaying({
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
+  const [sleepOpen, setSleepOpen] = useState(false)
+  const palette = coverPalette(track)
 
   const runSearch = (q) => {
     setSearching(true)
@@ -808,6 +1109,7 @@ function NowPlaying({
 
   const lines = lyrics?.status === 'done' ? lyrics.lines : []
   const synced = !!lyrics?.synced
+  const lyricTrans = useLyricsTranslation(lines)
   const lyricTime = elapsed - syncOffset
   let activeIndex = -1
   if (synced && lines.length) {
@@ -826,6 +1128,7 @@ function NowPlaying({
     const onKey = (e) => {
       if (e.key === 'Escape') {
         if (searchOpen) setSearchOpen(false)
+        else if (sleepOpen && !isOnline) setSleepOpen(false)
         else if (menuOpen) setMenuOpen(false)
         else if (showEq) setShowEq(false)
         else if (depthOpen) setDepthOpen(false)
@@ -848,7 +1151,7 @@ function NowPlaying({
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = prevOverflow
     }
-  }, [onClose, onToggle, onNext, onPrev, searchOpen, menuOpen, showEq, depthOpen])
+  }, [onClose, onToggle, onNext, onPrev, searchOpen, menuOpen, showEq, depthOpen, sleepOpen, isOnline])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -871,6 +1174,15 @@ function NowPlaying({
     document.addEventListener('pointerdown', onDown)
     return () => document.removeEventListener('pointerdown', onDown)
   }, [depthOpen])
+
+  useEffect(() => {
+    if (!sleepOpen) return
+    const onDown = (e) => {
+      if (sleepMenuRef.current && !sleepMenuRef.current.contains(e.target)) setSleepOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [sleepOpen])
 
   const pickDepth = (v) => {
     onSetDepth?.(v)
@@ -907,7 +1219,10 @@ function NowPlaying({
   const shownTime = dragRatio !== null ? dragRatio * (duration || 0) : elapsed
 
   return (
-    <div className={`now-playing ${searchOpen ? 'searching' : ''}`}>
+    <div
+      className={`now-playing ${searchOpen ? 'searching' : ''}`}
+      style={{ '--npc1': palette.c1, '--npc2': palette.c2, '--npc3': palette.c3 }}
+    >
       <div className="np-top">
         <button className="np-close" onClick={onClose} aria-label="Fechar">
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -934,6 +1249,66 @@ function NowPlaying({
               </svg>
             )}
           </button>
+          {!isOnline && (
+            <div className={`np-sleep-wrap ${sleepOpen ? 'open' : ''}`} ref={sleepMenuRef}>
+              <button
+                className={`np-close np-sleep-btn ${sleepMode ? 'on' : ''}`}
+                onClick={() => setSleepOpen((v) => !v)}
+                aria-label="Timer de desligar"
+                aria-expanded={sleepOpen}
+                title="Timer de desligar"
+              >
+                {sleepMode ? (
+                  <span className="np-sleep-pill">
+                    {sleepMode === 'end' ? 'fim' : fmtSleep(sleepRemaining)}
+                  </span>
+                ) : (
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                    <path d="M19.6 16.7A8.5 8.5 0 0 0 7.3 4.4a7 7 0 1 1-1.7 13.7l1.2-.9a5.4 5.4 0 1 0 1.5-8.3 8.5 8.5 0 0 0 11.3 7.8z" />
+                    <path d="M12 7v5l3 2" />
+                    <path d="M12.3 3.2 13 1.5M9.4 4 8 2.9" />
+                  </svg>
+                )}
+              </button>
+              {sleepOpen && (
+                <div className="np-sleep-menu" role="menu">
+                  <span className="np-sleep-title">Parar depois de</span>
+                  {[10, 20, 30, 60].map((m) => (
+                    <button
+                      key={m}
+                      className={`np-sleep-opt ${sleepMode === String(m) ? 'active' : ''}`}
+                      onClick={() => {
+                        onStartSleep?.(m)
+                        setSleepOpen(false)
+                      }}
+                    >
+                      {m} minutos
+                    </button>
+                  ))}
+                  <button
+                    className={`np-sleep-opt ${sleepMode === 'end' ? 'active' : ''}`}
+                    onClick={() => {
+                      onStartSleep?.('end')
+                      setSleepOpen(false)
+                    }}
+                  >
+                    Final desta música
+                  </button>
+                  {sleepMode && (
+                    <button
+                      className="np-sleep-opt np-sleep-cancel"
+                      onClick={() => {
+                        onCancelSleep?.()
+                        setSleepOpen(false)
+                      }}
+                    >
+                      Cancelar timer
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {!isOnline && (
             <div className="np-menu-wrap" ref={menuRef}>
             <button
@@ -1016,6 +1391,8 @@ function NowPlaying({
 
       <div className="np-main">
         <div className="np-cover">
+          <span className="np-aura" aria-hidden="true" />
+          <AudioHalo active={playing} />
           <Cover colors={track.cover} image={track.coverUrl} size="min(56vw, 260px)" radius={22} />
         </div>
 
@@ -1254,25 +1631,57 @@ function NowPlaying({
             )}
 
             {lyrics?.status === 'done' && lines.length > 0 && (
-              <div className="np-lyrics-lines">
-                {lines.map((line, i) => {
-                  const seekable = synced && line.time != null
-                  return (
-                    <p
-                      key={i}
-                      ref={i === activeIndex ? activeRef : null}
-                      className={`np-lyric ${i === activeIndex ? 'active' : ''} ${seekable ? 'seekable' : ''}`}
-                      onClick={
-                        seekable
-                          ? () => onSeek(Math.min(0.999, line.time / (duration || 1)))
-                          : undefined
-                      }
-                    >
-                      {line.text || '\u00A0'}
-                    </p>
-                  )
-                })}
-              </div>
+              <>
+                <div className="np-lyrics-bar">
+                  <button
+                    className={`np-tr-btn ${lyricTrans.enabled ? 'on' : ''}`}
+                    onClick={() => lyricTrans.setEnabled((v) => !v)}
+                    title={
+                      lyricTrans.enabled
+                        ? 'Desativar tradução para o português'
+                        : 'Traduzir a letra para o português'
+                    }
+                  >
+                    {lyricTrans.enabled ? (
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3.5 6h5M6 4v2m-2.5 9c1.2-2 3.4-2.5 5-1.7m-2.5 5.5c1-2.2 3.2-3.4 6-3.7" />
+                        <path d="m10 5 4 14M10.8 12h3M18 5c.7 1.4 1.8 2 3 2.2m-3 0c.8 1 2 1.5 3 1.6" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3.5 6h5M6 4v2m-2.5 9c1.2-2 3.4-2.5 5-1.7m-2.5 5.5c1-2.2 3.2-3.4 6-3.7" />
+                        <path d="m10 5 4 14M10.8 12h3M18 5c.7 1.4 1.8 2 3 2.2m-3 0c.8 1 2 1.5 3 1.6" />
+                      </svg>
+                    )}
+                    {lyricTrans.enabled ? 'Mostrar original' : 'Traduzir letra'}
+                  </button>
+                  {lyricTrans.pending > 0 && (
+                    <span className="np-tr-status">Traduzindo… ({lyricTrans.pending})</span>
+                  )}
+                </div>
+                <div className="np-lyrics-lines">
+                  {lines.map((line, i) => {
+                    const seekable = synced && line.time != null
+                    return (
+                      <p
+                        key={i}
+                        ref={i === activeIndex ? activeRef : null}
+                        className={`np-lyric ${i === activeIndex ? 'active' : ''} ${seekable ? 'seekable' : ''}`}
+                        onClick={
+                          seekable
+                            ? () => onSeek(Math.min(0.999, line.time / (duration || 1)))
+                            : undefined
+                        }
+                      >
+                        <span className="np-lyric-main">{line.text || '\u00A0'}</span>
+                        {lyricTrans.enabled && lyricTrans.map[line.text] && (
+                          <span className="np-lyric-tr">{lyricTrans.map[line.text]}</span>
+                        )}
+                      </p>
+                    )
+                  })}
+                </div>
+              </>
             )}
           </>
         )}
@@ -1320,7 +1729,22 @@ function useMediaSession({ track, playing, elapsed, duration, speed, onToggle, o
       previoustrack: () => actionsRef.current.onPrev(),
       nexttrack: () => actionsRef.current.onNext(),
       seekto: (d) => {
-        if (d && typeof d.seekTime === 'number') actionsRef.current.onSeek(d.seekTime)
+        const dur = stateRef.current.duration
+        if (d && typeof d.seekTime === 'number' && dur > 0) {
+          actionsRef.current.onSeek(Math.min(d.seekTime, dur) / dur)
+        }
+      },
+      seekforward: (d) => {
+        const st = stateRef.current
+        const off = (d && d.seekOffset) || 10
+        const dur = st.duration || 0
+        if (dur > 0) actionsRef.current.onSeek(Math.min(st.elapsed + off, dur) / dur)
+      },
+      seekbackward: (d) => {
+        const st = stateRef.current
+        const off = (d && d.seekOffset) || 10
+        const dur = st.duration || 0
+        if (dur > 0) actionsRef.current.onSeek(Math.max(st.elapsed - off, 0) / dur)
       },
     }
     Object.keys(handlers).forEach((a) => {
@@ -1510,6 +1934,22 @@ function usePlayer(library, speed = 1, onStart) {
     setQueue([])
   }, [])
 
+  const reorderQueue = useCallback((from, to) => {
+    const cur = [...queueRef.current]
+    if (
+      from < 0 ||
+      to < 0 ||
+      from >= cur.length ||
+      to >= cur.length ||
+      from === to
+    )
+      return
+    const [item] = cur.splice(from, 1)
+    cur.splice(to, 0, item)
+    queueRef.current = cur
+    setQueue(cur)
+  }, [])
+
   const playQueueItem = useCallback(
     (id) => {
       const idx = libRef.current.findIndex((t) => t.id === id)
@@ -1665,6 +2105,7 @@ const progress = duration ? elapsed / duration : 0
     removeFromQueue,
     moveInQueue,
     clearQueue,
+    reorderQueue,
     playQueueItem,
     queueAdd,
     queueNext,
@@ -2094,6 +2535,7 @@ function toRecord(track) {
     addedAt: track.addedAt || Date.now(),
     fav: track.fav === true,
     plays: track.plays || 0,
+    playDays: track.playDays || {},
   }
 }
 
@@ -2107,6 +2549,7 @@ function recordKey(track) {
     track.coverBlob ? `${track.coverBlob.size}:${track.coverBlob.type}` : '',
     track.fav === true ? 1 : 0,
     track.plays || 0,
+    JSON.stringify(track.playDays || {}),
   ])
 }
 
@@ -2155,6 +2598,166 @@ function VSlider({ value, onChange, min = -12, max = 12, step = 1, label, suffix
       {suffix && <span className="vslider-sub">{suffix}</span>}
     </div>
   )
+}
+
+function AudioHalo({ active }) {
+  const ref = useRef(null)
+  const activeRef = useRef(active)
+
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
+
+  useEffect(() => {
+    const canvas = ref.current
+    if (!canvas) return undefined
+    let c2d
+    try {
+      c2d = canvas.getContext('2d')
+    } catch {
+      return undefined
+    }
+    if (!c2d) return undefined
+    graph.getContext()
+    const analyser = graph.getAnalyser()
+    const data = new Uint8Array(analyser ? analyser.frequencyBinCount : 64)
+    let raf = 0
+
+    const draw = () => {
+      const rect = canvas.getBoundingClientRect()
+      const dpr = window.devicePixelRatio || 1
+      const w = Math.max(1, Math.round(rect.width * dpr))
+      const h = Math.max(1, Math.round(rect.height * dpr))
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w
+        canvas.height = h
+      }
+      c2d.clearRect(0, 0, w, h)
+      if (analyser && activeRef.current) analyser.getByteFrequencyData(data)
+      else data.fill(0)
+
+      const cx = w / 2
+      const cy = h / 2
+      const bars = 56
+      const inner = Math.min(w, h) * 0.34
+      const spread = Math.min(w, h) * 0.17
+      for (let i = 0; i < bars; i += 1) {
+        const ang = (i / bars) * Math.PI * 2 - Math.PI / 2
+        const level = data[Math.floor((i / bars) * 64)] / 255 || 0
+        const len = spread * (0.08 + level * 0.92)
+        const x0 = cx + Math.cos(ang) * inner
+        const y0 = cy + Math.sin(ang) * inner
+        const x1 = cx + Math.cos(ang) * (inner + len)
+        const y1 = cy + Math.sin(ang) * (inner + len)
+        const a = Math.max(0.06, Math.min(0.5, 0.14 + level * 0.5))
+        c2d.strokeStyle = `rgba(255,255,255,${a.toFixed(3)})`
+        c2d.lineWidth = Math.max(1.2, 2.4 * dpr * (0.6 + level * 0.6))
+        c2d.lineCap = 'round'
+        c2d.beginPath()
+        c2d.moveTo(x0, y0)
+        c2d.lineTo(x1, y1)
+        c2d.stroke()
+      }
+      raf = requestAnimationFrame(draw)
+    }
+    raf = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  return <canvas ref={ref} className="np-halo" aria-hidden="true" />
+}
+
+const TRANS_KEY = 'nt.trans'
+let transCache = null
+
+function transCacheLoad() {
+  if (transCache) return transCache
+  try {
+    transCache = JSON.parse(localStorage.getItem(TRANS_KEY)) || {}
+  } catch {
+    transCache = {}
+  }
+  return transCache
+}
+
+function transCacheSave() {
+  try {
+    const entries = Object.entries(transCache || {})
+    if (entries.length > 600) {
+      transCache = Object.fromEntries(entries.slice(entries.length - 600))
+    }
+    localStorage.setItem(TRANS_KEY, JSON.stringify(transCache))
+  } catch {}
+}
+
+async function translateLine(text) {
+  const t = (text || '').trim()
+  if (!t) return ''
+  const cache = transCacheLoad()
+  if (cache[t]) return cache[t]
+  try {
+    const res = await fetch(
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(t.slice(0, 480))}&langpair=autodetect|pt`,
+    )
+    if (!res.ok) return ''
+    const data = await res.json()
+    const out = data?.responseData?.translatedText || ''
+    if (!out || /MYMEMORY WARNING/i.test(out)) return ''
+    cache[t] = out
+    transCacheSave()
+    return out
+  } catch {
+    return ''
+  }
+}
+
+function useLyricsTranslation(lines) {
+  const [enabled, setEnabled] = useState(false)
+  const [map, setMap] = useState({})
+  const [pending, setPending] = useState(0)
+  const tokenRef = useRef(0)
+
+  useEffect(() => {
+    if (!enabled) return undefined
+    const myToken = tokenRef.current + 1
+    tokenRef.current = myToken
+    const unique = []
+    const seen = new Set()
+    ;(lines || []).forEach((l) => {
+      const t = (l.text || '').trim()
+      if (t && !seen.has(t)) {
+        seen.add(t)
+        unique.push(t)
+      }
+    })
+    const cache = transCacheLoad()
+    const seeded = {}
+    const missing = []
+    unique.forEach((t) => {
+      if (cache[t]) seeded[t] = cache[t]
+      else missing.push(t)
+    })
+    setMap(seeded)
+    setPending(missing.length)
+    if (!missing.length) return undefined
+    const queue = [...missing]
+    const _workers = Array.from({ length: Math.min(3, Math.max(1, queue.length)) }, async () => {
+      while (queue.length) {
+        if (tokenRef.current !== myToken) return
+        const cur = queue.shift()
+        const tr = await translateLine(cur)
+        if (tokenRef.current !== myToken) return
+        if (tr) setMap((m) => ({ ...m, [cur]: tr }))
+        setPending((p) => Math.max(0, p - 1))
+      }
+    })
+    return () => {
+      tokenRef.current += 1
+      setPending(0)
+    }
+  }, [enabled, lines])
+
+  return { enabled, setEnabled, map, pending }
 }
 
 function Visualizer() {
@@ -2295,7 +2898,10 @@ function Equalizer({ eq }) {
   )
 }
 
-function QueueSheet({ track, progress, elapsed, duration, queue, onPlayItem, onRemoveItem, onMoveItem, onClear, onClose }) {
+function QueueSheet({ track, progress, elapsed, duration, queue, onPlayItem, onRemoveItem, onMoveItem, onClear, onReorder, onClose }) {
+  const [dragFrom, setDragFrom] = useState(null)
+  const [dragOverIdx, setDragOverIdx] = useState(null)
+
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') onClose()
@@ -2308,6 +2914,33 @@ function QueueSheet({ track, progress, elapsed, duration, queue, onPlayItem, onR
       document.body.style.overflow = prevOverflow
     }
   }, [onClose])
+
+  const onRowDragStart = (e, i) => {
+    setDragFrom(i)
+    setDragOverIdx(i)
+    e.dataTransfer.effectAllowed = 'move'
+    try {
+      e.dataTransfer.setData('text/plain', String(i))
+    } catch {}
+  }
+
+  const onRowDragOver = (e, i) => {
+    e.preventDefault()
+    if (dragFrom === null || dragFrom === i) return
+    setDragOverIdx(i)
+  }
+
+  const onRowDrop = (e, i) => {
+    e.preventDefault()
+    if (dragFrom !== null) onReorder?.(dragFrom, i)
+    setDragFrom(null)
+    setDragOverIdx(null)
+  }
+
+  const onDragEnd = () => {
+    setDragFrom(null)
+    setDragOverIdx(null)
+  }
 
   return (
     <div className="queue-sheet">
@@ -2354,7 +2987,15 @@ function QueueSheet({ track, progress, elapsed, duration, queue, onPlayItem, onR
         ) : (
           <div className="queue-list">
             {queue.map((t, i) => (
-              <div className="queue-row" key={t.id}>
+              <div
+                className={`queue-row ${dragFrom === i ? 'dragging' : ''} ${dragOverIdx === i && dragFrom !== null && dragFrom !== i ? 'drag-over' : ''}`}
+                key={t.id}
+                draggable
+                onDragStart={(e) => onRowDragStart(e, i)}
+                onDragOver={(e) => onRowDragOver(e, i)}
+                onDrop={(e) => onRowDrop(e, i)}
+                onDragEnd={onDragEnd}
+              >
                 <button className="queue-row-main" onClick={() => onPlayItem(t.id)}>
                   <span className="queue-num">{i + 1}</span>
                   <Cover colors={t.cover} image={t.coverUrl} size={40} radius={8} />
@@ -2779,7 +3420,7 @@ function ApkDownloadButton() {
   )
 }
 
-function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, cloud, cloudRedirect }) {
+function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onImportFolder, onImportDevice, cloud, cloudRedirect }) {
   const [storage, setStorage] = useState(null)
   const [exported, setExported] = useState(false)
   const [imported, setImported] = useState(false)
@@ -3254,6 +3895,32 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
         )}
         <div className="settings-row">
           <div className="settings-info">
+            <span className="settings-label">Importar uma pasta</span>
+            <span className="settings-desc">
+              Escolhe uma pasta inteira com músicas e adiciona tudo de uma vez.
+            </span>
+          </div>
+          <div className="settings-actions">
+            <button className="btn-ghost" onClick={onImportFolder} hidden={isNative}>
+              Escolher pasta
+            </button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-info">
+            <span className="settings-label">Importar músicas do aparelho</span>
+            <span className="settings-desc">
+              Lê as músicas baixadas no telefone (arquivos MP3 e afins).
+            </span>
+          </div>
+          <div className="settings-actions">
+            <button className="btn-ghost" onClick={onImportDevice} hidden={!isNative}>
+              Importar
+            </button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-info">
             <span className="settings-label">Compartilhar o app</span>
             <span className="settings-desc">Envia o NebulaTune (arquivo APK) para outra pessoa instalar.</span>
           </div>
@@ -3298,6 +3965,7 @@ function App() {
   const { settings: appSettings, api: settingsApi } = useSettings()
   const dragCounter = useRef(0)
   const fileInputRef = useRef(null)
+  const folderInputRef = useRef(null)
   const persistedRef = useRef(new Map())
   const replacingRef = useRef(false)
   const libraryRef = useRef(library)
@@ -3428,13 +4096,198 @@ function App() {
     })
   }, [library, loadingLib])
 
+  const todayKey = () => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
   const countPlay = useCallback((i) => {
+    const key = todayKey()
     setLibrary((prev) => {
       const t = prev[i]
       if (!t) return prev
-      return prev.map((x) => (x.id === t.id ? { ...x, plays: (x.plays || 0) + 1 } : x))
+      const days = t.playDays || {}
+      return prev.map((x) =>
+        x.id === t.id
+          ? { ...x, plays: (x.plays || 0) + 1, playDays: { ...days, [key]: (days[key] || 0) + 1 } }
+          : x,
+      )
     })
   }, [])
+
+  const [playlists, setPlaylists] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('nt.playlists') || '[]')
+      return Array.isArray(raw) ? raw : []
+    } catch {
+      return []
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('nt.playlists', JSON.stringify(playlists))
+    } catch {}
+  }, [playlists])
+
+  const [activePlaylist, setActivePlaylist] = useState(null)
+  const [playlistPickerTrack, setPlaylistPickerTrack] = useState(null)
+  const [createPlaylistOpen, setCreatePlaylistOpen] = useState(false)
+  const [renamePlaylistOpen, setRenamePlaylistOpen] = useState(false)
+  const [trackPickerPlaylist, setTrackPickerPlaylist] = useState(null)
+
+  const createPlaylist = useCallback((name) => {
+    const n = (name || '').trim()
+    if (!n) return null
+    const pl = {
+      id: `pl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: n.slice(0, 60),
+      trackIds: [],
+      createdAt: Date.now(),
+    }
+    setPlaylists((prev) => [...prev, pl])
+    return pl.id
+  }, [])
+
+  const renamePlaylist = useCallback(
+    (id, name) => {
+      const n = (name || '').trim().slice(0, 60)
+      if (!n) return
+      setPlaylists((prev) => prev.map((p) => (p.id === id ? { ...p, name: n } : p)))
+    },
+    [],
+  )
+
+  const removePlaylist = useCallback(
+    (id) => {
+      setPlaylists((prev) => prev.filter((p) => p.id !== id))
+      if (activePlaylist === id) setActivePlaylist(null)
+    },
+    [activePlaylist],
+  )
+
+  const addToPlaylist = useCallback((playlistId, trackId) => {
+    setPlaylists((prev) =>
+      prev.map((p) => {
+        if (p.id !== playlistId) return p
+        if (p.trackIds.includes(trackId)) return p
+        return { ...p, trackIds: [...p.trackIds, trackId] }
+      }),
+    )
+  }, [])
+
+  const addTracksToPlaylist = useCallback(
+    (playlistId, ids) => {
+      setPlaylists((prev) =>
+        prev.map((p) => {
+          if (p.id !== playlistId) return p
+          const set = new Set(p.trackIds)
+          ids.forEach((id) => set.add(id))
+          return { ...p, trackIds: [...set] }
+        }),
+      )
+    },
+    [],
+  )
+
+  const removeFromPlaylist = useCallback((playlistId, trackId) => {
+    setPlaylists((prev) =>
+      prev.map((p) =>
+        p.id === playlistId ? { ...p, trackIds: p.trackIds.filter((x) => x !== trackId) } : p,
+      ),
+    )
+  }, [])
+
+  const [recentSearches, setRecentSearches] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('nt.recent')) || []
+    } catch {
+      return []
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('nt.recent', JSON.stringify(recentSearches.slice(0, 8)))
+    } catch {}
+  }, [recentSearches])
+
+  const addRecentSearch = useCallback((q) => {
+    const term = (q || '').trim().toLowerCase()
+    if (!term) return
+    setRecentSearches((prev) => [term, ...prev.filter((x) => x !== term)].slice(0, 8))
+  }, [])
+
+  const clearRecentSearches = useCallback(() => setRecentSearches([]), [])
+
+  const [sleepMode, setSleepMode] = useState(null)
+  const [sleepEndsAt, setSleepEndsAt] = useState(null)
+  const [sleepRemaining, setSleepRemaining] = useState(null)
+  const sleepTrackRef = useRef(null)
+  const liveRef = useRef({ playing, onlineActive, displayElapsed, displayDuration })
+
+  useEffect(() => {
+    liveRef.current = { playing, onlineActive, displayElapsed, displayDuration }
+  })
+
+  const stopSleepTimer = useCallback(() => {
+    setSleepMode(null)
+    setSleepEndsAt(null)
+    setSleepRemaining(null)
+    sleepTrackRef.current = null
+    const live = liveRef.current
+    if (live.playing) pausePlayback()
+    if (live.onlineActive) stopOnline()
+    showToast('⏰ Hora de descansar!')
+  }, [pausePlayback, stopOnline, showToast])
+
+  const startSleep = useCallback(
+    (minutes) => {
+      setSleepMode(String(minutes))
+      if (minutes === 'end') {
+        sleepTrackRef.current = displayTrackRef.current?.id || null
+        setSleepEndsAt(null)
+        setSleepRemaining(null)
+        showToast('Vou parar no fim desta música')
+        return
+      }
+      setSleepEndsAt(Date.now() + Number(minutes) * 60000)
+      setSleepRemaining(Number(minutes) * 60)
+      showToast(`Timer de desligar: ${minutes} min`)
+    },
+    [showToast],
+  )
+
+  useEffect(() => {
+    if (!sleepEndsAt) return undefined
+    const id = setInterval(() => {
+      const rem = Math.max(0, Math.ceil((sleepEndsAt - Date.now()) / 1000))
+      setSleepRemaining(rem)
+      if (rem <= 0) stopSleepTimer()
+    }, 1000)
+    return () => clearInterval(id)
+  }, [sleepEndsAt, stopSleepTimer])
+
+  useEffect(() => {
+    if (sleepMode !== 'end') return undefined
+    const id = setInterval(() => {
+      const currentId = displayTrackRef.current?.id || null
+      if (!sleepTrackRef.current || sleepTrackRef.current !== currentId) {
+        sleepTrackRef.current = currentId
+        return
+      }
+      const live = liveRef.current
+      if (live.displayDuration > 0 && live.displayElapsed >= live.displayDuration - 0.6) {
+        stopSleepTimer()
+      }
+    }, 500)
+    return () => clearInterval(id)
+  }, [sleepMode, stopSleepTimer])
+
+  const [deviceMusic, setDeviceMusic] = useState(null)
+  const [deviceImportOpen, setDeviceImportOpen] = useState(false)
+  const [deviceImporting, setDeviceImporting] = useState(false)
+  const [deviceSelection, setDeviceSelection] = useState({})
 
   const {
     currentIndex,
@@ -3457,6 +4310,7 @@ function App() {
     removeFromQueue,
     moveInQueue,
     clearQueue,
+    reorderQueue,
     playQueueItem,
     queueAdd,
     queueNext,
@@ -3611,6 +4465,13 @@ function App() {
           /* armazenamento indisponível */
         }
       }
+      if (Array.isArray(data.playlists)) {
+        setPlaylists(
+          data.playlists
+            .filter((p) => p && p.id && p.name)
+            .map((p) => ({ ...p, trackIds: Array.isArray(p.trackIds) ? p.trackIds : [] })),
+        )
+      }
     },
     [eq, settingsApi],
   )
@@ -3620,6 +4481,7 @@ function App() {
     settings: appSettings,
     equalizer: eq.settings,
     lyricSync: syncOffsets,
+    playlists,
     loading: loadingLib,
     applyRemote: applyCloudBackup,
   })
@@ -3639,6 +4501,7 @@ function App() {
       if (!t) return
       stopAndReset()
       setLibrary((prev) => prev.filter((x) => x.id !== id))
+      setPlaylists((prev) => prev.map((p) => ({ ...p, trackIds: p.trackIds.filter((x) => x !== id) })))
       persistedRef.current.delete(id)
       if (t.src) URL.revokeObjectURL(t.src)
       if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl)
@@ -4001,6 +4864,83 @@ function App() {
     [fetchCovers],
   )
 
+  const openDeviceImport = useCallback(async () => {
+    setDeviceImportOpen(true)
+    const res = await scanDeviceTracks()
+    if (!res.available) {
+      setDeviceImportOpen(false)
+      showToast(res.error || 'Não foi possível ler as músicas do aparelho')
+      return
+    }
+    setDeviceMusic(res.tracks || [])
+    setDeviceSelection({})
+  }, [showToast])
+
+  const importDeviceTracks = useCallback(async () => {
+    const selected = (deviceMusic || []).filter((t) => deviceSelection[t.id])
+    if (!selected.length) return
+    setDeviceImporting(true)
+    const batch = Date.now()
+    const added = []
+    try {
+      for (let i = 0; i < selected.length; i += 1) {
+        const dm = selected[i]
+        try {
+          const res = await importDeviceTrack(dm)
+          if (!res?.base64) continue
+          const blob = dataUrlToBlob(`data:${res.mime};base64,${res.base64}`)
+          if (!blob) continue
+          const fallback = {
+            id: `dev-${batch}-${i}`,
+            title: dm.title || parseFileName(dm.title || 'Desconhecida').title,
+            artist: dm.artist || 'Desconhecido',
+            album: dm.album || 'Aparelho',
+            duration: dm.duration || 0,
+            cover: COVERS[Math.floor(Math.random() * COVERS.length)],
+            audioBlob: blob,
+            coverBlob: null,
+            coverRemote: null,
+            coverUrl: null,
+            src: URL.createObjectURL(blob),
+            addedAt: batch + i,
+          }
+          added.push(fallback)
+          setLibrary((prev) => [...prev, fallback])
+          await putTrack(toRecord(fallback)).catch(() => setStorageError(true))
+        } catch {
+          /* arquivo não lido: segue para o próximo */
+        }
+      }
+      if (added.length) {
+        setView('biblioteca')
+        showToast(`${added.length} ${added.length === 1 ? 'música importada' : 'músicas importadas'}!`)
+      }
+    } finally {
+      setDeviceImporting(false)
+      setDeviceImportOpen(false)
+      setDeviceMusic(null)
+      setDeviceSelection({})
+    }
+  }, [deviceMusic, deviceSelection, showToast])
+
+  const toggleDeviceTrack = useCallback(
+    (id) => {
+      setDeviceSelection((prev) => ({ ...prev, [id]: !prev[id] }))
+    },
+    [],
+  )
+
+  const selectAllDevice = useCallback(
+    (value) => {
+      const next = {}
+      ;(deviceMusic || []).forEach((t) => {
+        next[t.id] = value
+      })
+      setDeviceSelection(next)
+    },
+    [deviceMusic],
+  )
+
   const onDrop = (e) => {
     e.preventDefault()
     dragCounter.current = 0
@@ -4044,6 +4984,21 @@ function App() {
           e.target.value = ''
         }}
       />
+
+      {!IS_NATIVE && (
+        <input
+          ref={folderInputRef}
+          type="file"
+          multiple
+          hidden
+          webkitdirectory=""
+          directory=""
+          onChange={(e) => {
+            addFiles(e.target.files)
+            e.target.value = ''
+          }}
+        />
+      )}
 
       <main className="main">
         <header className={`topbar ${IS_NATIVE ? 'app-topbar' : ''}`}>
@@ -4089,6 +5044,9 @@ function App() {
                   onChange={(e) => {
                     setQuery(e.target.value)
                     if (e.target.value) setView('buscar')
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.target.value.trim()) addRecentSearch(e.target.value)
                   }}
                 />
               </div>
@@ -4181,7 +5139,7 @@ function App() {
 
                 <div className="section">
                   <h2 className="section-title">Todas as músicas</h2>
-<TrackList tracks={library} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onOpenSource={openExternal} />
+<TrackList tracks={library} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onOpenSource={openExternal} onAddToPlaylist={setPlaylistPickerTrack} />
                 </div>
               </>
             )}
@@ -4203,52 +5161,198 @@ function App() {
                     setQuery(e.target.value)
                     if (e.target.value) setView('buscar')
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.target.value.trim()) addRecentSearch(e.target.value)
+                  }}
                 />
               </div>
             )}
             <h1 className="greeting">{query ? 'Resultados' : 'Buscar'}</h1>
+            {!query && recentSearches.length > 0 && (
+              <div className="recent-searches">
+                <div className="recent-header">
+                  <h2 className="section-title">Busca recente</h2>
+                  <button className="recent-clear" onClick={clearRecentSearches}>
+                    Limpar
+                  </button>
+                </div>
+                <div className="recent-chips">
+                  {recentSearches.map((term) => (
+                    <button
+                      key={term}
+                      className="recent-chip"
+                      onClick={() => {
+                        addRecentSearch(term)
+                        setQuery(term)
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="m21 21-4.3-4.3" />
+                        <circle cx="11" cy="11" r="7" />
+                      </svg>
+                      {term}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {results.length ? (
-              <TrackList tracks={results} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onOpenSource={openExternal} />
+              <TrackList tracks={results} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onOpenSource={openExternal} onAddToPlaylist={setPlaylistPickerTrack} />
             ) : (
-              <p className="empty">Digite algo no campo de busca acima para encontrar músicas, artistas ou álbuns.</p>
+              query ? (
+                <p className="empty">Nenhuma música encontrada para “{query}”.</p>
+              ) : (
+                <p className="empty">Digite algo no campo de busca acima para encontrar músicas, artistas ou álbuns.</p>
+              )
             )}
           </section>
         )}
 
         {view === 'biblioteca' && (
           <section className="view">
-            <div className="lib-head">
-              <h1 className="greeting">Sua Biblioteca</h1>
-              <div className="lib-actions">
-                {library.length > 0 && (
-                  <button className="btn-ghost" onClick={clearLibrary}>
-                    Limpar
-                  </button>
-                )}
-                <button className="btn-primary" onClick={() => fileInputRef.current?.click()}>
-                  + Adicionar músicas
-                </button>
-              </div>
-            </div>
-            {library.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-cover">
-                  <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M9 18V5l12-2v13" />
-                    <circle cx="6" cy="18" r="3" />
-                    <circle cx="18" cy="16" r="3" />
-                  </svg>
-                </div>
-                <h2>Nenhuma música ainda</h2>
-                <p>Adicione arquivos para montar sua biblioteca.</p>
-                <button className="btn-primary big" onClick={() => fileInputRef.current?.click()}>
-                  + Adicionar músicas
-                </button>
-              </div>
+            {activePlaylist ? (
+              (() => {
+                const pl = playlists.find((p) => p.id === activePlaylist)
+                if (!pl) {
+                  return <p className="empty">Playlist não encontrada.</p>
+                }
+                const plTracks = pl.trackIds.map((id) => library.find((t) => t.id === id)).filter(Boolean)
+                return (
+                  <>
+                    <div className="lib-head lib-head-playlist">
+                      <button className="btn-ghost playlist-back" onClick={() => setActivePlaylist(null)}>
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M15 18l-6-6 6-6" />
+                        </svg>
+                        Biblioteca
+                      </button>
+                      <h1 className="greeting">{pl.name}</h1>
+                      <div className="lib-actions">
+                        <button className="btn-ghost" onClick={() => setRenamePlaylistOpen(true)}>
+                          Renomear
+                        </button>
+                        <button className="btn-ghost" onClick={() => removePlaylist(pl.id)}>
+                          Apagar
+                        </button>
+                      </div>
+                    </div>
+                    <div className="playlist-summary">
+                      <span>{plTracks.length} {plTracks.length === 1 ? 'música' : 'músicas'}</span>
+                      <span>Duração total: {formatTime(plTracks.reduce((acc, t) => acc + (t.duration || 0), 0))}</span>
+                    </div>
+                    <button
+                      className="btn-primary playlist-add-tracks"
+                      onClick={() => setTrackPickerPlaylist(pl)}
+                      disabled={library.length === 0}
+                    >
+                      + Adicionar músicas
+                    </button>
+                    {plTracks.length === 0 ? (
+                      <p className="empty">Esta playlist está vazia. Adicione músicas para começar.</p>
+                    ) : (
+                      <TrackList
+                        tracks={plTracks}
+                        currentId={track?.id}
+                        onSelect={playById}
+                        onRemove={(id) => removeFromPlaylist(pl.id, id)}
+                        onToggleFavorite={toggleFavorite}
+                        onQueueNext={queueNextLocal}
+                        onQueueAdd={queueAddLocal}
+                        onSearchOnline={searchTrackOnline}
+                        onEdit={setEditingTrack}
+                        onShare={shareTrack}
+                        onOpenSource={openExternal}
+                      />
+                    )}
+                  </>
+                )
+              })()
             ) : (
               <>
-                <TrackList tracks={library} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} />
-                <LibraryView tracks={library} onSelect={playById} />
+                <div className="lib-head">
+                  <h1 className="greeting">Sua Biblioteca</h1>
+                  <div className="lib-actions">
+                    {library.length > 0 && (
+                      <button className="btn-ghost" onClick={clearLibrary}>
+                        Limpar
+                      </button>
+                    )}
+                    {!IS_NATIVE && (
+                      <button className="btn-ghost" onClick={() => folderInputRef.current?.click()}>
+                        Importar pasta
+                      </button>
+                    )}
+                    <button className="btn-primary" onClick={() => fileInputRef.current?.click()}>
+                      + Adicionar músicas
+                    </button>
+                  </div>
+                </div>
+
+                <div className="section">
+                  <div className="playlist-head">
+                    <h2 className="section-title">Suas playlists</h2>
+                    <button className="btn-ghost" onClick={() => setCreatePlaylistOpen(true)}>
+                      + Nova
+                    </button>
+                  </div>
+                  {playlists.length === 0 ? (
+                    <p className="empty playlist-empty">
+                      Crie uma playlist para organizar suas músicas. Use “⋯” em qualquer música e escolha
+                      “Adicionar à playlist”.
+                    </p>
+                  ) : (
+                    <div className="playlist-grid">
+                      {playlists.map((p) => {
+                        const first = p.trackIds.map((id) => library.find((t) => t.id === id)).find(Boolean)
+                        return (
+                          <button key={p.id} className="card playlist-card" onClick={() => setActivePlaylist(p.id)}>
+                            <Cover colors={first?.cover || featuredCovers[0]} image={first?.coverUrl} size="100%" radius={12} />
+                            <span className="playlist-card-name">{p.name}</span>
+                            <span className="playlist-card-count">{p.trackIds.length} {p.trackIds.length === 1 ? 'música' : 'músicas'}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {library.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-cover">
+                      <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M9 18V5l12-2v13" />
+                        <circle cx="6" cy="18" r="3" />
+                        <circle cx="18" cy="16" r="3" />
+                      </svg>
+                    </div>
+                    <h2>Nenhuma música ainda</h2>
+                    <p>Adicione arquivos para montar sua biblioteca.</p>
+                    <button className="btn-primary big" onClick={() => fileInputRef.current?.click()}>
+                      + Adicionar músicas
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <TrackList tracks={library} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onOpenSource={openExternal} onAddToPlaylist={setPlaylistPickerTrack} />
+                    <LibraryView tracks={library} onSelect={playById} />
+                  </>
+                )}
+
+                {IS_NATIVE && (
+                  <div className="settings-card library-import-card">
+                    <div className="library-import-row">
+                      <div className="library-import-info">
+                        <span className="settings-label">Importar músicas do aparelho</span>
+                        <span className="settings-desc">
+                          Lê as músicas baixadas no telefone e adiciona à biblioteca.
+                        </span>
+                      </div>
+                      <button className="btn-primary" onClick={openDeviceImport}>
+                        Importar do aparelho
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </section>
@@ -4295,6 +5399,7 @@ function App() {
                 onEdit={setEditingTrack}
                 onShare={shareTrack}
                 onOpenSource={openExternal}
+                onAddToPlaylist={setPlaylistPickerTrack}
               />
             )}
           </section>
@@ -4335,6 +5440,8 @@ function App() {
             isNative={IS_NATIVE}
             onImport={importLibrary}
             onShareApp={shareApp}
+            onImportFolder={() => folderInputRef.current?.click()}
+            onImportDevice={openDeviceImport}
             cloud={cloud}
             cloudRedirect={
               IS_NATIVE ? DEEP_LINK_PREFIX : `${window.location.origin}${window.location.pathname}`
@@ -4371,6 +5478,9 @@ function App() {
           onToggleFavorite={() => toggleFavorite(displayTrack.id)}
           onOpenQueue={() => setShowQueue(true)}
           isOnline={onlineActive}
+          sleepMode={sleepMode}
+          sleepRemaining={sleepRemaining}
+          onCancelSleep={stopSleepTimer}
         />
       )}
 
@@ -4409,6 +5519,10 @@ function App() {
           depth={audioDepth}
           onSetDepth={setAudioDepth}
           isOnline={onlineActive}
+          sleepMode={sleepMode}
+          sleepRemaining={sleepRemaining}
+          onStartSleep={startSleep}
+          onCancelSleep={stopSleepTimer}
         />
       )}
 
@@ -4423,6 +5537,7 @@ function App() {
           onRemoveItem={removeFromQueue}
           onMoveItem={moveInQueue}
           onClear={clearQueue}
+          onReorder={reorderQueue}
           onClose={() => setShowQueue(false)}
         />
       )}
@@ -4439,6 +5554,68 @@ function App() {
       )}
 
       {toast && <div className="toast">{toast}</div>}
+
+      {playlistPickerTrack && (
+        <PlaylistPicker
+          playlists={playlists}
+          track={playlistPickerTrack}
+          onCreate={createPlaylist}
+          onAdd={addToPlaylist}
+          onClose={() => setPlaylistPickerTrack(null)}
+        />
+      )}
+
+      {trackPickerPlaylist && (
+        <TrackPicker
+          tracks={library}
+          playlist={trackPickerPlaylist}
+          onAdd={addToPlaylist}
+          onAddMany={addTracksToPlaylist}
+          onClose={() => setTrackPickerPlaylist(null)}
+        />
+      )}
+
+      {createPlaylistOpen && (
+        <NameModal
+          title="Nova playlist"
+          placeholder="Nome da playlist"
+          onSave={(n) => {
+            createPlaylist(n)
+            setCreatePlaylistOpen(false)
+          }}
+          onClose={() => setCreatePlaylistOpen(false)}
+        />
+      )}
+
+      {renamePlaylistOpen && activePlaylist && (
+        <NameModal
+          title="Renomear playlist"
+          initial={playlists.find((p) => p.id === activePlaylist)?.name || ''}
+          placeholder="Nome da playlist"
+          onSave={(n) => {
+            renamePlaylist(activePlaylist, n)
+            setRenamePlaylistOpen(false)
+          }}
+          onClose={() => setRenamePlaylistOpen(false)}
+        />
+      )}
+
+      {deviceImportOpen && (
+        <DeviceImport
+          tracks={deviceMusic || []}
+          selection={deviceSelection}
+          onToggle={toggleDeviceTrack}
+          onSelectAll={selectAllDevice}
+          importing={deviceImporting}
+          onImport={importDeviceTracks}
+          onClose={() => {
+            if (deviceImporting) return
+            setDeviceImportOpen(false)
+            setDeviceMusic(null)
+            setDeviceSelection({})
+          }}
+        />
+      )}
 
       {dragOver && (
         <div className="drop-overlay">

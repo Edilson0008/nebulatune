@@ -41,15 +41,17 @@ function trackSignature(t) {
     cover: Array.isArray(t?.cover) ? t.cover : null,
     coverRemote: t?.coverRemote || null,
     addedAt: t?.addedAt || 0,
+    playDays: JSON.stringify((t?.playDays && typeof t.playDays === 'object') ? t.playDays : {}),
   })
 }
 
-function signature({ library, settings, equalizer, lyricSync } = {}) {
+function signature({ library, settings, equalizer, lyricSync, playlists = null } = {}) {
   return JSON.stringify({
     t: (library || []).map(trackSignature).sort(),
     s: settings || null,
     e: equalizer || null,
     l: lyricSync || null,
+    p: Array.isArray(playlists) ? playlists : null,
   })
 }
 
@@ -59,10 +61,11 @@ function backupSignature(backup) {
     settings: backup?.settings,
     equalizer: backup?.equalizer,
     lyricSync: backup?.lyricSync,
+    playlists: backup?.playlists,
   })
 }
 
-export function useCloudSync({ library, settings, equalizer, lyricSync, loading, applyRemote }) {
+export function useCloudSync({ library, settings, equalizer, lyricSync, playlists = null, loading, applyRemote }) {
   const [user, setUser] = useState(null)
   const [authReady, setAuthReady] = useState(!cloudEnabled)
   const [status, setStatus] = useState('')
@@ -76,13 +79,13 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
   const pushedSigRef = useRef('')
   const lastRemoteRef = useRef(null)
 
-  const dataRef = useRef({ library, settings, equalizer, lyricSync })
+  const dataRef = useRef({ library, settings, equalizer, lyricSync, playlists })
   const applyRef = useRef(applyRemote)
-  const dataSig = signature({ library, settings, equalizer, lyricSync })
+  const dataSig = signature({ library, settings, equalizer, lyricSync, playlists })
 
   useEffect(() => {
-    dataRef.current = { library, settings, equalizer, lyricSync }
-  }, [library, settings, equalizer, lyricSync])
+    dataRef.current = { library, settings, equalizer, lyricSync, playlists }
+  }, [library, settings, equalizer, lyricSync, playlists])
 
   useEffect(() => {
     applyRef.current = applyRemote

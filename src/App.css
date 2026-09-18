@@ -3689,3 +3689,481 @@ button {
 .app-native .storage-warning {
   bottom: calc(284px + env(safe-area-inset-bottom));
 }
+/* ---------- Tela "Tocando agora": fundo com a cor da capa ---------- */
+.now-playing {
+  background:
+    radial-gradient(60% 44% at 84% -8%, var(--npc1), transparent 68%),
+    radial-gradient(56% 40% at 6% 112%, var(--npc2), transparent 68%),
+    radial-gradient(54% 42% at 50% 46%, var(--npc3), transparent 72%),
+    linear-gradient(180deg, #161027 0%, #100d1e 58%, #0b0917 100%);
+}
+
+.np-cover {
+  position: relative;
+}
+
+.np-cover > .cover {
+  position: relative;
+  z-index: 2;
+}
+
+.np-halo {
+  position: absolute;
+  inset: -9%;
+  width: 118%;
+  height: 118%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.np-aura {
+  position: absolute;
+  inset: -46%;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, var(--npc1) 0%, transparent 58%),
+    radial-gradient(circle at 50% 42%, var(--npc3) 0%, transparent 72%);
+  filter: blur(46px);
+  opacity: 0.5;
+  animation: aura-breathe 6s ease-in-out infinite;
+}
+
+@keyframes aura-breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.09);
+    opacity: 0.62;
+  }
+}
+
+/* ---------- Timer de desligar (sleep timer) ---------- */
+.np-sleep-wrap {
+  position: relative;
+}
+
+.np-sleep-wrap.open > .np-sleep-btn {
+  border-color: var(--np-accent);
+  background: rgba(0, 255, 135, 0.12);
+  color: var(--np-accent);
+}
+
+.np-sleep-btn.on {
+  border-color: rgba(0, 255, 135, 0.5);
+  background: rgba(0, 255, 135, 0.14);
+  color: #ffffff;
+}
+
+.np-sleep-pill {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.np-sleep-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 40;
+  min-width: 198px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: rgba(22, 16, 39, 0.97);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: np-in 0.16s ease;
+}
+
+.np-sleep-title {
+  padding: 8px 12px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.np-sleep-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.np-sleep-opt:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-h);
+}
+
+.np-sleep-opt.active {
+  color: var(--np-accent);
+}
+
+.np-sleep-cancel {
+  color: #ff9a9a;
+}
+
+.np-sleep-mini {
+  position: relative;
+  gap: 4px;
+}
+
+.np-sleep-mini-time {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ---------- Fila: arrastar para reordenar ---------- */
+.queue-row {
+  transition: opacity 0.12s, box-shadow 0.12s;
+}
+
+.queue-row.dragging {
+  opacity: 0.35;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.queue-row.drag-over {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+/* ---------- Estatísticas de reprodução ---------- */
+.stats-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stats-tab {
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.stats-tab:hover {
+  color: var(--text-h);
+}
+
+.stats-tab.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(124, 58, 237, 0.14);
+}
+
+.stats-summary {
+  margin: 2px 0 10px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.stats-summary strong {
+  color: var(--text-h);
+  font-size: 15px;
+}
+
+.stats-list-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+/* ---------- Buscas recentes ---------- */
+.recent-searches {
+  margin: 4px 0 20px;
+}
+
+.recent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.recent-header .section-title {
+  margin: 0;
+}
+
+.recent-clear {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.recent-clear:hover {
+  color: #ff9a9a;
+  border-color: rgba(255, 154, 154, 0.5);
+}
+
+.recent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.recent-chip:hover {
+  border-color: var(--accent);
+  color: var(--text-h);
+}
+
+/* ---------- Playlists ---------- */
+.playlist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.playlist-empty {
+  margin: 0 0 14px;
+}
+
+.playlist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.playlist-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  text-align: left;
+  animation: np-cover-in 0.25s ease;
+}
+
+.playlist-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-h);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-card-count {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.lib-head-playlist {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.playlist-back {
+  align-self: flex-start;
+}
+
+.playlist-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.playlist-add-tracks {
+  margin-bottom: 14px;
+}
+
+.playlist-new-form {
+  margin-bottom: 4px;
+}
+
+.playlist-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 8px 0 4px;
+}
+
+.playlist-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-h);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.playlist-picker-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.playlist-picker-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-picker-count {
+  flex-shrink: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.track-picker-list {
+  max-height: 60vh;
+}
+
+/* ---------- Importar músicas do aparelho / pasta ---------- */
+.device-import-modal {
+  width: min(470px, 100%);
+}
+
+.device-import-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.device-import-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.device-import-count {
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.device-import-list {
+  max-height: 50vh;
+}
+
+.library-import-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.library-import-info {
+  min-width: 0;
+}
+
+/* ---------- Tradução da letra ---------- */
+.np-lyrics-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-top: 18px;
+}
+
+.np-tr-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.np-tr-btn:hover {
+  color: var(--text-h);
+}
+
+.np-tr-btn.on {
+  color: var(--np-accent);
+  border-color: rgba(0, 255, 135, 0.45);
+  background: rgba(0, 255, 135, 0.1);
+}
+
+.np-tr-status {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.np-lyric-tr {
+  display: block;
+  font-size: 0.78em;
+  font-weight: 500;
+  line-height: 140%;
+  color: var(--np-accent-2);
+  opacity: 0.92;
+  margin-top: 2px;
+}
