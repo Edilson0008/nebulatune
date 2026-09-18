@@ -4,11 +4,10 @@
 - Site oficial no ar: https://edilson0008.github.io/nebulatune/
 - `SITE_URL` em `src/app-config.js` já aponta para esse endereço.
 - Repositório: https://github.com/Edilson0008/nebulatune
-- Publicação: o site vai para o branch `gh-pages` (a cada atualização, gerar o
-  build web com `WEB_BASE=/nebulatune/` e enviar para `gh-pages`).
-- O workflow automático está guardado em `scripts/github-pages-workflow.yml`
-  (para ativar, o token do GitHub precisa do escopo `workflow`; aí mover para
-  `.github/workflows/deploy.yml`).
+- Publicação automática ATIVA: `.github/workflows/deploy.yml` reconstrói e
+  publica o site sozinho a cada envio para o branch `main`.
+- Para atualizar o site, basta enviar as mudanças para o `main`. (O token do
+  GitHub precisa do escopo `workflow`.)
 
 ## Login futuro (pendente, importante)
 O usuário quer opções de login para que quem usa a web possa instalar o APK e
