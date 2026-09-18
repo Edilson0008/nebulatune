@@ -101,6 +101,13 @@ export async function signOutCloud() {
   await supabase.auth.signOut()
 }
 
+export async function exchangeOAuthCode(code) {
+  if (!supabase) throw new Error('sincronização indisponível')
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+  if (error) throw error
+  return data
+}
+
 async function readIndex(userId) {
   const { data, error } = await storage().download(`${userId}/${INDEX_FILE}`)
   if (error || !data) return null

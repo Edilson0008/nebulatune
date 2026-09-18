@@ -24,8 +24,8 @@
   arquivo separado (`tracks/`, `covers/`) e só o que mudou é reenviado; o
   `index.json` guarda os metadados. Isso evita o limite de arquivo de 50MB do
   plano grátis. SQL em `supabase/setup.sql`.
-- PENDENTE: login com Google. Falta configurar no Google Cloud + Supabase
-  (Authentication → Providers → Google) e testar.
+- Google OAuth configurado e funcionando (web + app). No app, o login usa o
+  endereço `br.com.nebulatune://callback` (Deep Link declarado no manifesto).
 - PENDENTE: ligar de volta a confirmação de e-mail no Supabase quando quiser
   mais segurança (hoje está desligada para facilitar os testes).
 
@@ -39,7 +39,7 @@
   próprio app atualiza.
 
 ## Versões (importante)
-- Versão atual publicada: **1.2.0** (sincronização automática + correções).
+- Versão atual publicada: **1.3.0** (login com Google dentro do app).
 - Ao lançar versão nova, manter em sincronia:
   `APP_VERSION` (`src/app-config.js`), `versionName`/`versionCode`
   (`android/app/build.gradle`). O `version.json` do site é gerado sozinho a

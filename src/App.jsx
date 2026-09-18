@@ -22,8 +22,11 @@ import {
   markUpdatePrompted,
   wasUpdatePrompted,
 } from './updater'
+import { exchangeOAuthCode } from './cloud'
 
 const IS_NATIVE = !!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.())
+
+const DEEP_LINK_PREFIX = 'br.com.nebulatune://callback'
 
 const LYRICS_CACHE_MAX = 30
 
@@ -3331,6 +3334,42 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!IS_NATIVE) return undefined
+    let active = true
+    const handleOAuthReturn = async (url) => {
+      if (!active || typeof url !== 'string' || !url.startsWith(DEEP_LINK_PREFIX)) return
+      let code = null
+      try {
+        code = new URL(url).searchParams.get('code')
+      } catch {
+        return
+      }
+      if (!code || code === window.__ntOAuthCode) return
+      window.__ntOAuthCode = code
+      try {
+        await exchangeOAuthCode(code)
+      } catch {
+        /* falha ao trocar o código: o usuário pode tentar de novo */
+      } finally {
+        window.location.href = '/'
+      }
+    }
+    ;(async () => {
+      const { App } = await import('@capacitor/app')
+      App.addListener('appUrlOpen', (e) => handleOAuthReturn(e.url))
+      try {
+        const launch = (await App.getLaunchUrl?.()) || null
+        if (launch?.url) handleOAuthReturn(launch.url)
+      } catch {
+        /* sem deep link de inicialização */
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [])
+
   const postponeUpdate = () => {
     setUpdatePrompt(null)
     setUpdateInstallMsg('')
@@ -4298,9 +4337,7 @@ function App() {
             onShareApp={shareApp}
             cloud={cloud}
             cloudRedirect={
-              IS_NATIVE
-                ? `${SITE_URL}/`
-                : `${window.location.origin}${window.location.pathname}`
+              IS_NATIVE ? DEEP_LINK_PREFIX : `${window.location.origin}${window.location.pathname}`
             }
           />
         )}
