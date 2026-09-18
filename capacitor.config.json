@@ -1,0 +1,11 @@
+{
+  "appId": "br.com.nebulatune.app",
+  "appName": "NebulaTune",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": true
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
