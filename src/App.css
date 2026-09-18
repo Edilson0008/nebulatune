@@ -4107,15 +4107,13 @@ button {
 }
 
 .library-import-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
   gap: 14px;
 }
 
 .library-import-row .library-import-info {
-  flex: 1 1 220px;
   min-width: 0;
 }
 
@@ -4123,6 +4121,20 @@ button {
 .library-import-row .library-import-info .settings-desc {
   white-space: normal;
   overflow-wrap: break-word;
+}
+
+.library-import-row > .btn-primary {
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .library-import-row {
+    grid-template-columns: 1fr;
+  }
+
+  .library-import-row > .btn-primary {
+    justify-self: stretch;
+  }
 }
 
 .library-import-info {

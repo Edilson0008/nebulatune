@@ -1,7 +1,9 @@
 let ctx = null
 let input = null
 let master = null
+let presence = null
 let comp = null
+let limiter = null
 let analyser = null
 let pending = null
 const bands = []
@@ -38,18 +40,33 @@ function buildGraph() {
   master.gain.value = 1
   bands[bands.length - 1].connect(master)
 
+  presence = ctx.createBiquadFilter()
+  presence.type = 'highshelf'
+  presence.frequency.value = 6200
+  presence.Q.value = 0.5
+  presence.gain.value = 0
+  master.connect(presence)
+
   comp = ctx.createDynamicsCompressor()
   comp.threshold.value = -14
   comp.knee.value = 8
   comp.ratio.value = 4
   comp.attack.value = 0.003
   comp.release.value = 0.25
-  master.connect(comp)
+  presence.connect(comp)
+
+  limiter = ctx.createDynamicsCompressor()
+  limiter.threshold.value = -3
+  limiter.knee.value = 3
+  limiter.ratio.value = 20
+  limiter.attack.value = 0.001
+  limiter.release.value = 0.12
+  comp.connect(limiter)
 
   analyser = ctx.createAnalyser()
   analyser.fftSize = 256
   analyser.smoothingTimeConstant = 0.82
-  comp.connect(analyser)
+  limiter.connect(analyser)
   analyser.connect(ctx.destination)
 }
 

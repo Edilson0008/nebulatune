@@ -2200,6 +2200,27 @@ function usePlayer(library, speed = 1, onStart) {
     }
   }, [playing, getAudio, handleEnded, playWithRetry])
 
+  useEffect(() => {
+    const resume = () => {
+      if (!playingRef.current || cancelledRef.current) return
+      if (modeRef.current !== 'file') return
+      const a = getAudio()
+      if (a && a.paused && !a.ended && a.src && a.readyState >= 2) {
+        playWithRetry(a)
+      }
+    }
+    const onVis = () => {
+      if (document.visibilityState === 'visible') resume()
+    }
+    const onShow = () => resume()
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('pageshow', onShow)
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('pageshow', onShow)
+    }
+  }, [playingRef, getAudio, playWithRetry])
+
   const stopAndReset = useCallback(() => {
     if (modeRef.current === 'file') {
       const a = getAudio()
