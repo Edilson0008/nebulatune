@@ -87,6 +87,14 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.4.2',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Primeira publicação ponta-a-ponta do aviso nativo de atualização: ao instalar esta versão, o app passa a te avisar sozinho, pela notificação do sistema, sempre que houver uma versão nova no site.' },
+      { type: 'correcao', text: 'Confirmado o fluxo completo site → aparelho: a versão que o celular tem é a mesma que o site serve (sem divergência entre os dois).' },
+    ],
+  },
+  {
     version: '1.4.1',
     date: 'Setembro de 2026',
     items: [
