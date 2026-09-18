@@ -20,6 +20,11 @@
   garantia).
 - Conta de teste usada nas verificações: `bot-teste-nebulatune@example.com`
   (senha `teste123456`). Pode apagar quando quiser; não afeta a conta do usuário.
+- VALIDAÇÃO MANUAL FEITA POR MIM (18/09): login na nuvem de produção com a
+  conta-teste → **HTTP 200 / acesso: sim** (endpoint Supabase real do app).
+  Conclusão: autenticação+chave+endereço funcionam; o "Failed to fetch" que o
+  usuário viu era a mensagem crua de rede — já traduzida para texto amigável
+  no 1.4.0 (publicado no site + GitHub).
 - Backups: bucket privado `backups`, por usuário. Cada música é enviada como
   arquivo separado (`tracks/`, `covers/`) e só o que mudou é reenviado; o
   `index.json` guarda os metadados. Isso evita o limite de arquivo de 50MB do
