@@ -87,6 +87,16 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.4.1',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Som de estúdio profissional: EQ de 10 bandas + presence (clareza) + compressor + limiter — tudo nativo do aparelho, sem enrolação.' },
+      { type: 'correcao', text: 'Música não corta mais quando você volta do segundo plano: o app destrava e dá play na hora.' },
+      { type: 'novo', text: 'A partir de agora, cada atualização troca a versão — e o app avisa sozinho quando tem uma nova pronta para instalar.' },
+      { type: 'correcao', text: 'Layout do "Importar do aparelho" sem sobreposição de texto na Biblioteca.' },
+    ],
+  },
+  {
     version: '1.4.0',
     date: 'Setembro de 2026',
     items: [
