@@ -93,7 +93,10 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
   const doPush = useCallback(async (id, force = false) => {
     if (!cloudEnabled || !id || busyRef.current) return
     const sig = signature(dataRef.current)
-    console.log('[nt-sync] doPush', { force, busy: busyRef.current, same: sig === pushedSigRef.current })
+    console.log(
+      '[nt-sync] doPush ' +
+        JSON.stringify({ force, busy: busyRef.current, same: sig === pushedSigRef.current }),
+    )
     if (!force && sig === pushedSigRef.current) return
     busyRef.current = true
     setStatus('syncing')
@@ -193,13 +196,16 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
   }, [userId, loading, doPush, doPull])
 
   useEffect(() => {
-    console.log('[nt-sync] effect', {
-      userId,
-      armed: armedRef.current,
-      applying: applyingRef.current,
-      loading,
-      same: dataSig === pushedSigRef.current,
-    })
+    console.log(
+      '[nt-sync] effect ' +
+        JSON.stringify({
+          userId: userId ? userId.slice(0, 6) : null,
+          armed: armedRef.current,
+          applying: applyingRef.current,
+          loading,
+          same: dataSig === pushedSigRef.current,
+        }),
+    )
     if (!cloudEnabled || !userId || !armedRef.current || applyingRef.current || loading)
       return undefined
     console.log('[nt-sync] agendar push')

@@ -56,6 +56,11 @@ const info = await page.evaluate(() => {
   return { pressed: b.getAttribute('aria-pressed'), titulo: row?.innerText?.split('\n')[0] || '' }
 })
 console.log('botao favorito:', JSON.stringify(info))
+const vis = await page.evaluate(() => document.visibilityState)
+const timerReal = await page.evaluate(
+  () => new Promise((r) => { const s = Date.now(); setTimeout(() => r(Date.now() - s), 5000) }),
+)
+console.log('visibilityState:', vis, '| timer de 5s levou(ms):', timerReal)
 await page.evaluate(() => document.querySelector('.row-fav')?.click())
 await new Promise((r) => setTimeout(r, 1000))
 const pressedDepois = await page.evaluate(() =>
