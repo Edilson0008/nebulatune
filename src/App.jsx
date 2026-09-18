@@ -4220,70 +4220,6 @@ function App() {
 
   const clearRecentSearches = useCallback(() => setRecentSearches([]), [])
 
-  const [sleepMode, setSleepMode] = useState(null)
-  const [sleepEndsAt, setSleepEndsAt] = useState(null)
-  const [sleepRemaining, setSleepRemaining] = useState(null)
-  const sleepTrackRef = useRef(null)
-  const liveRef = useRef({ playing, onlineActive, displayElapsed, displayDuration })
-
-  useEffect(() => {
-    liveRef.current = { playing, onlineActive, displayElapsed, displayDuration }
-  })
-
-  const stopSleepTimer = useCallback(() => {
-    setSleepMode(null)
-    setSleepEndsAt(null)
-    setSleepRemaining(null)
-    sleepTrackRef.current = null
-    const live = liveRef.current
-    if (live.playing) pausePlayback()
-    if (live.onlineActive) stopOnline()
-    showToast('⏰ Hora de descansar!')
-  }, [pausePlayback, stopOnline, showToast])
-
-  const startSleep = useCallback(
-    (minutes) => {
-      setSleepMode(String(minutes))
-      if (minutes === 'end') {
-        sleepTrackRef.current = displayTrackRef.current?.id || null
-        setSleepEndsAt(null)
-        setSleepRemaining(null)
-        showToast('Vou parar no fim desta música')
-        return
-      }
-      setSleepEndsAt(Date.now() + Number(minutes) * 60000)
-      setSleepRemaining(Number(minutes) * 60)
-      showToast(`Timer de desligar: ${minutes} min`)
-    },
-    [showToast],
-  )
-
-  useEffect(() => {
-    if (!sleepEndsAt) return undefined
-    const id = setInterval(() => {
-      const rem = Math.max(0, Math.ceil((sleepEndsAt - Date.now()) / 1000))
-      setSleepRemaining(rem)
-      if (rem <= 0) stopSleepTimer()
-    }, 1000)
-    return () => clearInterval(id)
-  }, [sleepEndsAt, stopSleepTimer])
-
-  useEffect(() => {
-    if (sleepMode !== 'end') return undefined
-    const id = setInterval(() => {
-      const currentId = displayTrackRef.current?.id || null
-      if (!sleepTrackRef.current || sleepTrackRef.current !== currentId) {
-        sleepTrackRef.current = currentId
-        return
-      }
-      const live = liveRef.current
-      if (live.displayDuration > 0 && live.displayElapsed >= live.displayDuration - 0.6) {
-        stopSleepTimer()
-      }
-    }, 500)
-    return () => clearInterval(id)
-  }, [sleepMode, stopSleepTimer])
-
   const [deviceMusic, setDeviceMusic] = useState(null)
   const [deviceImportOpen, setDeviceImportOpen] = useState(false)
   const [deviceImporting, setDeviceImporting] = useState(false)
@@ -4382,6 +4318,70 @@ function App() {
   useEffect(() => {
     displayTrackRef.current = displayTrack
   }, [displayTrack])
+
+  const [sleepMode, setSleepMode] = useState(null)
+  const [sleepEndsAt, setSleepEndsAt] = useState(null)
+  const [sleepRemaining, setSleepRemaining] = useState(null)
+  const sleepTrackRef = useRef(null)
+  const liveRef = useRef({ playing, onlineActive, displayElapsed, displayDuration })
+
+  useEffect(() => {
+    liveRef.current = { playing, onlineActive, displayElapsed, displayDuration }
+  })
+
+  const stopSleepTimer = useCallback(() => {
+    setSleepMode(null)
+    setSleepEndsAt(null)
+    setSleepRemaining(null)
+    sleepTrackRef.current = null
+    const live = liveRef.current
+    if (live.playing) pausePlayback()
+    if (live.onlineActive) stopOnline()
+    showToast('⏰ Hora de descansar!')
+  }, [pausePlayback, stopOnline, showToast])
+
+  const startSleep = useCallback(
+    (minutes) => {
+      setSleepMode(String(minutes))
+      if (minutes === 'end') {
+        sleepTrackRef.current = displayTrackRef.current?.id || null
+        setSleepEndsAt(null)
+        setSleepRemaining(null)
+        showToast('Vou parar no fim desta música')
+        return
+      }
+      setSleepEndsAt(Date.now() + Number(minutes) * 60000)
+      setSleepRemaining(Number(minutes) * 60)
+      showToast(`Timer de desligar: ${minutes} min`)
+    },
+    [showToast],
+  )
+
+  useEffect(() => {
+    if (!sleepEndsAt) return undefined
+    const id = setInterval(() => {
+      const rem = Math.max(0, Math.ceil((sleepEndsAt - Date.now()) / 1000))
+      setSleepRemaining(rem)
+      if (rem <= 0) stopSleepTimer()
+    }, 1000)
+    return () => clearInterval(id)
+  }, [sleepEndsAt, stopSleepTimer])
+
+  useEffect(() => {
+    if (sleepMode !== 'end') return undefined
+    const id = setInterval(() => {
+      const currentId = displayTrackRef.current?.id || null
+      if (!sleepTrackRef.current || sleepTrackRef.current !== currentId) {
+        sleepTrackRef.current = currentId
+        return
+      }
+      const live = liveRef.current
+      if (live.displayDuration > 0 && live.displayElapsed >= live.displayDuration - 0.6) {
+        stopSleepTimer()
+      }
+    }, 500)
+    return () => clearInterval(id)
+  }, [sleepMode, stopSleepTimer])
 
   const trackId = displayTrack?.id
 
