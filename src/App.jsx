@@ -20,6 +20,8 @@ import {
   installUpdate,
   isNewer,
   markUpdatePrompted,
+  notifyUpdateAvailable,
+  requestNotificationsPermission,
   wasUpdatePrompted,
 } from './updater'
 import { exchangeOAuthCode } from './cloud'
@@ -82,6 +84,35 @@ const PERIOD_LABELS = [
 function nf(n) {
   return new Intl.NumberFormat('pt-BR').format(n || 0)
 }
+
+const CHANGELOG = [
+  {
+    version: '1.4.0',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Timer de desligar: 10, 20, 30, 60 minutos ou ao fim da música.' },
+      { type: 'novo', text: 'Fundo da tela "Tocando agora" ganha as cores da capa, com brilho animado.' },
+      { type: 'novo', text: 'Visualizador de áudio: anéis que dançam ao redor da capa.' },
+      { type: 'novo', text: 'Arraste as músicas na fila para reordenar.' },
+      { type: 'novo', text: 'Playlists: criar, renomear, apagar e adicionar músicas.' },
+      { type: 'novo', text: 'Estatísticas de reprodução no Perfil (semana, mês, ano e tudo).' },
+      { type: 'novo', text: 'Buscas recentes em um toque.' },
+      { type: 'novo', text: 'Tradução da letra para português dentro do app.' },
+      { type: 'novo', text: 'Controles de mídia do aparelho/teclas multimídia.' },
+      { type: 'novo', text: 'Importar uma pasta (computador) ou as músicas do aparelho (Android).' },
+      { type: 'correcao', text: 'Corrigida a tela preta que impedia o app de abrir.' },
+      { type: 'correcao', text: 'A música agora passa sozinha para a próxima mesmo com a tela desligada ou em segundo plano.' },
+    ],
+  },
+  {
+    version: '1.3.0',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Login com Google dentro do app.' },
+      { type: 'correcao', text: 'Melhorias na sincronização automática com a conta.' },
+    ],
+  },
+]
 
 function Cover({ colors, image, size = 40, radius = 8 }) {
   const [c1, c2, c3] =
@@ -756,6 +787,52 @@ function NameModal({ title, initial = '', placeholder, onSave, onClose }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+function ChangelogModal({ onClose }) {
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onClose()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal changelog-modal" onClick={(e) => e.stopPropagation()}>
+        <h3 className="modal-title">Novidades e correções</h3>
+        <div className="changelog-list">
+          {CHANGELOG.map((entry) => (
+            <div key={entry.version} className="changelog-entry">
+              <div className="changelog-head">
+                <span className="changelog-version">Versão {entry.version}</span>
+                <span className="changelog-date">{entry.date}</span>
+              </div>
+              <ul className="changelog-items">
+                {entry.items.map((item, i) => (
+                  <li key={i} className={`changelog-item ${item.type}`}>
+                    <span className="changelog-tag">
+                      {item.type === 'correcao' ? 'Correção' : 'Novo'}
+                    </span>
+                    <span>{item.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="btn-primary" onClick={onClose}>
+            Entendi
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -1793,6 +1870,9 @@ function usePlayer(library, speed = 1, onStart) {
   const libRef = useRef(library)
   const onEndedRef = useRef(() => {})
   const onStartRef = useRef(onStart)
+  const onErrorRef = useRef(() => {})
+  const errorCountRef = useRef(0)
+  const playingRef = useRef(false)
   const [repeat, setRepeat] = useState(0)
   const [shuffle, setShuffle] = useState(false)
   const repeatRef = useRef(0)
@@ -1808,6 +1888,10 @@ function usePlayer(library, speed = 1, onStart) {
   useEffect(() => {
     if (audioRef.current) audioRef.current.playbackRate = speed
   }, [speed])
+
+  useEffect(() => {
+    playingRef.current = playing
+  }, [playing])
 
   useEffect(() => {
     libRef.current = library
@@ -1838,10 +1922,26 @@ function usePlayer(library, speed = 1, onStart) {
       a.playbackRate = speedRef.current
       graph.registerMediaElement(a)
       a.addEventListener('ended', () => onEndedRef.current())
+      a.addEventListener('error', () => onErrorRef.current())
+      a.addEventListener('playing', () => {
+        errorCountRef.current = 0
+      })
       audioRef.current = a
     }
     return audioRef.current
   }, [])
+
+  const playWithRetryRef = useRef(null)
+  const playWithRetry = useCallback((a, attempt = 0) => {
+    if (!playingRef.current) return
+    a.play().catch(() => {
+      if (attempt < 6) setTimeout(() => playWithRetryRef.current(a, attempt + 1), 300)
+    })
+  }, [])
+
+  useEffect(() => {
+    playWithRetryRef.current = playWithRetry
+  }, [playWithRetry])
 
   const startIndex = useCallback((i) => {
     const t = libRef.current[i]
@@ -1851,11 +1951,10 @@ function usePlayer(library, speed = 1, onStart) {
     if (t.src) {
       modeRef.current = 'file'
       const a = getAudio()
-      graph.resumeContext().then(() => {
-        a.src = t.src
-        a.currentTime = 0
-        a.play().catch(() => {})
-      })
+      a.src = t.src
+      a.currentTime = 0
+      graph.resumeContext()
+      playWithRetry(a)
       setDuration(t.duration || 0)
     } else {
       modeRef.current = 'synth'
@@ -1867,7 +1966,7 @@ function usePlayer(library, speed = 1, onStart) {
     setElapsed(0)
     setPlaying(true)
     onStartRef.current?.(i)
-  }, [getAudio])
+  }, [getAudio, playWithRetry])
 
   const randomIndex = useCallback(() => {
     const n = libRef.current.length
@@ -1998,6 +2097,17 @@ function usePlayer(library, speed = 1, onStart) {
     else next(true)
   }, [startIndex, next])
 
+  const handlePlayError = useCallback(() => {
+    if (!playingRef.current) return
+    errorCountRef.current += 1
+    if (errorCountRef.current >= 2) {
+      errorCountRef.current = 0
+      setPlaying(false)
+      return
+    }
+    next(true)
+  }, [next])
+
   const cycleRepeat = useCallback(() => setRepeat((r) => (r + 1) % 3), [])
   const toggleShuffle = useCallback(() => setShuffle((s) => !s), [])
 
@@ -2048,25 +2158,47 @@ function usePlayer(library, speed = 1, onStart) {
   }, [handleEnded])
 
   useEffect(() => {
+    onErrorRef.current = handlePlayError
+  }, [handlePlayError])
+
+  useEffect(() => {
     if (!playing) return undefined
-    let id
-    const loop = () => {
+    let raf = 0
+    let cancelled = false
+    const rafTick = () => {
+      if (cancelled) return
       if (modeRef.current === 'file') {
         const a = getAudio()
         setElapsed(a.currentTime || 0)
         setDuration(a.duration || libRef.current[indexRef.current]?.duration || 0)
       } else {
-        const e = engine.getElapsed()
-        const d = engine.getDuration()
-        setElapsed(e)
-        setDuration(d)
-        if (d && e >= d - 0.05) handleEnded()
+        setElapsed(engine.getElapsed())
+        setDuration(engine.getDuration())
       }
-      id = requestAnimationFrame(loop)
+      raf = requestAnimationFrame(rafTick)
     }
-    id = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(id)
-  }, [playing, getAudio, handleEnded])
+    const check = () => {
+      if (cancelled) return
+      if (modeRef.current === 'file') {
+        const a = getAudio()
+        if (a.ended) {
+          handleEnded()
+        } else if (a.paused && !a.ended && a.src && a.readyState >= 2) {
+          playWithRetry(a)
+        }
+      } else {
+        const d = engine.getDuration()
+        if (d && engine.getElapsed() >= d - 0.05) handleEnded()
+      }
+    }
+    raf = requestAnimationFrame(rafTick)
+    const iv = setInterval(check, 500)
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf)
+      clearInterval(iv)
+    }
+  }, [playing, getAudio, handleEnded, playWithRetry])
 
   const stopAndReset = useCallback(() => {
     if (modeRef.current === 'file') {
@@ -3420,7 +3552,7 @@ function ApkDownloadButton() {
   )
 }
 
-function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onImportFolder, onImportDevice, cloud, cloudRedirect }) {
+function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onImportFolder, onImportDevice, onOpenChangelog, cloud, cloudRedirect }) {
   const [storage, setStorage] = useState(null)
   const [exported, setExported] = useState(false)
   const [imported, setImported] = useState(false)
@@ -3921,6 +4053,19 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
         </div>
         <div className="settings-row">
           <div className="settings-info">
+            <span className="settings-label">Novidades e correções</span>
+            <span className="settings-desc">
+              Veja o que há de novo e o que foi consertado em cada versão do app.
+            </span>
+          </div>
+          <div className="settings-actions">
+            <button className="btn-ghost" onClick={onOpenChangelog}>
+              Abrir
+            </button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-info">
             <span className="settings-label">Compartilhar o app</span>
             <span className="settings-desc">Envia o NebulaTune (arquivo APK) para outra pessoa instalar.</span>
           </div>
@@ -3992,6 +4137,8 @@ function App() {
         if (isNewer(latest, APP_VERSION) && !wasUpdatePrompted(latest)) {
           markUpdatePrompted(latest)
           setUpdatePrompt(latest)
+          requestNotificationsPermission()
+          notifyUpdateAvailable(latest)
         }
       } catch {
         /* sem internet ou site indisponível: tenta de novo na próxima abertura */
@@ -4135,6 +4282,7 @@ function App() {
   const [createPlaylistOpen, setCreatePlaylistOpen] = useState(false)
   const [renamePlaylistOpen, setRenamePlaylistOpen] = useState(false)
   const [trackPickerPlaylist, setTrackPickerPlaylist] = useState(null)
+  const [changelogOpen, setChangelogOpen] = useState(false)
 
   const createPlaylist = useCallback((name) => {
     const n = (name || '').trim()
@@ -5442,6 +5590,7 @@ function App() {
             onShareApp={shareApp}
             onImportFolder={() => folderInputRef.current?.click()}
             onImportDevice={openDeviceImport}
+            onOpenChangelog={() => setChangelogOpen(true)}
             cloud={cloud}
             cloudRedirect={
               IS_NATIVE ? DEEP_LINK_PREFIX : `${window.location.origin}${window.location.pathname}`
@@ -5554,6 +5703,8 @@ function App() {
       )}
 
       {toast && <div className="toast">{toast}</div>}
+
+      {changelogOpen && <ChangelogModal onClose={() => setChangelogOpen(false)} />}
 
       {playlistPickerTrack && (
         <PlaylistPicker

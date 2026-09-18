@@ -68,3 +68,28 @@ export async function installUpdate(url = APK_URL) {
   a.click()
   a.remove()
 }
+
+export async function requestNotificationsPermission() {
+  if (Capacitor?.getPlatform?.() !== 'android') return
+  try {
+    await NativeUpdater.requestNotificationsPermission()
+  } catch {
+    /* usuário negou ou plataforma sem suporte */
+  }
+}
+
+export async function notifyUpdateAvailable(latest) {
+  if (Capacitor?.getPlatform?.() !== 'android') return
+  try {
+    if (!wasUpdatePrompted(latest)) {
+      markUpdatePrompted(latest)
+    }
+    await NativeUpdater.notifyUpdate({
+      title: 'NebulaTune ' + latest,
+      body: 'Atualização disponível! Toque para atualizar o app.',
+      tag: 'update',
+    })
+  } catch {
+    /* sem permissão ou dispositivo bloqueado */
+  }
+}
