@@ -13,6 +13,8 @@ import {
 } from './cloud'
 import { buildBackup } from './backup'
 
+const POLL_MS = 15000
+
 function traduzErro(e) {
   const msg = String(e?.message || e || '')
   if (/invalid login credentials/i.test(msg)) return 'E-mail ou senha incorretos.'
@@ -28,19 +30,51 @@ function traduzErro(e) {
   return msg || 'Algo deu errado. Tente de novo.'
 }
 
+function trackSignature(t) {
+  return JSON.stringify({
+    id: t?.id || '',
+    title: t?.title || '',
+    artist: t?.artist || '',
+    album: t?.album || '',
+    duration: Math.round(t?.duration || 0),
+    fav: t?.fav === true,
+    cover: Array.isArray(t?.cover) ? t.cover : null,
+    coverRemote: t?.coverRemote || null,
+    addedAt: t?.addedAt || 0,
+  })
+}
+
+function signature({ library, settings, equalizer, lyricSync } = {}) {
+  return JSON.stringify({
+    t: (library || []).map(trackSignature).sort(),
+    s: settings || null,
+    e: equalizer || null,
+    l: lyricSync || null,
+  })
+}
+
+function backupSignature(backup) {
+  return signature({
+    library: backup?.tracks || [],
+    settings: backup?.settings,
+    equalizer: backup?.equalizer,
+    lyricSync: backup?.lyricSync,
+  })
+}
+
 export function useCloudSync({ library, settings, equalizer, lyricSync, loading, applyRemote }) {
   const [user, setUser] = useState(null)
   const [authReady, setAuthReady] = useState(!cloudEnabled)
   const [status, setStatus] = useState('')
   const [message, setMessage] = useState('')
-  const [pendingCloud, setPendingCloud] = useState(null)
   const [lastSync, setLastSync] = useState(null)
 
   const armedRef = useRef(false)
   const applyingRef = useRef(false)
   const busyRef = useRef(false)
   const resolvedForRef = useRef(null)
-  const suppressUntilRef = useRef(0)
+  const pushedSigRef = useRef('')
+  const lastRemoteRef = useRef(null)
 
   const dataRef = useRef({ library, settings, equalizer, lyricSync })
   const applyRef = useRef(applyRemote)
@@ -55,13 +89,17 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
 
   const userId = user?.id || null
 
-  const doPush = useCallback(async (id) => {
+  const doPush = useCallback(async (id, force = false) => {
     if (!cloudEnabled || !id || busyRef.current) return
+    const sig = signature(dataRef.current)
+    if (!force && sig === pushedSigRef.current) return
     busyRef.current = true
     setStatus('syncing')
     try {
       const backup = await buildBackup(dataRef.current)
-      await pushBackup(id, backup)
+      const updatedAt = await pushBackup(id, backup)
+      pushedSigRef.current = sig
+      if (updatedAt) lastRemoteRef.current = updatedAt
       setLastSync(new Date())
       setStatus('ok')
       setMessage('')
@@ -73,27 +111,33 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
     }
   }, [])
 
-  const doPull = useCallback(async (id) => {
+  const doPull = useCallback(async (id, knownUpdatedAt) => {
     if (!cloudEnabled || !id) return
     setStatus('syncing')
     try {
       const data = await pullBackup(id)
       if (!data) throw new Error('nenhum dado na nuvem')
+      const cloudSig = backupSignature(data)
       applyingRef.current = true
-      suppressUntilRef.current = Date.now() + 3000
       await applyRef.current(data)
       armedRef.current = true
-      setPendingCloud(null)
+      pushedSigRef.current = cloudSig
+      lastRemoteRef.current = data.exportedAt || knownUpdatedAt || null
       setLastSync(new Date())
       setStatus('ok')
       setMessage('')
+      setTimeout(() => {
+        applyingRef.current = false
+        if (armedRef.current && signature(dataRef.current) !== pushedSigRef.current) {
+          doPush(id)
+        }
+      }, 0)
     } catch (e) {
+      applyingRef.current = false
       setStatus('error')
       setMessage(traduzErro(e))
-    } finally {
-      applyingRef.current = false
     }
-  }, [])
+  }, [doPush])
 
   useEffect(() => {
     if (!cloudEnabled) return undefined
@@ -110,7 +154,8 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
       if (!u) {
         armedRef.current = false
         resolvedForRef.current = null
-        setPendingCloud(null)
+        pushedSigRef.current = ''
+        lastRemoteRef.current = null
       }
     })
     return () => {
@@ -131,16 +176,17 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
     resolvedForRef.current = userId
     let cancelled = false
     ;(async () => {
-      const info = await cloudInfo(userId)
-      if (cancelled) return
-      if (!info.exists) {
-        armedRef.current = true
-        doPush(userId)
-      } else if (dataRef.current.library.length === 0) {
-        doPull(userId)
-      } else {
-        armedRef.current = false
-        setPendingCloud(info)
+      try {
+        const info = await cloudInfo(userId)
+        if (cancelled) return
+        if (!info.exists) {
+          armedRef.current = true
+          doPush(userId, true)
+        } else {
+          await doPull(userId, info.updatedAt)
+        }
+      } catch {
+        /* tenta de novo depois */
       }
     })()
     return () => {
@@ -149,11 +195,42 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
   }, [userId, loading, doPush, doPull])
 
   useEffect(() => {
-    if (!cloudEnabled || !userId || !armedRef.current || applyingRef.current || loading) return undefined
-    if (Date.now() < suppressUntilRef.current) return undefined
-    const t = setTimeout(() => doPush(userId), 6000)
+    if (!cloudEnabled || !userId || !armedRef.current || applyingRef.current || loading)
+      return undefined
+    if (signature(dataRef.current) === pushedSigRef.current) return undefined
+    const t = setTimeout(() => doPush(userId), 5000)
     return () => clearTimeout(t)
   }, [library, settings, equalizer, lyricSync, userId, loading, doPush])
+
+  useEffect(() => {
+    if (!cloudEnabled || !userId || loading) return undefined
+    let stopped = false
+    const check = async () => {
+      if (stopped || busyRef.current || applyingRef.current) return
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      try {
+        const info = await cloudInfo(userId)
+        if (stopped || !info.exists) return
+        if (info.updatedAt && info.updatedAt !== lastRemoteRef.current) {
+          await doPull(userId, info.updatedAt)
+        }
+      } catch {
+        /* sem internet: tenta de novo no próximo ciclo */
+      }
+    }
+    const timer = setInterval(check, POLL_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') check()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      stopped = true
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
+  }, [userId, loading, doPull])
 
   const signIn = useCallback(async (email, password) => {
     setMessage('')
@@ -196,25 +273,26 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
     await signOutCloud()
     armedRef.current = false
     resolvedForRef.current = null
-    setPendingCloud(null)
+    pushedSigRef.current = ''
+    lastRemoteRef.current = null
     setStatus('')
     setMessage('')
   }, [])
 
   const syncNow = useCallback(async () => {
-    if (userId) await doPush(userId)
-  }, [userId, doPush])
-
-  const downloadCloud = useCallback(async () => {
-    if (userId) await doPull(userId)
-  }, [userId, doPull])
-
-  const keepLocal = useCallback(async () => {
     if (!userId) return
-    armedRef.current = true
-    setPendingCloud(null)
-    await doPush(userId)
-  }, [userId, doPush])
+    try {
+      const info = await cloudInfo(userId)
+      if (info.exists && info.updatedAt && info.updatedAt !== lastRemoteRef.current) {
+        await doPull(userId, info.updatedAt)
+      } else {
+        await doPush(userId, true)
+      }
+    } catch (e) {
+      setStatus('error')
+      setMessage(traduzErro(e))
+    }
+  }, [userId, doPull, doPush])
 
   return {
     cloudEnabled,
@@ -222,14 +300,11 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
     authReady,
     status,
     message,
-    pendingCloud,
     lastSync,
     signIn,
     signUp,
     google,
     signOut,
     syncNow,
-    downloadCloud,
-    keepLocal,
   }
 }

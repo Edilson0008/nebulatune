@@ -2997,23 +2997,10 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
                 </div>
               </div>
 
-              {cloud.pendingCloud && (
-                <div className="settings-row">
-                  <div className="settings-info">
-                    <span className="settings-label">Encontramos dados na nuvem</span>
-                    <span className="settings-desc">
-                      Essa conta já tem uma biblioteca salva. O que você quer fazer?
-                    </span>
-                  </div>
-                  <div className="settings-actions">
-                    <button className="btn-primary" onClick={cloud.downloadCloud}>
-                      Baixar da nuvem
-                    </button>
-                    <button className="btn-ghost" onClick={cloud.keepLocal}>
-                      Manter deste aparelho
-                    </button>
-                  </div>
-                </div>
+              {cloud.status === 'ok' && (
+                <p className="settings-note">
+                  Tudo o que você adicionar aqui aparece também em outros aparelhos, sozinho.
+                </p>
               )}
 
               {cloud.status === 'error' && cloud.message && (
@@ -3553,8 +3540,12 @@ function App() {
 
   const applyCloudBackup = useCallback(
     (data) => {
-      const tracks = tracksFromBackup(data)
+      const cloudTracks = tracksFromBackup(data)
+      const cloudIds = new Set(cloudTracks.map((t) => t.id))
+      const localOnly = libraryRef.current.filter((t) => !cloudIds.has(t.id))
+      const tracks = [...cloudTracks, ...localOnly]
       libraryRef.current.forEach((t) => {
+        if (!cloudIds.has(t.id)) return
         if (t.src) URL.revokeObjectURL(t.src)
         if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl)
       })

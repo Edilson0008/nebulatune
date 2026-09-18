@@ -240,6 +240,7 @@ export async function pushBackup(userId, backup) {
   if (error) throw error
 
   await cleanupOld(userId, refs)
+  return index.updatedAt
 }
 
 async function cleanupOld(userId, keep) {
