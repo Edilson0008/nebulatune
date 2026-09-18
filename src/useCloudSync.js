@@ -126,18 +126,13 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
       setLastSync(new Date())
       setStatus('ok')
       setMessage('')
-      setTimeout(() => {
-        applyingRef.current = false
-        if (armedRef.current && signature(dataRef.current) !== pushedSigRef.current) {
-          doPush(id)
-        }
-      }, 0)
     } catch (e) {
-      applyingRef.current = false
       setStatus('error')
       setMessage(traduzErro(e))
+    } finally {
+      applyingRef.current = false
     }
-  }, [doPush])
+  }, [])
 
   useEffect(() => {
     if (!cloudEnabled) return undefined
