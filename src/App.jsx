@@ -35,7 +35,8 @@ function formatTime(sec) {
 }
 
 function Cover({ colors, image, size = 40, radius = 8 }) {
-  const [c1, c2, c3] = colors
+  const [c1, c2, c3] =
+    Array.isArray(colors) && colors.length ? colors : ['#6b5bd6', '#2a2450', '#b9a7ff']
   if (image) {
     return (
       <span
