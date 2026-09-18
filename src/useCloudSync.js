@@ -93,6 +93,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
   const doPush = useCallback(async (id, force = false) => {
     if (!cloudEnabled || !id || busyRef.current) return
     const sig = signature(dataRef.current)
+    console.log('[nt-sync] doPush', { force, busy: busyRef.current, same: sig === pushedSigRef.current })
     if (!force && sig === pushedSigRef.current) return
     busyRef.current = true
     setStatus('syncing')
@@ -104,6 +105,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
       setLastSync(new Date())
       setStatus('ok')
       setMessage('')
+      console.log('[nt-sync] push OK', updatedAt)
     } catch (e) {
       setStatus('error')
       setMessage(traduzErro(e))
@@ -191,11 +193,22 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
   }, [userId, loading, doPush, doPull])
 
   useEffect(() => {
+    console.log('[nt-sync] effect', {
+      userId,
+      armed: armedRef.current,
+      applying: applyingRef.current,
+      loading,
+      same: dataSig === pushedSigRef.current,
+    })
     if (!cloudEnabled || !userId || !armedRef.current || applyingRef.current || loading)
       return undefined
+    console.log('[nt-sync] agendar push')
     if (dataSig === pushedSigRef.current) return undefined
     const t = setTimeout(() => doPush(userId), 5000)
-    return () => clearTimeout(t)
+    return () => {
+      console.log('[nt-sync] cancela timer')
+      clearTimeout(t)
+    }
   }, [dataSig, userId, loading, doPush])
 
   useEffect(() => {
