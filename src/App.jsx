@@ -14,6 +14,14 @@ import { Filesystem, Directory } from '@capacitor/filesystem'
 import { resolveAudiusStream, searchAudiusTracks, topTracks } from './online'
 import { blobToDataUrl, dataUrlToBlob, tracksFromBackup } from './backup'
 import { useCloudSync } from './useCloudSync'
+import {
+  APK_URL,
+  fetchLatestVersion,
+  installUpdate,
+  isNewer,
+  markUpdatePrompted,
+  wasUpdatePrompted,
+} from './updater'
 
 const IS_NATIVE = !!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.())
 
@@ -2775,6 +2783,11 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
   const [importing, setImporting] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [checking, setChecking] = useState(false)
+  const [updating, setUpdating] = useState(false)
+  const [latestVersion, setLatestVersion] = useState('')
+  const [updateMsg, setUpdateMsg] = useState('')
+  const [updateError, setUpdateError] = useState(false)
   const importInputRef = useRef(null)
 
   const submitAuth = (mode) => (e) => {
@@ -2792,6 +2805,37 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
     }
   })() : ''
   const updateReachable = !!updateHost && !['localhost', '127.0.0.1', '0.0.0.0'].some((h) => updateHost.startsWith(h))
+
+  const checkUpdate = async () => {
+    if (checking || updating) return
+    setChecking(true)
+    setUpdateMsg('')
+    setUpdateError(false)
+    try {
+      const latest = await fetchLatestVersion()
+      setLatestVersion(latest)
+      if (!isNewer(latest, APP_VERSION)) {
+        setUpdateMsg(`Você já está na versão mais recente (${APP_VERSION}).`)
+        return
+      }
+      setUpdateMsg(`Nova versão ${latest} encontrada. Baixando…`)
+      setUpdating(true)
+      try {
+        await installUpdate()
+        setUpdateMsg('Download pronto! Confirme a instalação quando o Android pedir.')
+      } catch {
+        setUpdateError(true)
+        setUpdateMsg(`Não consegui baixar automaticamente. Baixe em: ${APK_URL}`)
+      } finally {
+        setUpdating(false)
+      }
+    } catch {
+      setUpdateError(true)
+      setUpdateMsg('Não foi possível verificar agora. Tente de novo.')
+    } finally {
+      setChecking(false)
+    }
+  }
 
   const refreshStorage = useCallback(() => {
     if (navigator.storage?.estimate) {
@@ -3165,16 +3209,21 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
               <span className="settings-label">Atualizar o app</span>
               <span className="settings-desc">
                 Versão instalada: {APP_VERSION}.
-                {updateReachable
-                  ? ' Verifique se há uma versão nova disponível no site.'
-                  : ' As novas versões chegam instalando o nebulatune.apk novo.'}
+                {latestVersion
+                  ? ` Última disponível: ${latestVersion}.`
+                  : ' Toque em Atualizar para verificar se há uma versão nova.'}
               </span>
+              {updateMsg && (
+                <span className={`settings-note${updateError ? ' settings-note-error' : ''}`}>
+                  {updateMsg}
+                </span>
+              )}
             </div>
             {updateReachable && (
               <div className="settings-actions">
-                <a className="btn-primary" href={`${SITE_URL}/apk/nebulatune.apk`} download="NebulaTune.apk">
-                  Baixar nova versão
-                </a>
+                <button className="btn-primary" onClick={checkUpdate} disabled={checking || updating}>
+                  {checking ? 'Verificando…' : updating ? 'Baixando…' : 'Atualizar'}
+                </button>
               </div>
             )}
           </div>
@@ -3261,6 +3310,9 @@ function App() {
   const persistedRef = useRef(new Map())
   const replacingRef = useRef(false)
   const libraryRef = useRef(library)
+  const [updatePrompt, setUpdatePrompt] = useState(null)
+  const [updateInstalling, setUpdateInstalling] = useState(false)
+  const [updateInstallMsg, setUpdateInstallMsg] = useState('')
 
   useEffect(() => {
     libraryRef.current = library
@@ -3270,6 +3322,45 @@ function App() {
     const id = setInterval(() => setNow(new Date()), 60000)
     return () => clearInterval(id)
   }, [])
+
+  useEffect(() => {
+    if (!IS_NATIVE) return undefined
+    let active = true
+    ;(async () => {
+      try {
+        const latest = await fetchLatestVersion()
+        if (!active) return
+        if (isNewer(latest, APP_VERSION) && !wasUpdatePrompted(latest)) {
+          markUpdatePrompted(latest)
+          setUpdatePrompt(latest)
+        }
+      } catch {
+        /* sem internet ou site indisponível: tenta de novo na próxima abertura */
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const postponeUpdate = () => {
+    setUpdatePrompt(null)
+    setUpdateInstallMsg('')
+  }
+
+  const installNow = async () => {
+    if (updateInstalling) return
+    setUpdateInstalling(true)
+    setUpdateInstallMsg('')
+    try {
+      await installUpdate()
+      setUpdateInstallMsg('Download pronto! Confirme a instalação quando o Android pedir.')
+    } catch {
+      setUpdateInstallMsg(`Não consegui baixar. Use o botão em Configurações ou acesse ${APK_URL}.`)
+    } finally {
+      setUpdateInstalling(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -4329,6 +4420,27 @@ function App() {
             </svg>
             <p>Solte os arquivos de música</p>
             <small>MP3, WAV, OGG, M4A, FLAC…</small>
+          </div>
+        </div>
+      )}
+
+      {updatePrompt && (
+        <div className="modal-overlay" onClick={postponeUpdate}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">Nova versão disponível</h3>
+            <p className="modal-text">
+              A versão {updatePrompt} do NebulaTune está disponível. Você está usando a versão{' '}
+              {APP_VERSION}.
+            </p>
+            {updateInstallMsg && <p className="modal-text">{updateInstallMsg}</p>}
+            <div className="modal-actions">
+              <button className="btn-ghost" onClick={postponeUpdate}>
+                Deixar pra depois
+              </button>
+              <button className="btn-primary" onClick={installNow} disabled={updateInstalling}>
+                {updateInstalling ? 'Baixando…' : 'Atualizar agora'}
+              </button>
+            </div>
           </div>
         </div>
       )}

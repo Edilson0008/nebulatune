@@ -23,6 +23,8 @@ function traduzErro(e) {
     return 'A senha precisa ter ao menos 6 caracteres.'
   if (/invalid format|unable to validate email/i.test(msg)) return 'E-mail inválido.'
   if (/rate limit|too many/i.test(msg)) return 'Muitas tentativas. Espere um pouco.'
+  if (/maximum allowed size/i.test(msg))
+    return 'Arquivo grande demais para um único envio. Tente de novo — o envio agora é dividido.'
   return msg || 'Algo deu errado. Tente de novo.'
 }
 

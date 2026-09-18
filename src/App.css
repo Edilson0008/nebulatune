@@ -732,6 +732,13 @@ button {
   font-weight: 700;
 }
 
+.modal-text {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
 .modal-field {
   display: flex;
   flex-direction: column;
