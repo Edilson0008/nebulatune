@@ -101,8 +101,11 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
     busyRef.current = true
     setStatus('syncing')
     try {
+      const t0 = Date.now()
       const backup = await buildBackup(dataRef.current)
+      console.log('[nt-sync] backup montado em ms: ' + (Date.now() - t0))
       const updatedAt = await pushBackup(id, backup)
+      console.log('[nt-sync] upload total ms: ' + (Date.now() - t0))
       pushedSigRef.current = sig
       if (updatedAt) lastRemoteRef.current = updatedAt
       setLastSync(new Date())
@@ -199,12 +202,14 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
     console.log(
       '[nt-sync] effect ' +
         JSON.stringify({
-          userId: userId ? userId.slice(0, 6) : null,
+          user: userId ? userId.slice(0, 6) : null,
           armed: armedRef.current,
           applying: applyingRef.current,
           loading,
           same: dataSig === pushedSigRef.current,
-        }),
+        }) +
+        ' DATA=' +
+        dataSig,
     )
     if (!cloudEnabled || !userId || !armedRef.current || applyingRef.current || loading)
       return undefined
