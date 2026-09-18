@@ -14,10 +14,10 @@ globalThis.FileReader = class {
 const { signInEmail, getSession, pullBackup } = await import('./cloud.mjs')
 await signInEmail('bot-teste-nebulatune@example.com', 'teste123456')
 const { user } = await getSession()
+const favsOf = (b) => Object.fromEntries((b.tracks || []).map((t) => [t.id, t.fav === true]))
 
-const favsOf = (backup) => Object.fromEntries((backup.tracks || []).map((t) => [t.id, t.fav === true]))
-const before = favsOf(await pullBackup(user.id))
-console.log('favoritos antes:', JSON.stringify(before))
+const b0 = await pullBackup(user.id)
+console.log('nuvem antes:', JSON.stringify(favsOf(b0)), 'updatedAt', b0.exportedAt)
 
 const browser = await puppeteer.launch({
   executablePath: '/usr/bin/chromium',
@@ -25,6 +25,7 @@ const browser = await puppeteer.launch({
   args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
 })
 const page = await browser.newPage()
+await page.setViewport({ width: 412, height: 900 })
 const logs = []
 page.on('pageerror', (e) => logs.push(e.message))
 await page.goto('https://edilson0008.github.io/nebulatune/', { waitUntil: 'networkidle2', timeout: 60000 })
@@ -43,15 +44,38 @@ await page.evaluate(() => {
 await new Promise((r) => setTimeout(r, 10000))
 await page.evaluate(() => localStorage.setItem('nt.view', 'inicio'))
 await page.reload({ waitUntil: 'networkidle2', timeout: 60000 })
-await new Promise((r) => setTimeout(r, 5000))
-const favBtn = await page.$('.row-fav')
-console.log('achou botao favorito:', !!favBtn)
-if (favBtn) await favBtn.click()
-await new Promise((r) => setTimeout(r, 11000))
+await new Promise((r) => setTimeout(r, 6000))
 
-const after = favsOf(await pullBackup(user.id))
-console.log('favoritos depois:', JSON.stringify(after))
-const changed = Object.keys(after).filter((id) => before[id] !== after[id])
+const info = await page.evaluate(() => {
+  const b = document.querySelector('.row-fav')
+  if (!b) return null
+  const row = b.closest('tr') || b.parentElement
+  return { pressed: b.getAttribute('aria-pressed'), titulo: row?.innerText?.split('\n')[0] || '' }
+})
+console.log('botao favorito:', JSON.stringify(info))
+await page.evaluate(() => document.querySelector('.row-fav')?.click())
+await new Promise((r) => setTimeout(r, 1000))
+const pressedDepois = await page.evaluate(() =>
+  document.querySelector('.row-fav')?.getAttribute('aria-pressed'),
+)
+console.log('aria-pressed depois do clique:', pressedDepois)
+
+await new Promise((r) => setTimeout(r, 20000))
+await page.evaluate(() => {
+  const b = [...document.querySelectorAll('button')].find((x) => /Ajustes/.test(x.textContent))
+  b && b.click()
+})
+await new Promise((r) => setTimeout(r, 1500))
+const status = await page.evaluate(() => {
+  const t = document.body.innerText
+  const i = t.indexOf('Conta e sincroniza')
+  return i >= 0 ? t.slice(i, i + 90).replace(/\n+/g, ' | ') : '(nao achei a area de conta)'
+})
+console.log('status do app:', status)
+
+const b1 = await pullBackup(user.id)
+console.log('nuvem depois:', JSON.stringify(favsOf(b1)), 'updatedAt', b1.exportedAt)
+const changed = Object.keys(favsOf(b1)).filter((id) => favsOf(b0)[id] !== favsOf(b1)[id])
 console.log('musicas cujo favorito mudou na nuvem:', changed.length, changed)
 console.log('erros:', logs.slice(-3))
 await browser.close()

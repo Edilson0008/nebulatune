@@ -78,6 +78,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
 
   const dataRef = useRef({ library, settings, equalizer, lyricSync })
   const applyRef = useRef(applyRemote)
+  const dataSig = signature({ library, settings, equalizer, lyricSync })
 
   useEffect(() => {
     dataRef.current = { library, settings, equalizer, lyricSync }
@@ -192,10 +193,10 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, loading,
   useEffect(() => {
     if (!cloudEnabled || !userId || !armedRef.current || applyingRef.current || loading)
       return undefined
-    if (signature(dataRef.current) === pushedSigRef.current) return undefined
+    if (dataSig === pushedSigRef.current) return undefined
     const t = setTimeout(() => doPush(userId), 5000)
     return () => clearTimeout(t)
-  }, [library, settings, equalizer, lyricSync, userId, loading, doPush])
+  }, [dataSig, userId, loading, doPush])
 
   useEffect(() => {
     if (!cloudEnabled || !userId || loading) return undefined
