@@ -60,6 +60,7 @@ export function useSettings() {
       setAvatar: (value) => setSettings((s) => ({ ...s, avatar: value })),
       setBgAnimated: (value) => setSettings((s) => ({ ...s, bgAnimated: value })),
       setCosmosAnimated: (value) => setSettings((s) => ({ ...s, cosmosAnimated: value })),
+      setAll: (value) => setSettings((s) => ({ ...s, ...(value || {}) })),
     }),
     [],
   )

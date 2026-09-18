@@ -12,6 +12,8 @@ import { APP_VERSION, SITE_URL } from './app-config'
 import { Share as CapShare } from '@capacitor/share'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { resolveAudiusStream, searchAudiusTracks, topTracks } from './online'
+import { blobToDataUrl, dataUrlToBlob, tracksFromBackup } from './backup'
+import { useCloudSync } from './useCloudSync'
 
 const IS_NATIVE = !!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.())
 
@@ -2704,27 +2706,6 @@ async function makeThumb(blob, max = 320) {
   }
 }
 
-function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    if (!blob) return resolve(null)
-    const r = new FileReader()
-    r.onload = () => resolve(r.result)
-    r.onerror = () => reject(r.error)
-    r.readAsDataURL(blob)
-  })
-}
-
-function dataUrlToBlob(data) {
-  if (!data) return null
-  const comma = data.indexOf(',')
-  if (comma < 0) return null
-  const mime = /^data:([^;]+)/.exec(data.slice(0, comma))?.[1] || ''
-  const bin = atob(data.slice(comma + 1))
-  const bytes = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-  return new Blob([bytes], { type: mime })
-}
-
 function extFromType(type) {
   const t = (type || '').split(';')[0].toLowerCase()
   if (t.includes('flac')) return 'flac'
@@ -2786,13 +2767,22 @@ function ApkDownloadButton() {
   )
 }
 
-function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp }) {
+function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, cloud, cloudRedirect }) {
   const [storage, setStorage] = useState(null)
   const [exported, setExported] = useState(false)
   const [imported, setImported] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const importInputRef = useRef(null)
+
+  const submitAuth = (mode) => (e) => {
+    e.preventDefault()
+    if (!email || !password) return
+    if (mode === 'signup') cloud.signUp(email, password, cloudRedirect)
+    else cloud.signIn(email, password)
+  }
 
   const updateHost = SITE_URL ? (() => {
     try {
@@ -2917,9 +2907,139 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
     reader.readAsText(file)
   }
 
+  const syncLabel =
+    cloud.status === 'syncing'
+      ? 'Sincronizando…'
+      : cloud.status === 'ok'
+        ? 'Tudo sincronizado'
+        : cloud.status === 'error'
+          ? 'Falha na sincronização'
+          : ''
+
   return (
     <section className="view">
       <h1 className="greeting">Configurações</h1>
+
+      {cloud.cloudEnabled && (
+        <div className="settings-card">
+          <h2 className="section-title">Conta e sincronização</h2>
+
+          {!cloud.authReady ? (
+            <div className="settings-row">
+              <div className="settings-info">
+                <span className="settings-desc">Carregando…</span>
+              </div>
+            </div>
+          ) : cloud.user ? (
+            <>
+              <div className="settings-row">
+                <div className="settings-info">
+                  <span className="settings-label">{cloud.user.email}</span>
+                  <span className="settings-desc">
+                    {syncLabel || 'Seus dados são salvos na nuvem automaticamente.'}
+                  </span>
+                </div>
+                <div className="settings-actions">
+                  <button
+                    className="btn-ghost"
+                    onClick={cloud.syncNow}
+                    disabled={cloud.status === 'syncing'}
+                  >
+                    Sincronizar agora
+                  </button>
+                  <button className="btn-ghost btn-ghost-danger" onClick={cloud.signOut}>
+                    Sair
+                  </button>
+                </div>
+              </div>
+
+              {cloud.pendingCloud && (
+                <div className="settings-row">
+                  <div className="settings-info">
+                    <span className="settings-label">Encontramos dados na nuvem</span>
+                    <span className="settings-desc">
+                      Essa conta já tem uma biblioteca salva. O que você quer fazer?
+                    </span>
+                  </div>
+                  <div className="settings-actions">
+                    <button className="btn-primary" onClick={cloud.downloadCloud}>
+                      Baixar da nuvem
+                    </button>
+                    <button className="btn-ghost" onClick={cloud.keepLocal}>
+                      Manter deste aparelho
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {cloud.status === 'error' && cloud.message && (
+                <p className="settings-note settings-note-error">{cloud.message}</p>
+              )}
+            </>
+          ) : (
+            <form onSubmit={submitAuth('signin')}>
+              <div className="settings-row">
+                <div className="settings-info">
+                  <span className="settings-label">Entrar ou criar conta</span>
+                  <span className="settings-desc">
+                    Sua biblioteca, favoritos e ajustes ficam salvos e aparecem em qualquer
+                    aparelho.
+                  </span>
+                </div>
+              </div>
+              <div className="auth-fields">
+                <input
+                  type="email"
+                  className="auth-input"
+                  placeholder="E-mail"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+                <input
+                  type="password"
+                  className="auth-input"
+                  placeholder="Senha (mínimo 6 caracteres)"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <div className="auth-actions">
+                  <button
+                    type="submit"
+                    className="btn-primary"
+                    disabled={cloud.status === 'syncing'}
+                  >
+                    Entrar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={cloud.status === 'syncing'}
+                    onClick={() => email && password && cloud.signUp(email, password, cloudRedirect)}
+                  >
+                    Criar conta
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="btn-ghost auth-google"
+                  onClick={() => cloud.google(cloudRedirect)}
+                >
+                  Entrar com Google
+                </button>
+              </div>
+              {cloud.message && (
+                <p
+                  className={`settings-note ${cloud.status === 'error' ? 'settings-note-error' : ''}`}
+                >
+                  {cloud.message}
+                </p>
+              )}
+            </form>
+          )}
+        </div>
+      )}
 
       <div className="settings-card">
         <h2 className="section-title">Aparência</h2>
@@ -3139,6 +3259,7 @@ function App() {
   const dragCounter = useRef(0)
   const fileInputRef = useRef(null)
   const persistedRef = useRef(new Map())
+  const replacingRef = useRef(false)
   const libraryRef = useRef(library)
 
   useEffect(() => {
@@ -3178,7 +3299,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (loadingLib) return
+    if (loadingLib || replacingRef.current) return
     library.forEach((t) => {
       if (!t.audioBlob) return
       const key = recordKey(t)
@@ -3338,6 +3459,48 @@ function App() {
       return next
     })
   }, [])
+
+  const applyCloudBackup = useCallback(
+    (data) => {
+      const tracks = tracksFromBackup(data)
+      libraryRef.current.forEach((t) => {
+        if (t.src) URL.revokeObjectURL(t.src)
+        if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl)
+      })
+      replacingRef.current = true
+      persistedRef.current.clear()
+      setLibrary(tracks)
+      clearTracks()
+        .then(() => {
+          tracks.forEach((t) => persistedRef.current.set(t.id, recordKey(t)))
+          return putTracks(tracks.map(toRecord))
+        })
+        .catch(() => setStorageError(true))
+        .finally(() => {
+          replacingRef.current = false
+        })
+      if (data.settings && typeof data.settings === 'object') settingsApi.setAll(data.settings)
+      if (data.equalizer && typeof data.equalizer === 'object') eq.importSettings(data.equalizer)
+      if (data.lyricSync && typeof data.lyricSync === 'object') {
+        setSyncOffsets(data.lyricSync)
+        try {
+          localStorage.setItem('nt.lyricSync', JSON.stringify(data.lyricSync))
+        } catch {
+          /* armazenamento indisponível */
+        }
+      }
+    },
+    [eq, settingsApi],
+  )
+
+  const cloud = useCloudSync({
+    library,
+    settings: appSettings,
+    equalizer: eq.settings,
+    lyricSync: syncOffsets,
+    loading: loadingLib,
+    applyRemote: applyCloudBackup,
+  })
 
   const syncOffset = trackId ? syncOffsets[trackId] || 0 : 0
   const firstLineTime = lyrics?.lines?.[0]?.time
@@ -4050,6 +4213,12 @@ function App() {
             isNative={IS_NATIVE}
             onImport={importLibrary}
             onShareApp={shareApp}
+            cloud={cloud}
+            cloudRedirect={
+              IS_NATIVE
+                ? `${SITE_URL}/`
+                : `${window.location.origin}${window.location.pathname}`
+            }
           />
         )}
       </main>

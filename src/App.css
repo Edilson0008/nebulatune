@@ -3415,6 +3415,58 @@ button {
   cursor: default;
 }
 
+.auth-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0 0;
+  max-width: 340px;
+}
+
+.auth-input {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-h);
+  padding: 10px 12px;
+  font-size: 14px;
+  width: 100%;
+}
+
+.auth-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.auth-input::placeholder {
+  color: var(--text-2);
+}
+
+.auth-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.auth-actions .btn-primary,
+.auth-actions .btn-ghost {
+  flex: 1;
+}
+
+.auth-google {
+  width: 100%;
+}
+
+.settings-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.settings-note-error {
+  color: #ff6b6b;
+}
+
 .swatch-grid {
   display: flex;
   gap: 8px;

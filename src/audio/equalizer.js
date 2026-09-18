@@ -91,5 +91,19 @@ export function useEqualizer() {
       })),
     toggle: () => setSettings((s) => ({ ...s, enabled: !s.enabled })),
     reset: () => setSettings(() => defaultSettings()),
+    importSettings: (value) =>
+      setSettings(() => {
+        const base = defaultSettings()
+        const clean = { ...(value || {}) }
+        delete clean.preamp
+        return {
+          ...base,
+          ...clean,
+          bands:
+            Array.isArray(clean.bands) && clean.bands.length === BAND_COUNT
+              ? clean.bands
+              : base.bands,
+        }
+      }),
   }
 }
