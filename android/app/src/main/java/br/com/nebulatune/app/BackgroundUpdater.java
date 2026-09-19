@@ -9,7 +9,7 @@ import android.content.SharedPreferences;
 public final class BackgroundUpdater {
 
     private static final String PREFS = "nebulatune_bg_updates";
-    private static final long INTERVAL_MS = 6L * 60 * 60 * 1000; // 6 horas
+    private static final long INTERVAL_MS = 60L * 60 * 1000; // 1 hora
     private static final int REQUEST_CODE = 4041;
 
     private BackgroundUpdater() {}

@@ -9,7 +9,15 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AppUpdaterPlugin.class);
         registerPlugin(MediaImporterPlugin.class);
         registerPlugin(MediaNotificationPlugin.class);
+        registerPlugin(SleepTimerPlugin.class);
         super.onCreate(savedInstanceState);
         BackgroundUpdater.schedule(this);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        BackgroundUpdater.reschedule(this);
+        UpdateAlarmReceiver.checkNow(this);
     }
 }

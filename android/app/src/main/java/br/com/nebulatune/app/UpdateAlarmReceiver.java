@@ -27,12 +27,17 @@ public class UpdateAlarmReceiver extends BroadcastReceiver {
         "https://edilson0008.github.io/nebulatune/version.json";
     private static final int NOTIFICATION_ID = 4042;
 
+    public static void checkNow(Context context) {
+        new Thread(() -> new UpdateAlarmReceiver().check(context)).start();
+    }
+
     @Override
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
         if (android.content.Intent.ACTION_BOOT_COMPLETED.equals(action)
             || "android.intent.action.MY_PACKAGE_REPLACED".equals(action)) {
             BackgroundUpdater.schedule(context);
+            SleepTimerPlugin.rescheduleAfterRestart(context);
             return;
         }
         if (!ACTION_CHECK.equals(action)) return;

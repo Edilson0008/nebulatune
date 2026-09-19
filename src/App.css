@@ -3719,9 +3719,9 @@ button {
 /* ---------- Tela "Tocando agora": fundo com a cor da capa ---------- */
 .now-playing {
   background:
-    radial-gradient(60% 44% at 84% -8%, var(--npc1), transparent 68%),
-    radial-gradient(56% 40% at 6% 112%, var(--npc2), transparent 68%),
-    radial-gradient(54% 42% at 50% 46%, var(--npc3), transparent 72%),
+    radial-gradient(60% 44% at 84% -8%, color-mix(in srgb, var(--npc1) 32%, transparent), transparent 68%),
+    radial-gradient(56% 40% at 6% 112%, color-mix(in srgb, var(--npc2) 28%, transparent), transparent 68%),
+    radial-gradient(54% 42% at 50% 46%, color-mix(in srgb, var(--npc3) 20%, transparent), transparent 72%),
     linear-gradient(180deg, #161027 0%, #100d1e 58%, #0b0917 100%);
 }
 
@@ -3743,29 +3743,13 @@ button {
   pointer-events: none;
 }
 
-.np-aura {
+.np-particles {
   position: absolute;
-  inset: -30%;
-  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
   pointer-events: none;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 50% 48%, var(--npc1) 0%, rgba(16, 13, 30, 0) 56%),
-    radial-gradient(circle at 60% 62%, var(--npc3) 0%, rgba(16, 13, 30, 0) 72%);
-  filter: blur(30px);
-  opacity: 0.26;
-  animation: aura-breathe 9s ease-in-out infinite;
-}
-
-@keyframes aura-breathe {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 0.22;
-  }
-  50% {
-    transform: scale(1.06);
-    opacity: 0.34;
-  }
 }
 
 /* ---------- Timer de desligar (sleep timer) ---------- */

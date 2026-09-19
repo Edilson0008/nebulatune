@@ -89,6 +89,16 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.8.1',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: '"Tocando agora" com visual novo: aquele brilho oval no meio da tela saiu — agora ficam pequenas partículas de luz subindo pela tela e o halo ao redor da capa ganhou "planetas" orbitando em neon suave, confortável para os olhos.' },
+      { type: 'correcao', text: 'Timer de desligar (sleep timer) agora funciona de verdade: usa um alarme exato do celular, então a música para mesmo se o app estiver em segundo plano ou a tela apagada.' },
+      { type: 'correcao', text: 'Fila de reprodução: agora dá para arrastar a música para cima ou para baixo e soltar — a nova ordem fica salva (antes só movia enquanto segurava).' },
+      { type: 'correcao', text: 'Aviso de atualização mais rápido: o app checa versão nova a cada hora em segundo plano e também assim que você abre o app, notificando na hora.' },
+    ],
+  },
+  {
     version: '1.8.0',
     date: 'Setembro de 2026',
     items: [
@@ -1379,6 +1389,7 @@ function NowPlaying({
       className={`now-playing ${searchOpen ? 'searching' : ''}`}
       style={{ '--npc1': palette.c1, '--npc2': palette.c2, '--npc3': palette.c3 }}
     >
+      <NowParticles />
       <div className="np-top">
         <button className="np-close" onClick={onClose} aria-label="Fechar">
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1547,7 +1558,6 @@ function NowPlaying({
 
       <div className="np-main">
         <div className="np-cover">
-          <span className="np-aura" aria-hidden="true" />
           <AudioHalo active={playing} />
           <Cover colors={track.cover} image={track.coverUrl} size="min(56vw, 260px)" radius={22} />
         </div>
@@ -2957,6 +2967,71 @@ function VSlider({ value, onChange, min = -12, max = 12, step = 1, label, suffix
   )
 }
 
+function NowParticles() {
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const canvas = ref.current
+    if (!canvas) return undefined
+    let c2d
+    try {
+      c2d = canvas.getContext('2d')
+    } catch {
+      return undefined
+    }
+    if (!c2d) return undefined
+    const rand = (a, b) => a + Math.random() * (b - a)
+    const N = 20
+    const parts = Array.from({ length: N }, () => ({
+      x: Math.random(),
+      y: 0.35 + Math.random() * 0.5,
+      r: rand(0.7, 2.4),
+      vy: rand(0.012, 0.045),
+      vx: rand(-0.04, 0.04),
+      tw: rand(1.4, 4),
+      hue: Math.random() < 0.55 ? 150 : Math.random() < 0.5 ? 190 : 260,
+      phase: Math.random() * Math.PI * 2,
+    }))
+    let raf = 0
+
+    const draw = () => {
+      const rect = canvas.getBoundingClientRect()
+      const dpr = window.devicePixelRatio || 1
+      const w = Math.max(1, Math.round(rect.width * dpr))
+      const h = Math.max(1, Math.round(rect.height * dpr))
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w
+        canvas.height = h
+      }
+      c2d.clearRect(0, 0, w, h)
+      const t = performance.now() / 1000
+      for (const p of parts) {
+        p.y += p.vy * 0.016
+        p.x += p.vx * 0.016
+        if (p.y > 1.05) {
+          p.y = -0.05
+          p.x = Math.random()
+          p.vx = rand(-0.04, 0.04)
+        }
+        const px = ((p.x % 1) + 1) % 1
+        const alpha = 0.08 + 0.3 * Math.abs(Math.sin(t * p.tw + p.phase))
+        const size = p.r * dpr * (1 + 0.4 * Math.sin(t * 1.3 + p.phase))
+        c2d.beginPath()
+        c2d.arc(px * w, p.y * h, Math.max(0.5, size), 0, Math.PI * 2)
+        c2d.fillStyle = p.hue === 150
+          ? `rgba(150,255,215,${alpha.toFixed(3)})`
+          : `hsla(${p.hue}, 85%, 78%, ${alpha.toFixed(3)})`
+        c2d.fill()
+      }
+      raf = requestAnimationFrame(draw)
+    }
+    raf = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  return <canvas ref={ref} className="np-particles" aria-hidden="true" />
+}
+
 function AudioHalo({ active }) {
   const ref = useRef(null)
   const activeRef = useRef(active)
@@ -3007,10 +3082,21 @@ function AudioHalo({ active }) {
 
       const t = performance.now() / 1000
       c2d.lineCap = 'round'
+      c2d.shadowColor = 'rgba(120,255,220,0.55)'
+      c2d.shadowBlur = 6 * dpr
       const rings = [
-        { r: R, band: [0, 0.14], speed: 0.5, width: 2.4, alpha: 0.5 },
-        { r: R * 1.17, band: [0.14, 0.42], speed: -0.32, width: 1.8, alpha: 0.34 },
-        { r: R * 1.34, band: [0.42, 1], speed: 0.2, width: 1.3, alpha: 0.2 },
+        {
+          r: R, band: [0, 0.14], speed: 0.5, width: 2.2, alpha: 0.5,
+          col: [126, 255, 204], planet: { size: 3.6, offset: 0.9, col: [220, 255, 245] },
+        },
+        {
+          r: R * 1.17, band: [0.14, 0.42], speed: -0.32, width: 1.8, alpha: 0.36,
+          col: [140, 226, 255], planet: { size: 2.6, offset: 2.5, col: [200, 245, 255] },
+        },
+        {
+          r: R * 1.34, band: [0.42, 1], speed: 0.2, width: 1.4, alpha: 0.24,
+          col: [198, 170, 255], planet: { size: 1.9, offset: 4.2, col: [235, 225, 255] },
+        },
       ]
       for (let ri = 0; ri < rings.length; ri += 1) {
         const cfg = rings[ri]
@@ -3018,7 +3104,7 @@ function AudioHalo({ active }) {
         const radius = cfg.r * (1 + lvl * 0.055)
         const rot = t * cfg.speed + ri * 0.9
         const a = cfg.alpha * (0.3 + lvl * 0.7)
-        const col = ['255,255,255', '216,180,254', '167,230,255'][ri]
+        const col = cfg.col.join(',')
         c2d.strokeStyle = `rgba(${col},${a.toFixed(3)})`
         c2d.lineWidth = cfg.width * dpr
         c2d.beginPath()
@@ -3026,11 +3112,23 @@ function AudioHalo({ active }) {
         c2d.stroke()
         const ex = cx + Math.cos(rot + 1.7 * Math.PI) * radius
         const ey = cy + Math.sin(rot + 1.7 * Math.PI) * radius
+        c2d.shadowBlur = 4 * dpr
         c2d.fillStyle = `rgba(${col},${Math.min(1, a * 1.35).toFixed(3)})`
         c2d.beginPath()
         c2d.arc(ex, ey, cfg.width * dpr * 1.5, 0, Math.PI * 2)
         c2d.fill()
+        const pa = t * cfg.speed * 0.9 + cfg.planet.offset
+        const px = cx + Math.cos(pa) * radius
+        const py = cy + Math.sin(pa) * radius
+        const ps = cfg.planet.size * dpr * (1 + lvl * 0.35)
+        c2d.shadowColor = `rgba(${cfg.planet.col.join(',')},0.9)`
+        c2d.shadowBlur = 10 * dpr
+        c2d.fillStyle = `rgba(${cfg.planet.col.join(',')},${Math.min(1, a + 0.35).toFixed(3)})`
+        c2d.beginPath()
+        c2d.arc(px, py, ps, 0, Math.PI * 2)
+        c2d.fill()
       }
+      c2d.shadowBlur = 0
       raf = requestAnimationFrame(draw)
     }
     raf = requestAnimationFrame(draw)
@@ -3272,8 +3370,8 @@ function Equalizer({ eq }) {
 }
 
 function QueueSheet({ track, progress, elapsed, duration, queue, onPlayItem, onRemoveItem, onMoveItem, onClear, onReorder, onClose }) {
-  const [dragFrom, setDragFrom] = useState(null)
-  const [dragOverIdx, setDragOverIdx] = useState(null)
+  const listRef = useRef(null)
+  const [dragSession, setDragSession] = useState(null)
 
   useEffect(() => {
     const onKey = (e) => {
@@ -3288,31 +3386,55 @@ function QueueSheet({ track, progress, elapsed, duration, queue, onPlayItem, onR
     }
   }, [onClose])
 
-  const onRowDragStart = (e, i) => {
-    setDragFrom(i)
-    setDragOverIdx(i)
-    e.dataTransfer.effectAllowed = 'move'
-    try {
-      e.dataTransfer.setData('text/plain', String(i))
-    } catch {}
-  }
+  useEffect(() => {
+    if (!dragSession) return undefined
+    const onMove = (e) => {
+      const d = dragSession
+      if (!d.engaged) {
+        const dx = Math.abs(e.clientX - d.x)
+        const dy = Math.abs(e.clientY - d.y)
+        if (dx + dy < 10) return
+        d.engaged = true
+      }
+      try {
+        e.preventDefault()
+      } catch {}
+      const box = listRef.current
+      if (!box) return
+      const rows = box.querySelectorAll('.queue-row')
+      if (!rows.length) return
+      let target = d.from
+      const y = e.clientY
+      rows.forEach((el) => {
+        const r = el.getBoundingClientRect()
+        const idx = Number(el.dataset.idx)
+        if (Number.isFinite(idx) && y >= r.top + r.height / 2) target = idx
+      })
+      if (target !== d.lastTarget) d.lastTarget = target
+      setDragSession({ ...d, lastTarget: target })
+    }
+    const onUp = () => {
+      const d = dragSession
+      if (d && d.engaged && d.lastTarget != null && d.lastTarget !== d.from) {
+        onReorder?.(d.from, d.lastTarget)
+      }
+      setDragSession(null)
+    }
+    const onCancel = () => setDragSession(null)
+    window.addEventListener('pointermove', onMove, { passive: false })
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+    }
+  }, [dragSession, onReorder])
 
-  const onRowDragOver = (e, i) => {
-    e.preventDefault()
-    if (dragFrom === null || dragFrom === i) return
-    setDragOverIdx(i)
-  }
-
-  const onRowDrop = (e, i) => {
-    e.preventDefault()
-    if (dragFrom !== null) onReorder?.(dragFrom, i)
-    setDragFrom(null)
-    setDragOverIdx(null)
-  }
-
-  const onDragEnd = () => {
-    setDragFrom(null)
-    setDragOverIdx(null)
+  const rowPointerDown = (e, i) => {
+    if (e.target.closest('button')) return
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    setDragSession({ from: i, x: e.clientX, y: e.clientY, engaged: false, lastTarget: i })
   }
 
   return (
@@ -3358,16 +3480,13 @@ function QueueSheet({ track, progress, elapsed, duration, queue, onPlayItem, onR
             música da sua lista para ela entrar na fila automaticamente.
           </p>
         ) : (
-          <div className="queue-list">
+          <div className="queue-list" ref={listRef}>
             {queue.map((t, i) => (
               <div
-                className={`queue-row ${dragFrom === i ? 'dragging' : ''} ${dragOverIdx === i && dragFrom !== null && dragFrom !== i ? 'drag-over' : ''}`}
+                className={`queue-row ${dragSession && dragSession.engaged && dragSession.from === i ? 'dragging' : ''} ${dragSession && dragSession.engaged && dragSession.lastTarget === i && dragSession.lastTarget !== dragSession.from ? 'drag-over' : ''}`}
                 key={t.id}
-                draggable
-                onDragStart={(e) => onRowDragStart(e, i)}
-                onDragOver={(e) => onRowDragOver(e, i)}
-                onDrop={(e) => onRowDrop(e, i)}
-                onDragEnd={onDragEnd}
+                data-idx={i}
+                onPointerDown={(e) => rowPointerDown(e, i)}
               >
                 <button className="queue-row-main" onClick={() => onPlayItem(t.id)}>
                   <span className="queue-num">{i + 1}</span>
@@ -4336,6 +4455,28 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
   )
 }
 
+function sleepNativeStart(timestampMs) {
+  try {
+    if (IS_NATIVE && window.Capacitor?.Plugins?.SleepTimer) {
+      window.Capacitor.Plugins.SleepTimer.start({ timestamp: timestampMs })
+    }
+  } catch {}
+}
+
+function sleepNativeCancel() {
+  try {
+    if (IS_NATIVE && window.Capacitor?.Plugins?.SleepTimer) {
+      window.Capacitor.Plugins.SleepTimer.cancel()
+    }
+  } catch {}
+}
+
+if (typeof window !== 'undefined') {
+  window.__nebulaSleepPause = () => {
+    window.dispatchEvent(new CustomEvent('nebulatune:sleepfire'))
+  }
+}
+
 function App() {
   const [library, setLibrary] = useState([])
   const [loadingLib, setLoadingLib] = useState(true)
@@ -4813,6 +4954,7 @@ function App() {
     setSleepEndsAt(null)
     setSleepRemaining(null)
     sleepTrackRef.current = null
+    sleepNativeCancel()
     const live = liveRef.current
     if (live.playing) pausePlayback()
     if (live.onlineActive) stopOnline()
@@ -4826,11 +4968,15 @@ function App() {
         sleepTrackRef.current = displayTrackRef.current?.id || null
         setSleepEndsAt(null)
         setSleepRemaining(null)
+        const live = liveRef.current
+        const remMs = (live.displayDuration - live.displayElapsed) * 1000
+        sleepNativeStart(Date.now() + Math.max(3000, remMs + 1500))
         showToast('Vou parar no fim desta música')
         return
       }
       setSleepEndsAt(Date.now() + Number(minutes) * 60000)
       setSleepRemaining(Number(minutes) * 60)
+      sleepNativeStart(Date.now() + Number(minutes) * 60000)
       showToast(`Timer de desligar: ${minutes} min`)
     },
     [showToast],
@@ -4860,6 +5006,14 @@ function App() {
       }
     }, 500)
     return () => clearInterval(id)
+  }, [sleepMode, stopSleepTimer])
+
+  useEffect(() => {
+    const h = () => {
+      if (sleepMode) stopSleepTimer()
+    }
+    window.addEventListener('nebulatune:sleepfire', h)
+    return () => window.removeEventListener('nebulatune:sleepfire', h)
   }, [sleepMode, stopSleepTimer])
 
   const trackId = displayTrack?.id
