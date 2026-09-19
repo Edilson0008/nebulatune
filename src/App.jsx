@@ -7,7 +7,7 @@ import * as graph from './audio/graph'
 import { EQ_FREQS } from './audio/graph'
 import { ACCENTS, SPEEDS, useSettings } from './settings'
 import { PRESETS, useEqualizer } from './audio/equalizer'
-import { clearTracks, deleteTrack, getAllTracks, putTrack, putTracks } from './storage/db'
+import { clearTracks, deleteTrack, getAllTracks, getAllFiles, getFile, putTrack, putTracks, toMeta } from './storage/db'
 import { APP_VERSION, SITE_URL } from './app-config'
 import { Share as CapShare } from '@capacitor/share'
 import { Filesystem, Directory } from '@capacitor/filesystem'
@@ -88,6 +88,15 @@ function nf(n) {
 }
 
 const CHANGELOG = [
+  {
+    version: '1.8.0',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Letra no "Tocando agora": a tela não sobe mais junto com a letra — agora só a letra desliza, acompanhando a música.' },
+      { type: 'novo', text: 'Botão "Limpar cache" nas Configurações: apaga arquivos temporários e sobras de atualizações para liberar espaço (suas músicas não são apagadas).' },
+      { type: 'correcao', text: 'App bem mais leve e fluido: as músicas não são mais reescritas no armazenamento a cada toque (era isso que fazia o espaço crescer sem parar) — e o áudio só é carregado na hora de tocar.' },
+    ],
+  },
   {
     version: '1.7.3',
     date: 'Setembro de 2026',
@@ -1263,8 +1272,12 @@ function NowPlaying({
   }
 
   useEffect(() => {
-    if (activeIndex < 0 || !activeRef.current) return
-    activeRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const box = lyricsRef.current
+    if (activeIndex < 0 || !box) return
+    const line = box.querySelectorAll('.np-lyric')[activeIndex]
+    if (!line) return
+    const top = line.offsetTop - box.clientHeight / 2 + line.clientHeight / 2
+    box.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
   }, [activeIndex])
 
   useEffect(() => {
@@ -2018,6 +2031,8 @@ function usePlayer(library, speed = 1, onStart) {
   const onErrorRef = useRef(() => {})
   const errorCountRef = useRef(0)
   const playingRef = useRef(false)
+  const startTokenRef = useRef(0)
+  const currentAudioUrlRef = useRef(null)
   const [repeat, setRepeat] = useState(0)
   const [shuffle, setShuffle] = useState(false)
   const repeatRef = useRef(0)
@@ -2093,24 +2108,66 @@ function usePlayer(library, speed = 1, onStart) {
     if (!t) return
     indexRef.current = i
     setCurrentIndex(i)
-    if (t.src) {
-      modeRef.current = 'file'
-      const a = getAudio()
-      a.src = t.src
-      a.currentTime = 0
-      graph.resumeContext()
-      playWithRetry(a)
-      setDuration(t.duration || 0)
-    } else {
+
+    const finish = () => {
+      setElapsed(0)
+      setPlaying(true)
+      onStartRef.current?.(i)
+    }
+    const synthFallback = () => {
       modeRef.current = 'synth'
       if (audioRef.current) audioRef.current.pause()
       graph.getContext()
       engine.startTrack(i + 1)
       setDuration(engine.getDuration())
+      finish()
     }
-    setElapsed(0)
-    setPlaying(true)
-    onStartRef.current?.(i)
+    const startFile = (src, dur) => {
+      modeRef.current = 'file'
+      const a = getAudio()
+      a.src = src
+      a.currentTime = 0
+      graph.resumeContext()
+      playWithRetry(a)
+      setDuration(dur || 0)
+      finish()
+    }
+
+    if (t.src) {
+      startFile(t.src, t.duration)
+      return
+    }
+    if (t.audioBlob && (t.audioBlob.size || t.audioBlob.type)) {
+      const src = URL.createObjectURL(t.audioBlob)
+      currentAudioUrlRef.current = src
+      const up = { ...t, src }
+      libRef.current[i] = up
+      setLibrary((prev) => prev.map((x) => (x.id === t.id ? up : x)))
+      startFile(src, t.duration)
+      return
+    }
+    if (t.hasAudio) {
+      const token = ++startTokenRef.current
+      getFile(t.id)
+        .then((f) => {
+          if (startTokenRef.current !== token) return
+          if (f && f.audioBlob && f.audioBlob.size) {
+            const src = URL.createObjectURL(f.audioBlob)
+            const prevUrl = currentAudioUrlRef.current
+            currentAudioUrlRef.current = src
+            const up = { ...t, audioBlob: f.audioBlob, src }
+            libRef.current[i] = up
+            setLibrary((prev) => prev.map((x) => (x.id === t.id ? up : x)))
+            startFile(src, t.duration)
+            if (prevUrl && prevUrl !== src) setTimeout(() => URL.revokeObjectURL(prevUrl), 8000)
+          } else {
+            synthFallback()
+          }
+        })
+        .catch(() => synthFallback())
+      return
+    }
+    synthFallback()
   }, [getAudio, playWithRetry])
 
   const randomIndex = useCallback(() => {
@@ -2831,6 +2888,7 @@ function toRecord(track) {
     coverBlob: track.coverBlob || null,
     coverRemote: track.coverRemote || null,
     addedAt: track.addedAt || Date.now(),
+    hasAudio: track.hasAudio === true || Boolean(track.audioBlob && track.audioBlob.size),
     fav: track.fav === true,
     plays: track.plays || 0,
     playDays: track.playDays || {},
@@ -2845,6 +2903,7 @@ function recordKey(track) {
     Math.round(track.duration || 0),
     track.coverRemote || '',
     track.coverBlob ? `${track.coverBlob.size}:${track.coverBlob.type}` : '',
+    track.audioBlob ? `${track.audioBlob.size}:${track.audioBlob.type}` : '',
     track.fav === true ? 1 : 0,
     track.plays || 0,
     JSON.stringify(track.playDays || {}),
@@ -3734,7 +3793,7 @@ function ApkDownloadButton() {
   )
 }
 
-function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onImportFolder, onImportDevice, onOpenChangelog, cloud, cloudRedirect }) {
+function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onImportFolder, onImportDevice, onOpenChangelog, cloud, cloudRedirect, onClearCache, cacheCleanMsg }) {
   const [storage, setStorage] = useState(null)
   const [exported, setExported] = useState(false)
   const [imported, setImported] = useState(false)
@@ -4235,6 +4294,21 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
         </div>
         <div className="settings-row">
           <div className="settings-info">
+            <span className="settings-label">Limpar cache</span>
+            <span className="settings-desc">
+              Apaga arquivos temporários e sobras de atualizações para liberar espaço.
+              Suas músicas não são apagadas.
+            </span>
+            {cacheCleanMsg && <span className="settings-note">{cacheCleanMsg}</span>}
+          </div>
+          <div className="settings-actions">
+            <button className="btn-ghost" onClick={onClearCache}>
+              Limpar
+            </button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-info">
             <span className="settings-label">Novidades e correções</span>
             <span className="settings-desc">
               Veja o que há de novo e o que foi consertado em cada versão do app.
@@ -4266,6 +4340,7 @@ function App() {
   const [library, setLibrary] = useState([])
   const [loadingLib, setLoadingLib] = useState(true)
   const [storageError, setStorageError] = useState(false)
+  const [cacheCleanMsg, setCacheCleanMsg] = useState('')
   const [view, setView] = useState(() => {
     try {
       return localStorage.getItem('nt.view') || 'inicio'
@@ -4449,20 +4524,34 @@ function App() {
   useEffect(() => {
     let cancelled = false
     getAllTracks()
-      .then((records) => {
+      .then(async (records) => {
         if (cancelled) return
         const tracks = records
-          .filter((r) => r.audioBlob)
+          .filter((r) => r.id)
           .map((r) => ({
             ...r,
             fav: r.fav === true,
-            src: URL.createObjectURL(r.audioBlob),
-            coverUrl: r.coverBlob
-              ? URL.createObjectURL(r.coverBlob)
-              : r.coverRemote || null,
+            audioBlob: null,
+            coverBlob: null,
+            src: null,
+            coverUrl: null,
           }))
         tracks.forEach((t) => persistedRef.current.set(t.id, recordKey(t)))
         setLibrary(tracks)
+        const withCovers = await Promise.all(
+          tracks.map(async (t) => {
+            try {
+              const f = await getFile(t.id)
+              if (f && f.coverBlob && f.coverBlob.size) {
+                return { ...t, coverBlob: f.coverBlob, coverUrl: URL.createObjectURL(f.coverBlob) }
+              }
+            } catch {
+              /* sem capa */
+            }
+            return t
+          }),
+        )
+        if (!cancelled) setLibrary(withCovers)
       })
       .catch(() => {})
       .finally(() => {
@@ -4480,7 +4569,7 @@ function App() {
       const key = recordKey(t)
       if (persistedRef.current.get(t.id) !== key) {
         persistedRef.current.set(t.id, key)
-        putTrack(toRecord(t)).catch(() => setStorageError(true))
+        putTrack(toMeta(t)).catch(() => setStorageError(true))
       }
     })
   }, [library, loadingLib])
@@ -4822,8 +4911,30 @@ function App() {
     })
   }, [])
 
+  const cloudSigRef = useRef('')
+
   const applyCloudBackup = useCallback(
     (data) => {
+      const cloudMetaSig = (d) =>
+        JSON.stringify({
+          t: (d.tracks || [])
+            .map((x) => [
+              x.id,
+              x.title,
+              x.artist,
+              Math.round(x.duration || 0),
+              x.fav === true,
+              JSON.stringify(x.playDays || {}),
+              x.addedAt || 0,
+            ])
+            .sort(),
+          s: d.settings || null,
+          e: d.equalizer || null,
+          l: d.lyricSync || null,
+          p: Array.isArray(d.playlists) ? d.playlists : null,
+        })
+      const sig = cloudMetaSig(data)
+      if (sig === cloudSigRef.current) return
       const cloudTracks = tracksFromBackup(data)
       const cloudIds = new Set(cloudTracks.map((t) => t.id))
       const localOnly = libraryRef.current.filter((t) => !cloudIds.has(t.id))
@@ -4845,6 +4956,7 @@ function App() {
         .finally(() => {
           replacingRef.current = false
         })
+      cloudSigRef.current = sig
       if (data.settings && typeof data.settings === 'object') settingsApi.setAll(data.settings)
       if (data.equalizer && typeof data.equalizer === 'object') eq.importSettings(data.equalizer)
       if (data.lyricSync && typeof data.lyricSync === 'object') {
@@ -4987,8 +5099,45 @@ function App() {
     if (!installEvt) return
     installEvt.prompt()
     await installEvt.userChoice
-    setInstallEvt(null)
+setInstallEvt(null)
   }, [installEvt])
+
+  const clearCache = useCallback(async () => {
+    setCacheCleanMsg('Limpando…')
+    const estimate = () =>
+      navigator.storage
+        ?.estimate?.()
+        .then((e) => e.usage || 0)
+        .catch(() => null)
+    const before = await estimate()
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys().catch(() => [])
+        await Promise.all(keys.map((k) => caches.delete(k).catch(() => {})))
+      }
+      ;['nt.trans', 'nt.recent'].forEach((key) => {
+        try {
+          localStorage.removeItem(key)
+        } catch {
+          /* armazenamento indisponível */
+        }
+      })
+      const [records, files] = await Promise.all([getAllTracks(), getAllFiles()])
+      const ids = new Set(records.map((r) => r.id))
+      await clearTracks()
+      await putTracks(records.map((r) => ({ ...r, audioBlob: undefined, coverBlob: undefined })))
+      await putTracks(files.filter((f) => ids.has(f.id)))
+      const after = await estimate()
+      const freed = before != null && after != null ? Math.max(0, before - after) : null
+      setCacheCleanMsg(
+        freed != null && freed > 0
+          ? `Cache limpo! Liberados ~${fmtBytes(freed)}.`
+          : 'Cache limpo! Suas músicas não foram removidas.',
+      )
+    } catch {
+      setCacheCleanMsg('Não consegui limpar totalmente.')
+    }
+  }, [])
 
   const queueItemLocal = useCallback(
     (id) => {
@@ -5829,6 +5978,8 @@ function App() {
             onShareApp={shareApp}
             onImportFolder={() => folderInputRef.current?.click()}
             onImportDevice={openDeviceImport}
+            onClearCache={clearCache}
+            cacheCleanMsg={cacheCleanMsg}
             onOpenChangelog={() => setChangelogOpen(true)}
             cloud={cloud}
             cloudRedirect={

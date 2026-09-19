@@ -1,3 +1,5 @@
+import { getFile } from './storage/db'
+
 export const BACKUP_TYPE = 'backup-completo'
 
 export function blobToDataUrl(blob) {
@@ -24,6 +26,7 @@ export function dataUrlToBlob(data) {
 export async function buildBackup({ library = [], settings, equalizer, lyricSync, playlists = null } = {}) {
   const items = []
   for (const t of library) {
+    const stored = t.audioBlob || t.coverBlob ? null : await getFile(t.id).catch(() => null)
     items.push({
       id: t.id,
       title: t.title,
@@ -35,8 +38,8 @@ export async function buildBackup({ library = [], settings, equalizer, lyricSync
       plays: t.plays || 0,
       playDays: t.playDays || {},
       addedAt: t.addedAt || Date.now(),
-      audioData: await blobToDataUrl(t.audioBlob),
-      coverData: await blobToDataUrl(t.coverBlob),
+      audioData: await blobToDataUrl(t.audioBlob || stored?.audioBlob || null),
+      coverData: await blobToDataUrl(t.coverBlob || stored?.coverBlob || null),
       coverRemote: t.coverRemote || null,
     })
   }
