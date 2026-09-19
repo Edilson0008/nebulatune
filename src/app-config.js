@@ -1,5 +1,5 @@
-export const APP_VERSION = '1.4.6'
-export const VERSION_CODE = 8
+export const APP_VERSION = '1.6.0'
+export const VERSION_CODE = 9
 
 export const SITE_URL = 'https://edilson0008.github.io/nebulatune'
 

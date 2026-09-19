@@ -26,7 +26,7 @@ import {
 } from './updater'
 import { exchangeOAuthCode } from './cloud'
 import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
-import { updateNowPlaying, hideNowPlaying, onMediaAction } from './mediaNotification'
+import { updateNowPlaying, onMediaAction } from './mediaNotification'
 
 
 const IS_NATIVE = !!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.())
@@ -1835,11 +1835,14 @@ function useMediaSession({ track, playing, elapsed, duration, speed, onToggle, o
     }
     try {
       const ms2 = navigator.mediaSession
+      const art =
+        track.coverUrl ||
+        (typeof track.cover === 'string' && /^(data:|https?:\/\/)/.test(track.cover) ? track.cover : '')
       ms2.metadata = new MediaMetadata({
         title: track.title || '',
         artist: track.artist || '',
         album: track.album || '',
-        artwork: track.coverUrl ? [{ src: track.coverUrl, sizes: '512x512' }] : [],
+        artwork: art ? [{ src: art, sizes: '512x512' }] : [],
       })
     } catch {}
     updateNowPlaying({
@@ -1971,26 +1974,12 @@ function useMediaSession({ track, playing, elapsed, duration, speed, onToggle, o
       const st = stateRef.current
       const d = st.duration
       if (!d || d <= 0) return
-      try {
+try {
         ms.setPositionState({ duration: d, position: Math.min(st.elapsed, d), playbackRate: st.speed || 1 })
       } catch {}
     }, 1000)
     return () => window.clearInterval(id)
-  
-    try {
-      updateNowPlaying({
-        title: track.title || '',
-        artist: track.artist || '',
-        album: track.album || '',
-        cover: track.cover || null,
-        playing: !!playing,
-        position: Math.max(0, elapsed || 0),
-        duration: Math.max(0, duration || 0),
-      })
-    } catch (e) {
-      console.warn('falha ao mostrar agora na barra', e)
-    }
-}, [track])
+  }, [track])
 }
 
 function usePlayer(library, speed = 1, onStart) {
@@ -4846,11 +4835,6 @@ function App() {
     [playing, pausePlayback, playOnline],
   )
 
-  const toggleLocal = useCallback(() => {
-    if (!playing) stopOnline()
-    toggle()
-  }, [playing, toggle, stopOnline])
-
   const nextLocal = useCallback(() => {
     stopOnline()
     next()
@@ -4866,15 +4850,15 @@ function App() {
   }, [audioDepth])
 
   useMediaSession({
-    track,
-    playing,
-    elapsed,
-    duration,
+    track: displayTrack,
+    playing: displayPlaying,
+    elapsed: displayElapsed,
+    duration: displayDuration,
     speed: appSettings.speed,
-    onToggle: toggleLocal,
+    onToggle: displayToggle,
     onNext: nextLocal,
     onPrev: prevLocal,
-    onSeek: (t) => seek(t),
+    onSeek: displaySeek,
   })
 
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
