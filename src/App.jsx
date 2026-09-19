@@ -89,6 +89,16 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.4.3',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Música deixou de picotar/perder fluidez quando você minimiza o app: agora o app sobe uma barra de mídia nativa (controles da música na barra de notificação), o que garante que o áudio continue suave em segundo plano.' },
+      { type: 'correcao', text: 'Barra de mídia (com capa, título, artista e botões anterior/play-próxima/pular) voltou a aparecer na notificação sempre que você minimiza o app com música tocando.' },
+      { type: 'novo', text: 'A barra de notificação agora responde aos seus toques: play/pause, próxima/anterior, avançar/voltar 10s e arrastar o progresso funcionam direto pela barrinha de mídia.' },
+      { type: 'novo', text: 'O app pede permissão de notificação logo na primeira abertura em celulares novos (Android 13+), para a barra de mídia aparecer sem depender de buscar atualização.' },
+    ],
+  },
+  {
     version: '1.4.2',
     date: 'Setembro de 2026',
     items: [
@@ -1815,7 +1825,17 @@ function useMediaSession({ track, playing, elapsed, duration, speed, onToggle, o
         artwork: track.coverUrl ? [{ src: track.coverUrl, sizes: '512x512' }] : [],
       })
     } catch {}
-  }, [track])
+    updateNowPlaying({
+      title: track.title || '',
+      artist: track.artist || '',
+      album: track.album || '',
+      cover: track.cover || null,
+      playing: !!playing,
+      position: Math.max(0, stateRef.current.elapsed || 0),
+      duration: Math.max(0, stateRef.current.duration || 0),
+      playbackRate: stateRef.current.speed || 1,
+    })
+  }, [track, playing])
 
   useEffect(() => {
     const ms = navigator.mediaSession
@@ -1860,9 +1880,72 @@ function useMediaSession({ track, playing, elapsed, duration, speed, onToggle, o
 
   useEffect(() => {
     const ms = navigator.mediaSession
-    if (!ms || !track) return
+    if (!ms) return
     ms.playbackState = playing ? 'playing' : 'paused'
+    if (!track) return
+    try {
+      updateNowPlaying({
+        title: track.title || '',
+        artist: track.artist || '',
+        album: track.album || '',
+        cover: track.cover || null,
+        playing: !!playing,
+        position: Math.max(0, stateRef.current.elapsed || 0),
+        duration: Math.max(0, stateRef.current.duration || 0),
+        playbackRate: stateRef.current.speed || 1,
+      })
+    } catch (e) {
+      console.warn('falha ao espelhar play/pause na notificação nativa', e)
+    }
   }, [playing, track])
+
+  useEffect(() => {
+    if (IS_NATIVE) {
+      requestNotificationsPermission()
+        .catch(() => {})
+        .finally(() => {})
+    }
+    let stop = () => {}
+    try {
+      stop = onMediaAction(({ action, seekTime, seekOffset }) => {
+        const a = actionsRef.current
+        const st = stateRef.current
+        const dur = st.duration || 0
+        switch (action) {
+          case 'play':
+          case 'pause':
+            a.onToggle()
+            break
+          case 'previoustrack':
+            a.onPrev()
+            break
+          case 'nexttrack':
+            a.onNext()
+            break
+          case 'seekto':
+            if (typeof seekTime === 'number' && dur > 0) {
+              a.onSeek(Math.min(Math.max(seekTime, 0), dur) / dur)
+            }
+            break
+          case 'seekbackward': {
+            const off = typeof seekOffset === 'number' ? seekOffset : 10
+            if (dur > 0) a.onSeek(Math.max((st.elapsed || 0) - off, 0) / dur)
+            break
+          }
+          case 'seekforward': {
+            const off = typeof seekOffset === 'number' ? seekOffset : 10
+            if (dur > 0) a.onSeek(Math.min((st.elapsed || 0) + off, dur) / dur)
+            break
+          }
+          default:
+            break
+        }
+      })
+    } catch (e) {
+      console.warn('barra nativa sem ponte de ações', e)
+    }
+    return () => stop()
+  }, [])
 
   useEffect(() => {
     const ms = navigator.mediaSession
