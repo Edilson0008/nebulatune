@@ -12,10 +12,24 @@ function safe(fn) {
     .catch((e) => console.warn('[mediaSession] chamada nativa falhou', e))
 }
 
-function toArtwork(cover) {
+async function toArtwork(cover) {
   if (!cover || typeof cover !== 'string') return []
   if (cover.startsWith('data:') || /^https?:\/\//.test(cover)) {
     return [{ src: cover, sizes: '512x512' }]
+  }
+  if (cover.startsWith('blob:')) {
+    try {
+      const blob = await fetch(cover).then((r) => r.blob())
+      const dataUrl = await new Promise((resolve) => {
+        const fr = new FileReader()
+        fr.onload = () => resolve(fr.result)
+        fr.onerror = () => resolve(null)
+        fr.readAsDataURL(blob)
+      })
+      return dataUrl ? [{ src: dataUrl, sizes: '512x512' }] : []
+    } catch {
+      return []
+    }
   }
   return []
 }
@@ -55,12 +69,16 @@ export function hasMediaNotification() {
 
 export async function updateNowPlaying(state) {
   if (!isNative()) return
+
+  /* 1) METADATA SEMPRE — título/artista/capa vão juntos na 1ª chamada, sem depender de duração.
+        (O Android só acha "faixa ativa" quando há posição; sem ela, some até o título.) */
+  const artwork = await toArtwork(state?.cover)
   await safe(() =>
     CapgoMediaSession.setMetadata({
       title: state?.title || '',
       artist: state?.artist || '',
       album: state?.album || '',
-      artwork: toArtwork(state?.cover),
+      artwork,
     }),
   )
   await safe(() =>
@@ -68,15 +86,28 @@ export async function updateNowPlaying(state) {
       playbackState: state?.playing ? 'playing' : 'paused',
     }),
   )
-  const dur = state?.duration || 0
-  if (dur > 0) {
-    await safe(() =>
+
+  /* 2) POSIÇÃO: envia na hora se já houver duração; se ainda está carregando (troca de faixa),
+        REENVIA até a duração chegar — é o que faz o tempo e os botões "acordarem" sozinhos. */
+  const sendPos = () => {
+    const dur = Number(state?.duration) || 0
+    if (dur <= 0) return false
+    safe(() =>
       CapgoMediaSession.setPositionState({
         duration: dur,
-        position: Math.max(0, Math.min(state?.position || 0, dur)),
-        playbackRate: state?.playbackRate || 1,
+        position: Math.max(0, Math.min(Number(state?.position) || 0, dur)),
+        playbackRate: Number(state?.playbackRate) || 1,
       }),
     )
+    return true
+  }
+  if (!sendPos()) {
+    /* duração chega 100-600ms depois da troca: espera e reenvia até 5s */
+    let tries = 0
+    const iv = window.setInterval(() => {
+      tries += 1
+      if (sendPos() || tries >= 12) window.clearInterval(iv)
+    }, 400)
   }
 }
 
