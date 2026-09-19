@@ -7,7 +7,12 @@ GRADLE_FLAGS="--no-daemon"
 
 echo "==> 1/6 Build web"
 APP_VERSION=$("$NODE_BIN" --input-type=module -e "import {APP_VERSION} from './src/app-config.js'; process.stdout.write(String(APP_VERSION || '1.0.0'))" 2>/dev/null || echo 1.0.0)
+VC=$("$NODE_BIN" --input-type=module -e "import {VERSION_CODE} from './src/app-config.js'; process.stdout.write(String(VERSION_CODE || 1))" 2>/dev/null || echo 1)
 printf '{"version":"%s"}\n' "$APP_VERSION" > public/version.json
+
+# versionName/versionCode DINAMICOS: a tela "Informacoes do app" le isso (antes era fixo 1.4.0 -> ninguem via update)
+grep -qE 'applicationId "br.com.nebulatune.app"' android/app/build.gradle && \
+sed -i -E "s/versionName [\"'][^\"']*[\"']/versionName \"$APP_VERSION\"/; s/versionCode [0-9]+/versionCode $VC/" android/app/build.gradle
 pnpm build
 
 echo "==> 2/6 Sync com Capacitor"

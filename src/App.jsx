@@ -89,7 +89,16 @@ function nf(n) {
 
 const CHANGELOG = [
   {
-    version: '1.4.3',
+    version: '1.4.4',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'A tela "Informações do app" do celular agora mostra a versão certa: o app passou a carimbar a versão real no próprio apk (antes ficava presa em 1.4.0, gravada fixa — por isso a tela nunca mudava).' },
+      { type: 'correcao', text: 'O Android agora reconhece a atualização de verdade (o código interno subiu), então o app para de insistir que "já está na última" quando na real foi instalada uma cópia antiga.' },
+      { type: 'novo', text: 'Verificação reforçada: se a permissão de notificação tiver ficado esquecida ao instalar, o app reavisa em alguns segundos ao abrir — para a barra de mídia nunca mais sumir.' },
+    ],
+  },
+  {
+
     date: 'Setembro de 2026',
     items: [
       { type: 'correcao', text: 'Música deixou de picotar/perder fluidez quando você minimiza o app: agora o app sobe uma barra de mídia nativa (controles da música na barra de notificação), o que garante que o áudio continue suave em segundo plano.' },
