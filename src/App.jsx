@@ -89,7 +89,7 @@ function nf(n) {
 
 const CHANGELOG = [
   {
-    version: '1.4.5',
+    version: '1.4.6',
     date: 'Setembro de 2026',
     items: [
       { type: 'correcao', text: 'Música de cortar agora, na troca de faixa, em segundo plano: o serviço de mídia fica SEMPRE ativo enquanto toca (raw de CPU + processo prioritário), então o app não perde desempenho exatamente na hora de carregar a próxima música.' },
