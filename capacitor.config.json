@@ -5,6 +5,11 @@
   "android": {
     "allowMixedContent": true
   },
+  "plugins": {
+    "MediaSession": {
+      "foregroundService": "always"
+    }
+  },
   "server": {
     "androidScheme": "https"
   }

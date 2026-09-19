@@ -89,7 +89,15 @@ function nf(n) {
 
 const CHANGELOG = [
   {
-    version: '1.4.4',
+    version: '1.4.5',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Música de cortar agora, na troca de faixa, em segundo plano: o serviço de mídia fica SEMPRE ativo enquanto toca (raw de CPU + processo prioritário), então o app não perde desempenho exatamente na hora de carregar a próxima música.' },
+      { type: 'novo', text: 'O Android não deixa mais o player "dormir" entre uma faixa e outra: o serviço de reprodução em segundo plano agora é contínuo (foregroundService), garantindo um embalo sem picotar nem travar.' },
+    ],
+  },
+  {
+
     date: 'Setembro de 2026',
     items: [
       { type: 'correcao', text: 'A tela "Informações do app" do celular agora mostra a versão certa: o app passou a carimbar a versão real no próprio apk (antes ficava presa em 1.4.0, gravada fixa — por isso a tela nunca mudava).' },
