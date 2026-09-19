@@ -26,6 +26,8 @@ import {
 } from './updater'
 import { exchangeOAuthCode } from './cloud'
 import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
+import { updateNowPlaying, hideNowPlaying, onMediaAction } from './mediaNotification'
+
 
 const IS_NATIVE = !!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.())
 
@@ -1874,7 +1876,21 @@ function useMediaSession({ track, playing, elapsed, duration, speed, onToggle, o
       } catch {}
     }, 1000)
     return () => window.clearInterval(id)
-  }, [track])
+  
+    try {
+      updateNowPlaying({
+        title: track.title || '',
+        artist: track.artist || '',
+        album: track.album || '',
+        cover: track.cover || null,
+        playing: !!playing,
+        position: Math.max(0, elapsed || 0),
+        duration: Math.max(0, duration || 0),
+      })
+    } catch (e) {
+      console.warn('falha ao mostrar agora na barra', e)
+    }
+}, [track])
 }
 
 function usePlayer(library, speed = 1, onStart) {
