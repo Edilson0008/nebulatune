@@ -34,6 +34,25 @@ async function toArtwork(cover) {
   return []
 }
 
+let fallbackArtPromise = null
+function fallbackArtwork() {
+  if (!fallbackArtPromise) {
+    fallbackArtPromise = fetch('./icons/icon-512.png')
+      .then((r) => r.blob())
+      .then(
+        (blob) =>
+          new Promise((resolve) => {
+            const fr = new FileReader()
+            fr.onload = () => resolve(fr.result)
+            fr.onerror = () => resolve(null)
+            fr.readAsDataURL(blob)
+          }),
+      )
+      .catch(() => null)
+  }
+  return fallbackArtPromise
+}
+
 function registerActions() {
   const deliver = (action) => {
     if (actionsCb) actionsCb(action)
@@ -72,7 +91,11 @@ export async function updateNowPlaying(state) {
 
   /* 1) METADATA SEMPRE — título/artista/capa vão juntos na 1ª chamada, sem depender de duração.
         (O Android só acha "faixa ativa" quando há posição; sem ela, some até o título.) */
-  const artwork = await toArtwork(state?.cover)
+  let artwork = await toArtwork(state?.cover)
+  if (!artwork.length) {
+    const icon = await fallbackArtwork()
+    if (icon) artwork = [{ src: icon, sizes: '512x512' }]
+  }
   await safe(() =>
     CapgoMediaSession.setMetadata({
       title: state?.title || '',

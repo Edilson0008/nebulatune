@@ -26,7 +26,7 @@ import {
 } from './updater'
 import { exchangeOAuthCode } from './cloud'
 import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
-import { updateNowPlaying, onMediaAction } from './mediaNotification'
+import { updateNowPlaying, hideNowPlaying, onMediaAction } from './mediaNotification'
 
 
 const IS_NATIVE = !!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.())
@@ -1824,27 +1824,16 @@ function useMediaSession({ track, playing, elapsed, duration, speed, onToggle, o
   })
 
   useEffect(() => {
-    const ms = navigator.mediaSession
-    if (!ms) return
     if (!track) {
+      hideNowPlaying()
+      const ms = navigator.mediaSession
+      if (!ms) return
       try {
         ms.metadata = null
       } catch {}
       ms.playbackState = 'none'
       return
     }
-    try {
-      const ms2 = navigator.mediaSession
-      const art =
-        track.coverUrl ||
-        (typeof track.cover === 'string' && /^(data:|https?:\/\/)/.test(track.cover) ? track.cover : '')
-      ms2.metadata = new MediaMetadata({
-        title: track.title || '',
-        artist: track.artist || '',
-        album: track.album || '',
-        artwork: art ? [{ src: art, sizes: '512x512' }] : [],
-      })
-    } catch {}
     updateNowPlaying({
       title: track.title || '',
       artist: track.artist || '',
@@ -1855,6 +1844,19 @@ function useMediaSession({ track, playing, elapsed, duration, speed, onToggle, o
       duration: Math.max(0, stateRef.current.duration || 0),
       playbackRate: stateRef.current.speed || 1,
     })
+    const ms = navigator.mediaSession
+    if (!ms) return
+    try {
+      const art =
+        track.coverUrl ||
+        (typeof track.cover === 'string' && /^(data:|https?:\/\/)/.test(track.cover) ? track.cover : '')
+      ms.metadata = new MediaMetadata({
+        title: track.title || '',
+        artist: track.artist || '',
+        album: track.album || '',
+        artwork: art ? [{ src: art, sizes: '512x512' }] : [],
+      })
+    } catch {}
   }, [track, playing])
 
   useEffect(() => {
@@ -1899,24 +1901,25 @@ function useMediaSession({ track, playing, elapsed, duration, speed, onToggle, o
   }, [])
 
   useEffect(() => {
+    if (track) {
+      try {
+        updateNowPlaying({
+          title: track.title || '',
+          artist: track.artist || '',
+          album: track.album || '',
+          cover: track.cover || null,
+          playing: !!playing,
+          position: Math.max(0, stateRef.current.elapsed || 0),
+          duration: Math.max(0, stateRef.current.duration || 0),
+          playbackRate: stateRef.current.speed || 1,
+        })
+      } catch (e) {
+        console.warn('falha ao espelhar play/pause na notificação nativa', e)
+      }
+    }
     const ms = navigator.mediaSession
     if (!ms) return
     ms.playbackState = playing ? 'playing' : 'paused'
-    if (!track) return
-    try {
-      updateNowPlaying({
-        title: track.title || '',
-        artist: track.artist || '',
-        album: track.album || '',
-        cover: track.cover || null,
-        playing: !!playing,
-        position: Math.max(0, stateRef.current.elapsed || 0),
-        duration: Math.max(0, stateRef.current.duration || 0),
-        playbackRate: stateRef.current.speed || 1,
-      })
-    } catch (e) {
-      console.warn('falha ao espelhar play/pause na notificação nativa', e)
-    }
   }, [playing, track])
 
   useEffect(() => {
