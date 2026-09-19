@@ -4223,6 +4223,26 @@ button {
   margin-top: 2px;
 }
 
+.app-version-chip {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #43ffbd;
+  background: rgba(0, 255, 135, 0.1);
+  border: 1px solid rgba(0, 255, 135, 0.22);
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.sidebar-version {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
 /* ---------- Novidades e correções ---------- */
 .changelog-modal {
   width: min(520px, 100%);
@@ -4284,6 +4304,27 @@ button {
   color: var(--text);
 }
 
+.changelog-item.novo {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 255, 135, 0.13),
+    rgba(139, 92, 246, 0.1)
+  );
+  border: 1px solid rgba(0, 255, 135, 0.22);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 18px rgba(0, 255, 135, 0.1);
+}
+
+.changelog-item.correcao {
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  opacity: 0.88;
+}
+
 .changelog-tag {
   flex-shrink: 0;
   margin-top: 1px;
@@ -4296,11 +4337,12 @@ button {
 }
 
 .changelog-item.novo .changelog-tag {
-  color: #43ffbd;
-  background: rgba(0, 255, 135, 0.12);
+  color: #03211d;
+  background: linear-gradient(135deg, #43ffbd, #00ff87);
+  box-shadow: 0 0 12px rgba(0, 255, 135, 0.35);
 }
 
 .changelog-item.correcao .changelog-tag {
-  color: #ffd27f;
-  background: rgba(255, 200, 87, 0.14);
+  color: rgba(255, 210, 127, 0.95);
+  background: rgba(255, 200, 87, 0.12);
 }

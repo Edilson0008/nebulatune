@@ -89,6 +89,24 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.7.3',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Novidades e correções agora com destaque: as novidades aparecem em cartões coloridos para ficarem mais fáceis de ver.' },
+    ],
+  },
+  {
+    version: '1.7.2',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Login com Google funcionando de verdade dentro do app: o navegador abre para você escolher a conta e o app volta logado sozinho.' },
+      { type: 'novo', text: 'Aviso de atualização ponta a ponta: o app mostra a mensagem para atualizar e envia notificação de versão nova direto na barra de notificações.' },
+      { type: 'novo', text: 'Tela "Tocando agora" com visual novo: cores da capa no fundo com brilho animado e anéis de áudio dançando ao redor da capa.' },
+      { type: 'correcao', text: 'Capa da música aparecendo certinha na barra de notificação do celular.' },
+      { type: 'correcao', text: 'Layout de "Importar do aparelho" na Biblioteca sem texto sobreposto.' },
+    ],
+  },
+  {
     version: '1.4.6',
     date: 'Setembro de 2026',
     items: [
@@ -279,6 +297,7 @@ function Sidebar({ view, setView, onPickFiles }) {
 
       <div className="sidebar-footer">
         <span>♫ Sua música, no cosmos</span>
+        <span className="sidebar-version">NebulaTune v{APP_VERSION}</span>
         <a className="sidebar-download" href="./apk/nebulatune.apk" download="NebulaTune.apk">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 3v12m0 0 4.5-4.5M12 15 7.5 10.5" />
@@ -5373,6 +5392,7 @@ function App() {
               <div className="app-brand">
                 <span className="app-brand-logo">✦</span>
                 <span>NebulaTune</span>
+                <span className="app-version-chip">v{APP_VERSION}</span>
               </div>
               <button
                 className="user-btn app-user"
@@ -5416,6 +5436,7 @@ function App() {
                   }}
                 />
               </div>
+              <span className="app-version-chip">v{APP_VERSION}</span>
               <button className="user-btn" onClick={() => setView('perfil')} title={appSettings.userName || 'Perfil'} aria-label="Abrir perfil">
                 {appSettings.avatar ? (
                   <img className="user-btn-avatar" src={appSettings.avatar} alt="" />
