@@ -1,1 +1,4 @@
-{"version":"1.0.0"}
+{
+  "version": "1.4.3",
+  "changelog": "Música tocando agora aparece na barra de notificação com capa, título e controles (pausa/anterior/próxima)."
+}
