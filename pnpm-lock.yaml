@@ -26,6 +26,9 @@ importers:
       '@capacitor/share':
         specifier: ^8.0.2
         version: 8.0.2(@capacitor/core@8.5.2)
+      '@capgo/capacitor-media-session':
+        specifier: ^8.0.31
+        version: 8.0.31(@capacitor/core@8.5.2)
       '@supabase/supabase-js':
         specifier: ^2.116.0
         version: 2.116.0
@@ -173,6 +176,11 @@ packages:
 
   '@capacitor/synapse@1.0.4':
     resolution: {integrity: sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw==}
+
+  '@capgo/capacitor-media-session@8.0.31':
+    resolution: {integrity: sha512-e71sa9EHvnDOfeTXENoelnuor/K9oKK25vEO2b5dWmXSOdOF0Cu5obtuh1kWiip6+MVOq8eFOjxH8yZVsI8UIA==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -1431,6 +1439,10 @@ snapshots:
       '@capacitor/core': 8.5.2
 
   '@capacitor/synapse@1.0.4': {}
+
+  '@capgo/capacitor-media-session@8.0.31(@capacitor/core@8.5.2)':
+    dependencies:
+      '@capacitor/core': 8.5.2
 
   '@esbuild/aix-ppc64@0.28.2':
     optional: true
