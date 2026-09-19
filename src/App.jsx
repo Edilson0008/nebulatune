@@ -1838,7 +1838,7 @@ function useMediaSession({ track, playing, elapsed, duration, speed, onToggle, o
       title: track.title || '',
       artist: track.artist || '',
       album: track.album || '',
-      cover: track.cover || null,
+      cover: track.coverUrl || (typeof track.cover === 'string' ? track.cover : null),
       playing: !!playing,
       position: Math.max(0, stateRef.current.elapsed || 0),
       duration: Math.max(0, stateRef.current.duration || 0),
@@ -1907,7 +1907,7 @@ function useMediaSession({ track, playing, elapsed, duration, speed, onToggle, o
           title: track.title || '',
           artist: track.artist || '',
           album: track.album || '',
-          cover: track.cover || null,
+          cover: track.coverUrl || (typeof track.cover === 'string' ? track.cover : null),
           playing: !!playing,
           position: Math.max(0, stateRef.current.elapsed || 0),
           duration: Math.max(0, stateRef.current.duration || 0),
@@ -2917,25 +2917,41 @@ function AudioHalo({ active }) {
 
       const cx = w / 2
       const cy = h / 2
-      const bars = 56
-      const inner = Math.min(w, h) * 0.34
-      const spread = Math.min(w, h) * 0.17
-      for (let i = 0; i < bars; i += 1) {
-        const ang = (i / bars) * Math.PI * 2 - Math.PI / 2
-        const level = data[Math.floor((i / bars) * 64)] / 255 || 0
-        const len = spread * (0.08 + level * 0.92)
-        const x0 = cx + Math.cos(ang) * inner
-        const y0 = cy + Math.sin(ang) * inner
-        const x1 = cx + Math.cos(ang) * (inner + len)
-        const y1 = cy + Math.sin(ang) * (inner + len)
-        const a = Math.max(0.06, Math.min(0.5, 0.14 + level * 0.5))
-        c2d.strokeStyle = `rgba(255,255,255,${a.toFixed(3)})`
-        c2d.lineWidth = Math.max(1.2, 2.4 * dpr * (0.6 + level * 0.6))
-        c2d.lineCap = 'round'
+      const R = Math.min(w, h) * 0.42
+      const bands = data.length || 64
+      const bandLevel = (from, to) => {
+        const s = Math.max(1, Math.floor(bands * from))
+        const e = Math.max(s + 1, Math.floor(bands * to))
+        let sum = 0
+        for (let i = s; i < e; i += 1) sum += data[i]
+        return Math.max(0, Math.min(1, (sum / (e - s)) / 255))
+      }
+
+      const t = performance.now() / 1000
+      c2d.lineCap = 'round'
+      const rings = [
+        { r: R, band: [0, 0.14], speed: 0.5, width: 2.4, alpha: 0.5 },
+        { r: R * 1.17, band: [0.14, 0.42], speed: -0.32, width: 1.8, alpha: 0.34 },
+        { r: R * 1.34, band: [0.42, 1], speed: 0.2, width: 1.3, alpha: 0.2 },
+      ]
+      for (let ri = 0; ri < rings.length; ri += 1) {
+        const cfg = rings[ri]
+        const lvl = bandLevel(cfg.band[0], cfg.band[1])
+        const radius = cfg.r * (1 + lvl * 0.055)
+        const rot = t * cfg.speed + ri * 0.9
+        const a = cfg.alpha * (0.3 + lvl * 0.7)
+        const col = ['255,255,255', '216,180,254', '167,230,255'][ri]
+        c2d.strokeStyle = `rgba(${col},${a.toFixed(3)})`
+        c2d.lineWidth = cfg.width * dpr
         c2d.beginPath()
-        c2d.moveTo(x0, y0)
-        c2d.lineTo(x1, y1)
+        c2d.arc(cx, cy, radius, rot, rot + 1.7 * Math.PI)
         c2d.stroke()
+        const ex = cx + Math.cos(rot + 1.7 * Math.PI) * radius
+        const ey = cy + Math.sin(rot + 1.7 * Math.PI) * radius
+        c2d.fillStyle = `rgba(${col},${Math.min(1, a * 1.35).toFixed(3)})`
+        c2d.beginPath()
+        c2d.arc(ex, ey, cfg.width * dpr * 1.5, 0, Math.PI * 2)
+        c2d.fill()
       }
       raf = requestAnimationFrame(draw)
     }

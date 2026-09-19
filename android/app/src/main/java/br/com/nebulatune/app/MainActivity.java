@@ -10,5 +10,6 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MediaImporterPlugin.class);
         registerPlugin(MediaNotificationPlugin.class);
         super.onCreate(savedInstanceState);
+        BackgroundUpdater.schedule(this);
     }
 }
