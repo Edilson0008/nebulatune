@@ -1,18 +1,60 @@
 import { createClient } from '@supabase/supabase-js'
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './app-config'
+import { SUPABASE_URL, SUPABASE_ANON_KEY, SITE_URL } from './app-config'
 import { blobToDataUrl } from './backup'
 
 export const cloudEnabled = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
+
+const IS_NATIVE_APP =
+  typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.()
 
 export const supabase = cloudEnabled
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true,
+        detectSessionInUrl: !IS_NATIVE_APP,
       },
     })
   : null
+
+export const OAUTH_CALLBACK = 'br.com.nebulatune://callback'
+
+// No app nativo o login com Google volta para o site (endereço autorizado).
+// Aqui detectamos essa volta e transferimos a sessão para o app via link
+// especial, para o usuário continuar logado dentro do aplicativo.
+if (
+  IS_NATIVE_APP &&
+  cloudEnabled &&
+  typeof window !== 'undefined' &&
+  window.location.href.startsWith(SITE_URL)
+) {
+  const hash = new URLSearchParams(window.location.hash.slice(1))
+  const token = hash.get('access_token')
+  if (token) {
+    const keep = [
+      'access_token',
+      'refresh_token',
+      'token_type',
+      'expires_in',
+      'expires_at',
+      'provider_token',
+      'provider_refresh_token',
+    ]
+    const payload = {}
+    for (const key of keep) {
+      const value = hash.get(key)
+      if (value != null) payload[key] = value
+    }
+    window.location.href =
+      OAUTH_CALLBACK + '?auto=1&t=' + encodeURIComponent(JSON.stringify(payload))
+  } else if (
+    hash.get('error') ||
+    hash.get('error_description') ||
+    hash.get('error_code')
+  ) {
+    window.location.href = OAUTH_CALLBACK + '?auto=1&err=1'
+  }
+}
 
 const BUCKET = 'backups'
 const INDEX_FILE = 'index.json'

@@ -24,14 +24,14 @@ import {
   requestNotificationsPermission,
   wasUpdatePrompted,
 } from './updater'
-import { exchangeOAuthCode } from './cloud'
+import { exchangeOAuthCode, OAUTH_CALLBACK, supabase } from './cloud'
 import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
 import { updateNowPlaying, hideNowPlaying, onMediaAction } from './mediaNotification'
 
 
 const IS_NATIVE = !!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.())
 
-const DEEP_LINK_PREFIX = 'br.com.nebulatune://callback'
+const DEEP_LINK_PREFIX = OAUTH_CALLBACK
 
 const LYRICS_CACHE_MAX = 30
 
@@ -4315,22 +4315,82 @@ function App() {
   useEffect(() => {
     if (!IS_NATIVE) return undefined
     let active = true
+    const buildSession = (params) => {
+      const at = params.get('access_token')
+      if (!at) return null
+      const session = {
+        access_token: at,
+        refresh_token: params.get('refresh_token'),
+        token_type: params.get('token_type') || 'bearer',
+      }
+      if (params.get('expires_in')) {
+        session.expires_in = Number(params.get('expires_in'))
+      }
+      if (params.get('expires_at')) {
+        session.expires_at = Number(params.get('expires_at'))
+      }
+      if (!session.expires_at && session.expires_in) {
+        session.expires_at = Math.floor(Date.now() / 1000) + session.expires_in
+      }
+      return session
+    }
+    const goHome = () => {
+      window.location.href = '/'
+    }
     const handleOAuthReturn = async (url) => {
       if (!active || typeof url !== 'string' || !url.startsWith(DEEP_LINK_PREFIX)) return
-      let code = null
+      let parsed
       try {
-        code = new URL(url).searchParams.get('code')
+        parsed = new URL(url)
       } catch {
         return
       }
-      if (!code || code === window.__ntOAuthCode) return
-      window.__ntOAuthCode = code
-      try {
-        await exchangeOAuthCode(code)
-      } catch {
-        /* falha ao trocar o código: o usuário pode tentar de novo */
-      } finally {
-        window.location.href = '/'
+      const q = parsed.searchParams
+
+      if (q.get('err') === '1') {
+        goHome()
+        return
+      }
+
+      if (q.get('auto') === '1') {
+        let payload = null
+        try {
+          payload = JSON.parse(q.get('t') || 'null')
+        } catch {
+          payload = null
+        }
+        if (payload?.access_token) {
+          try {
+            await supabase.auth.setSession(payload)
+          } catch {
+            /* sessão inválida: usuário tenta de novo */
+          }
+        }
+        goHome()
+        return
+      }
+
+      const code = q.get('code')
+      if (code) {
+        if (code === window.__ntOAuthCode) return
+        window.__ntOAuthCode = code
+        try {
+          await exchangeOAuthCode(code)
+        } catch {
+          /* falha ao trocar o código: o usuário pode tentar de novo */
+        }
+        goHome()
+        return
+      }
+
+      const session = buildSession(new URLSearchParams(parsed.hash.slice(1)))
+      if (session && session.access_token) {
+        try {
+          await supabase.auth.setSession(session)
+        } catch {
+          /* sessão inválida: usuário tenta de novo */
+        }
+        goHome()
       }
     }
     ;(async () => {
@@ -5751,7 +5811,9 @@ function App() {
             onOpenChangelog={() => setChangelogOpen(true)}
             cloud={cloud}
             cloudRedirect={
-              IS_NATIVE ? DEEP_LINK_PREFIX : `${window.location.origin}${window.location.pathname}`
+              IS_NATIVE
+                ? SITE_URL
+                : `${window.location.origin}${window.location.pathname}`
             }
           />
         )}
