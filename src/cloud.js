@@ -7,30 +7,63 @@ export const cloudEnabled = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
 const IS_NATIVE_APP =
   typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.()
 
+// Marca usada no login do app: o Google volta para o site com ?nt=app,
+// para sabermos que é o retorno do aplicativo (e não um login web comum).
+const OAUTH_APP_RETURN =
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).get('nt') === 'app'
+
 export const supabase = cloudEnabled
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: !IS_NATIVE_APP,
+        detectSessionInUrl: !IS_NATIVE_APP && !OAUTH_APP_RETURN,
       },
     })
   : null
 
 export const OAUTH_CALLBACK = 'br.com.nebulatune://callback'
 
-// No app nativo o login com Google volta para o site (endereço autorizado).
-// Aqui detectamos essa volta e transferimos a sessão para o app via link
-// especial, para o usuário continuar logado dentro do aplicativo.
-if (
-  IS_NATIVE_APP &&
-  cloudEnabled &&
-  typeof window !== 'undefined' &&
-  window.location.href.startsWith(SITE_URL)
-) {
-  const hash = new URLSearchParams(window.location.hash.slice(1))
-  const token = hash.get('access_token')
-  if (token) {
+// Endereço interno onde o app roda dentro do WebView nativo (Capacitor).
+// Navegar para ele sempre volta para dentro do aplicativo, mesmo vindo do site.
+const NATIVE_APP_ORIGIN = 'https://localhost'
+
+if (typeof window !== 'undefined') {
+  // 1) Retorno do login direto para a origem do app (dentro do WebView).
+  if (IS_NATIVE_APP) {
+    const nt = new URLSearchParams(window.location.search)
+    if (nt.get('nt_oauth') === '1') {
+      let payload = null
+      try {
+        payload = JSON.parse(nt.get('t') || 'null')
+      } catch {
+        payload = null
+      }
+      if (supabase && payload?.access_token) {
+        supabase.auth.setSession(payload).catch(() => {
+          /* sessão inválida: usuário tenta de novo */
+        })
+      }
+      try {
+        history.replaceState(null, '', window.location.pathname)
+      } catch {
+        /* ok */
+      }
+    }
+  }
+
+  // 2) Retorno do login no site. No aparelho, o Google abre no navegador
+  //     externo (o WebView do app não navega para fora) — então a página do
+  //     site é quem devolve a sessão para o app via link especial.
+  if (window.location.href.startsWith(SITE_URL)) {
+    const hash = new URLSearchParams(window.location.hash.slice(1))
+    const token = hash.get('access_token')
+    const hasError =
+      hash.get('error') ||
+      hash.get('error_description') ||
+      hash.get('error_code')
+
     const keep = [
       'access_token',
       'refresh_token',
@@ -45,14 +78,29 @@ if (
       const value = hash.get(key)
       if (value != null) payload[key] = value
     }
-    window.location.href =
-      OAUTH_CALLBACK + '?auto=1&t=' + encodeURIComponent(JSON.stringify(payload))
-  } else if (
-    hash.get('error') ||
-    hash.get('error_description') ||
-    hash.get('error_code')
-  ) {
-    window.location.href = OAUTH_CALLBACK + '?auto=1&err=1'
+
+    if (OAUTH_APP_RETURN && !IS_NATIVE_APP) {
+      // Navegador externo (celular): volta para o app pelo link especial.
+      if (token) {
+        window.location.href =
+          OAUTH_CALLBACK +
+          '?auto=1&t=' +
+          encodeURIComponent(JSON.stringify(payload))
+      } else if (hasError) {
+        window.location.href = OAUTH_CALLBACK + '?auto=1&err=1'
+      }
+    } else if (IS_NATIVE_APP) {
+      // Veio dentro do WebView: volta direto para a origem do app.
+      if (token) {
+        window.location.href =
+          NATIVE_APP_ORIGIN +
+          '/?nt_oauth=1&t=' +
+          encodeURIComponent(JSON.stringify(payload))
+      } else if (hasError) {
+        window.location.href = NATIVE_APP_ORIGIN + '/'
+      }
+    }
+    // Web normal (sem marca): o próprio navegador finaliza o login.
   }
 }
 

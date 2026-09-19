@@ -5812,7 +5812,7 @@ function App() {
             cloud={cloud}
             cloudRedirect={
               IS_NATIVE
-                ? SITE_URL
+                ? `${SITE_URL}/?nt=app`
                 : `${window.location.origin}${window.location.pathname}`
             }
           />

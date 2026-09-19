@@ -32,7 +32,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url)
 
-  if (url.pathname.startsWith('/apk/')) return
+  if (url.pathname.includes('version.json') || url.pathname.startsWith('/apk/')) return
 
   if (req.mode === 'navigate') {
     event.respondWith(
