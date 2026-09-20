@@ -401,7 +401,7 @@ button {
 .pet-bubble {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 5px);
+  bottom: calc(100% - 2px);
   transform: translateX(calc(-50% + var(--bdx, 0px)));
   padding: 5px 11px;
   max-width: 138px;

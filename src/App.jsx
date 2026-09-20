@@ -359,7 +359,7 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
 
     const roomBelow = vh - bottomReserve - pr.bottom - need
     const roomAbove = pr.top - topReserve - need
-    const dir = roomBelow >= 0 ? 'below' : roomAbove >= 0 ? 'above' : roomBelow > roomAbove ? 'below' : 'above'
+    const dir = roomAbove >= 0 ? 'above' : roomBelow >= 0 ? 'below' : roomAbove > roomBelow ? 'above' : 'below'
 
     const half = br.width / 2
     let cx = pr.left + pr.width / 2
