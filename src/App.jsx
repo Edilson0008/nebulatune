@@ -89,6 +89,14 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.8.5',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'O gatinho agora faz companhia também na tela "Tocando agora": ele fica pertinho da capa da música, com as mesmas reações, carinhos, miados e até a reação ao equalizador.' },
+      { type: 'correcao', text: 'Barra de música da notificação: o tempo gravado já não fica mais parado no final depois de desligar e ligar a tela — o app atualiza a posição da música de tempos em tempos e de novo na hora que a tela volta.' },
+    ],
+  },
+  {
     version: '1.8.4',
     date: 'Setembro de 2026',
     items: [
@@ -1789,6 +1797,14 @@ function NowPlaying({
   sleepRemaining = null,
   onStartSleep,
   onCancelSleep,
+  eqEnabled = false,
+  eqPreset = 'flat',
+  favPing = 0,
+  trackId = null,
+  soundOn = true,
+  cheer = null,
+  idleSinceRef = null,
+  onPetAction = null,
 }) {
   const barRef = useRef(null)
   const draggingRef = useRef(false)
@@ -2117,6 +2133,23 @@ function NowPlaying({
       )}
 
       <div className="np-main">
+        <div className="np-pet">
+          <PetFriend
+            size={42}
+            playing={!!playing}
+            eqEnabled={eqEnabled}
+            eqPreset={eqPreset}
+            favPing={favPing}
+            shuffle={shuffle}
+            trackId={trackId || track?.id || null}
+            sleepMode={sleepMode}
+            sleepRemaining={sleepRemaining}
+            soundOn={soundOn}
+            cheer={cheer}
+            idleSinceRef={idleSinceRef}
+            onPetAction={onPetAction}
+          />
+        </div>
         <div className="np-cover">
           <AudioHalo active={playing} />
           <Cover colors={track.cover} image={track.coverUrl} size="min(56vw, 260px)" radius={22} />
@@ -2459,6 +2492,34 @@ function useMediaSession({ track, playing, elapsed, duration, speed, onToggle, o
         artwork: art ? [{ src: art, sizes: '512x512' }] : [],
       })
     } catch {}
+  }, [track, playing])
+
+  useEffect(() => {
+    if (!track) return undefined
+    const send = () => {
+      const st = stateRef.current
+      updateNowPlaying({
+        title: track.title || '',
+        artist: track.artist || '',
+        album: track.album || '',
+        cover: track.coverUrl || (typeof track.cover === 'string' ? track.cover : null),
+        playing: !!playing,
+        position: Math.max(0, st.elapsed || 0),
+        duration: Math.max(0, st.duration || 0),
+        playbackRate: st.speed || 1,
+      })
+    }
+    const iv = window.setInterval(send, 8000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') send()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('pageshow', onVisible)
+    return () => {
+      window.clearInterval(iv)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pageshow', onVisible)
+    }
   }, [track, playing])
 
   useEffect(() => {
@@ -6878,6 +6939,14 @@ setInstallEvt(null)
           sleepRemaining={sleepRemaining}
           onStartSleep={startSleep}
           onCancelSleep={stopSleepTimer}
+          eqEnabled={eq.settings.enabled}
+          eqPreset={eq.settings.preset}
+          favPing={favPing}
+          trackId={displayTrack.id}
+          soundOn={appSettings.petSound !== false}
+          cheer={cheer}
+          idleSinceRef={idleSinceRef}
+          onPetAction={handlePetAction}
         />
       )}
 

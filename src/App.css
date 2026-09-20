@@ -2874,6 +2874,14 @@ button {
   gap: 15px;
 }
 
+.np-pet {
+  position: absolute;
+  top: 26px;
+  right: 4px;
+  z-index: 6;
+  pointer-events: auto;
+}
+
 .np-cover {
   position: relative;
   border-radius: 24px;

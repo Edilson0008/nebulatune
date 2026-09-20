@@ -12,12 +12,14 @@ function safe(fn) {
     .catch((e) => console.warn('[mediaSession] chamada nativa falhou', e))
 }
 
+let artCache = null
 async function toArtwork(cover) {
   if (!cover || typeof cover !== 'string') return []
+  if (artCache && artCache.key === cover) return artCache.value
+  let value = []
   if (cover.startsWith('data:') || /^https?:\/\//.test(cover)) {
-    return [{ src: cover, sizes: '512x512' }]
-  }
-  if (cover.startsWith('blob:')) {
+    value = [{ src: cover, sizes: '512x512' }]
+  } else if (cover.startsWith('blob:')) {
     try {
       const blob = await fetch(cover).then((r) => r.blob())
       const dataUrl = await new Promise((resolve) => {
@@ -26,12 +28,13 @@ async function toArtwork(cover) {
         fr.onerror = () => resolve(null)
         fr.readAsDataURL(blob)
       })
-      return dataUrl ? [{ src: dataUrl, sizes: '512x512' }] : []
+      value = dataUrl ? [{ src: dataUrl, sizes: '512x512' }] : []
     } catch {
-      return []
+      value = []
     }
   }
-  return []
+  artCache = { key: cover, value }
+  return value
 }
 
 let fallbackArtPromise = null
