@@ -302,6 +302,7 @@ function PetFriend({
   const [burst, setBurst] = useState('')
   const [drag, setDrag] = useState(null)
   const [speech, setSpeech] = useState(null)
+const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
   const lastAnimRef = useRef([])
   const lastCuriousRef = useRef('')
   const rootRef = useRef(null)
@@ -335,6 +336,54 @@ function PetFriend({
     clearTimeout(sayT.current)
     if (ms) sayT.current = setTimeout(() => setSpeech(null), ms)
   }, [])
+
+  const layoutBubble = useCallback(() => {
+    const el = rootRef.current
+    if (!el || !el.querySelector('.pet-bubble')) return
+    const pr = el.getBoundingClientRect()
+    const br = el.querySelector('.pet-bubble').getBoundingClientRect()
+    const vw = window.innerWidth || document.documentElement.clientWidth || 400
+    const vh = window.innerHeight || document.documentElement.clientHeight || 800
+    const m = 8
+    const need = br.height + 6
+
+    let topReserve = m
+    const tb = document.querySelector('.topbar')
+    if (tb && tb.getBoundingClientRect().bottom > 0) topReserve = tb.getBoundingClientRect().bottom
+    let bottomReserve = m
+    const pl = document.querySelector('.player')
+    if (pl) {
+      const pb = pl.getBoundingClientRect()
+      if (pb.top > 0 && pb.top < vh) bottomReserve = vh - pb.top
+    }
+
+    const roomBelow = vh - bottomReserve - pr.bottom - need
+    const roomAbove = pr.top - topReserve - need
+    const dir = roomBelow >= 0 ? 'below' : roomAbove >= 0 ? 'above' : roomBelow > roomAbove ? 'below' : 'above'
+
+    const half = br.width / 2
+    let cx = pr.left + pr.width / 2
+    const minCx = m + half
+    const maxCx = vw - m - half
+    cx = maxCx < minCx ? vw / 2 : Math.max(minCx, Math.min(maxCx, cx))
+    const dx = Math.round(cx - (pr.left + pr.width / 2))
+    setBubblePlace((p) => (p.dir === dir && p.dx === dx ? p : { dir, dx }))
+  }, [])
+
+  useEffect(() => {
+    if (!speech) return undefined
+    const onResize = () => layoutBubble()
+    window.addEventListener('resize', onResize)
+    const id = requestAnimationFrame(layoutBubble)
+    const t1 = setTimeout(layoutBubble, 320)
+    const t2 = setTimeout(layoutBubble, 750)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      cancelAnimationFrame(id)
+      clearTimeout(t1)
+      clearTimeout(t2)
+    }
+  }, [speech, layoutBubble])
 
   const triggerBurst = useCallback(
     (b, ms = 1300, phrasePool = null) => {
@@ -797,7 +846,11 @@ function PetFriend({
       <span className="pet-trail pet-trail-2" />
       <span className="pet-trail pet-trail-3" />
       {speech && (
-        <span key={speech.id} className="pet-bubble">
+        <span
+          key={speech.id}
+          className={`pet-bubble${bubblePlace.dir === 'above' ? '' : ' pet-bubble-below'}`}
+          style={{ '--bdx': `${bubblePlace.dx}px`, transform: `translateX(calc(-50% + ${bubblePlace.dx}px))` }}
+        >
           {speech.text}
         </span>
       )}
