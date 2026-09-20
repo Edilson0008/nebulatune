@@ -89,6 +89,13 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.8.4',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Nome de usuário aparece por inteiro na tela inicial no celular: antes ficava cortado com "…" quando o nome era comprido — agora o cabeçalho organiza em duas linhas (saudação em cima, gatinho e botão embaixo).' },
+    ],
+  },
+  {
     version: '1.8.3',
     date: 'Setembro de 2026',
     items: [

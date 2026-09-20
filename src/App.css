@@ -194,17 +194,23 @@ button {
   flex-wrap: nowrap;
 }
 
-.lib-head-home .greeting {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .lib-head-home .lib-head-right {
   flex-shrink: 0;
   margin-left: auto;
+}
+
+@media (max-width: 520px) {
+  .lib-head-home {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px 12px;
+  }
+
+  .lib-head-home .greeting {
+    flex-basis: 100%;
+    width: 100%;
+    white-space: normal;
+  }
 }
 
 .pet {
