@@ -44,10 +44,14 @@ function openDB() {
         const store = db.createObjectStore(STORE, { keyPath: 'id' })
         store.createIndex('addedAt', 'addedAt')
         db.createObjectStore(FILES, { keyPath: 'id' })
-      } else if (!db.objectStoreNames.contains(FILES)) {
+        return
+      }
+      if (!db.objectStoreNames.contains(FILES)) {
         db.createObjectStore(FILES, { keyPath: 'id' })
         // Versão 1 guardava o áudio/capa dentro do registro da música.
-        // Migra tudo para a pasta de arquivos separada (metadados ficam leves).
+        // Migra para a pasta de arquivos separada. A migração é "melhor
+        // esforço": se faltar espaço para copiar um arquivo, a migração não
+        // quebra o banco — só remove os blobs antigos dos metadados.
         const tx = event.target.transaction
         const metaStore = tx.objectStore(STORE)
         const fileStore = tx.objectStore(FILES)
@@ -57,27 +61,64 @@ function openDB() {
           if (!cursor) return
           const rec = cursor.value
           if (rec && (rec.audioBlob || rec.coverBlob)) {
-            fileStore.put({
+            const putReq = fileStore.put({
               id: rec.id,
               audioBlob: rec.audioBlob || null,
               coverBlob: rec.coverBlob || null,
             })
+            putReq.onerror = (e) => e.stopPropagation()
             const meta = { ...rec }
             delete meta.audioBlob
             delete meta.coverBlob
             delete meta.src
             delete meta.coverUrl
             meta.hasAudio = Boolean(rec.audioBlob)
-            cursor.update(meta)
+            const upReq = cursor.update(meta)
+            upReq.onerror = (e) => e.stopPropagation()
           }
           cursor.continue()
         }
       }
     }
+    req.onblocked = () => {}
     req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
+    req.onerror = () => {
+      const err = req.error || new Error('não foi possível abrir o banco')
+      dbPromise = null
+      reject(err)
+    }
   })
   return dbPromise
+}
+
+function isQuotaError(err) {
+  return (
+    err &&
+    (err.name === 'QuotaExceededError' ||
+      err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+      String(err && err.message).indexOf('Quota') !== -1)
+  )
+}
+
+function writeTx(db, stores, fn) {
+  return new Promise((resolve, reject) => {
+    let tx
+    try {
+      tx = db.transaction(stores, 'readwrite')
+    } catch (e) {
+      reject(e)
+      return
+    }
+    try {
+      fn(tx)
+    } catch (e) {
+      reject(e)
+      return
+    }
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error || new Error('falha na gravação'))
+    tx.onabort = () => reject(tx.error || new Error('gravação cancelada'))
+  })
 }
 
 export async function getAllTracks() {
@@ -141,14 +182,17 @@ export async function putTrack(record) {
   const db = await openDB()
   const meta = toMeta(record)
   const files = withBlobs(record)
-  return new Promise((resolve, reject) => {
-    const stores = files ? [STORE, FILES] : [STORE]
-    const tx = db.transaction(stores, 'readwrite')
-    tx.objectStore(STORE).put(meta)
-    if (files) tx.objectStore(FILES).put(files)
-    tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
-  })
+  const stores = files ? [STORE, FILES] : [STORE]
+  try {
+    await writeTx(db, stores, (tx) => {
+      tx.objectStore(STORE).put(meta)
+      if (files) tx.objectStore(FILES).put(files)
+    })
+  } catch (err) {
+    if (!files || !isQuotaError(err)) throw err
+    // Sem espaço: guarda só os metadados para a biblioteca não sumir.
+    await writeTx(db, [STORE], (tx) => tx.objectStore(STORE).put(meta))
+  }
 }
 
 export async function putTracks(records) {
@@ -156,17 +200,22 @@ export async function putTracks(records) {
   const db = await openDB()
   const fileEntries = records.map(withBlobs).filter(Boolean)
   const stores = fileEntries.length ? [STORE, FILES] : [STORE]
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(stores, 'readwrite')
-    const metaStore = tx.objectStore(STORE)
-    records.forEach((r) => metaStore.put(toMeta(r)))
-    if (fileEntries.length) {
-      const fileStore = tx.objectStore(FILES)
-      fileEntries.forEach((f) => fileStore.put(f))
-    }
-    tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
-  })
+  try {
+    await writeTx(db, stores, (tx) => {
+      const metaStore = tx.objectStore(STORE)
+      records.forEach((r) => metaStore.put(toMeta(r)))
+      if (fileEntries.length) {
+        const fileStore = tx.objectStore(FILES)
+        fileEntries.forEach((f) => fileStore.put(f))
+      }
+    })
+  } catch (err) {
+    if (!fileEntries.length || !isQuotaError(err)) throw err
+    await writeTx(db, [STORE], (tx) => {
+      const metaStore = tx.objectStore(STORE)
+      records.forEach((r) => metaStore.put(toMeta(r)))
+    })
+  }
 }
 
 export async function deleteTrack(id) {

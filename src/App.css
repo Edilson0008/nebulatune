@@ -4330,3 +4330,26 @@ button {
   color: rgba(255, 210, 127, 0.95);
   background: rgba(255, 200, 87, 0.12);
 }
+
+/* ---------- Otimização de rolagem (listas longas ficam fluidas) ---------- */
+.track-row,
+.playlist-item,
+.album-row,
+.station-card,
+.section-card,
+.grid-card,
+.album-card,
+.card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+}
+
+.library-grid > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 230px;
+}
+
+.queue-row,
+.np-lyrics {
+  content-visibility: visible;
+}

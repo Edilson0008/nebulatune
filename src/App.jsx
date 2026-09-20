@@ -89,6 +89,14 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.8.2',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Corrigido o aviso "Não foi possível salvar a biblioteca": o app não trava mais o banco de dados quando o espaço está curto — se faltar espaço, ele guarda só as informações das músicas (as capas/áudios extras são os primeiros a sair) e a biblioteca nunca mais sumiu.' },
+      { type: 'novo', text: 'Site e app mais fluidos: listas com muitas músicas rolam com muito menos trabalho para o aparelho.' },
+    ],
+  },
+  {
     version: '1.8.1',
     date: 'Setembro de 2026',
     items: [
