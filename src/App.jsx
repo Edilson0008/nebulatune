@@ -296,6 +296,7 @@ function PetFriend({
   cheer = null,
   onPetAction = null,
   idleSinceRef = null,
+  mood = 'neutral',
 }) {
   const [anim, setAnim] = useState(null)
   const [burst, setBurst] = useState('')
@@ -319,6 +320,7 @@ function PetFriend({
   const cheerSeenRef = useRef(null)
   const onActionRef = useRef(onPetAction)
   const boredTellRef = useRef(0)
+  const moodSeenRef = useRef('neutral')
   onActionRef.current = onPetAction
 
   const heavy =
@@ -406,6 +408,21 @@ function PetFriend({
   }, [favPing, triggerBurst, playMeow])
 
   useEffect(() => {
+    if (mood === moodSeenRef.current) return
+    moodSeenRef.current = mood
+    if (!playing || mood === 'neutral') return
+    const phrases = {
+      triste: ['que triste...', 'essa música é melancólica...', 'sinto muito...', 'hmm...'],
+      calmo: ['que calmaria...', 'relaxando...', 'suave...'],
+      alegre: ['que alegria!', 'essa música é linda!', 'tô feliz!'],
+      dancante: ['no ritmo!', 'bom de dançar!', 'que muda!'],
+      hype: ['agito total!', 'isso!', 'uauuu!', 'energia!'],
+    }
+    const pool = phrases[mood] || ['que música!']
+    say(pool[Math.floor(Math.random() * pool.length)], 2600)
+  }, [mood, playing, say])
+
+  useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === 'visible') {
         const away = Date.now() - lastHiddenRef.current
@@ -439,6 +456,11 @@ function PetFriend({
         }
         const playOpts = ['sing', 'dance', 'hype', 'sing', 'dance', 'hop', 'sing', 'hype']
         if (heavy) playOpts.push('headbang', 'headbang')
+        if (mood === 'hype') playOpts.splice(0, playOpts.length, 'hype', 'headbang', 'hype', 'sing', 'dance', 'hype')
+        else if (mood === 'dancante') playOpts.push('dance', 'dance', 'twirl', 'sing')
+        else if (mood === 'alegre') playOpts.push('sing', 'hop', 'twirl', 'dance')
+        else if (mood === 'calmo') playOpts.push('glint', 'look', 'sing', 'sing')
+        else if (mood === 'triste') playOpts.splice(0, playOpts.length, 'sing', 'look', 'walk', 'glint', 'sing')
         const idleOpts = ['walk', 'twirl', 'glint', 'hop', 'look', 'wiggle', 'stretch', 'sleep', 'sleep', 'glint', 'curious']
         if (bored) idleOpts.push('curious', 'curious', 'curious', 'walk', 'walk')
         if (sleepMode) idleOpts.push('sleep', 'yawn')
@@ -446,6 +468,13 @@ function PetFriend({
         if (hour >= 6 && hour < 12) idleOpts.push('stretch', 'glint')
         if (hour >= 12 && hour < 19) idleOpts.push('twirl', 'glint', 'glint')
         if (hour >= 19 && hour < 23) idleOpts.push('yawn', 'sleep')
+        const moodPools = {
+          triste: ['que triste...', 'essa música é melancólica...', 'sinto muito...', 'hmm...'],
+          calmo: ['que calmaria...', 'relaxando...', 'suave...'],
+          alegre: ['que alegria!', 'essa música é linda!', 'tô feliz!'],
+          dancante: ['no ritmo!', 'bom de dançar!', 'que muda!'],
+          hype: ['agito total!', 'isso!', 'uauuu!', 'energia!'],
+        }
         const opts = playing ? playOpts : idleOpts
         const avoid = lastAnimRef.current
         const options = opts.filter((x) => !avoid.includes(x))
@@ -498,7 +527,8 @@ function PetFriend({
               const pool = pools[pick]
                 ? pools[pick]
                 : playing
-                  ? ['que música boa!', 'essa é top!', 'meu som!', 'curtindo!', 'no beat!', 'uuuu!']
+                  ? moodPools[mood] ||
+                    ['que música boa!', 'essa é top!', 'meu som!', 'curtindo!', 'no beat!', 'uuuu!']
                   : ['oi!', 'e aí?!', 'tô de boa...', 'que legal!', 'ué?', 'nossa, quanta música!', 'óia eu!', 'hehe']
               say(pool[Math.floor(Math.random() * pool.length)], 2600)
             }
@@ -518,7 +548,7 @@ function PetFriend({
       if (sayT.current) clearTimeout(sayT.current)
       if (tapWindowT.current) clearTimeout(tapWindowT.current)
     }
-  }, [playing, heavy, sleepMode, hour, say])
+  }, [playing, heavy, sleepMode, hour, say, mood])
 
   const onPointerDown = (e) => {
     const el = rootRef.current
@@ -622,6 +652,7 @@ function PetFriend({
     'pet',
     `pet-${anim || ''}`,
     `pet-${burst || ''}`,
+    burst ? '' : `pet-mood-${mood}`,
     drag ? 'pet-held' : '',
     drowsy ? 'pet-drowsy' : '',
   ]
@@ -708,6 +739,12 @@ function PetFriend({
             <circle cx="25.5" cy="35.6" r="1.6" fill="#7a3b52" />
             <circle cx="38.5" cy="35.6" r="1.6" fill="#7a3b52" />
           </g>
+          <g className="pet-eyes-sad">
+            <path d="M21.8 33.4 q3.7 -3 7.4 0" fill="none" stroke="#7a3b52" strokeWidth="2" strokeLinecap="round" />
+            <path d="M34.8 33.4 q3.7 -3 7.4 0" fill="none" stroke="#7a3b52" strokeWidth="2" strokeLinecap="round" />
+            <circle cx="25.5" cy="35.8" r="2.4" fill="#7a3b52" />
+            <circle cx="38.5" cy="35.8" r="2.4" fill="#7a3b52" />
+          </g>
           <ellipse cx="20" cy="43" rx="4.2" ry="2.6" fill="#ff9fc4" opacity="0.5" />
           <ellipse cx="44" cy="43" rx="4.2" ry="2.6" fill="#ff9fc4" opacity="0.5" />
           <path d="M10 34.5 L16.5 36 M9 39 L16.5 40" stroke="#f5a9c8" strokeWidth="1.3" strokeLinecap="round" opacity="0.8" />
@@ -724,6 +761,14 @@ function PetFriend({
             className="pet-mouth-open"
             d="M29.5 43.2 a2.5 2.2 0 0 0 5 0 a2.5 2.2 0 0 0 -5 0"
             fill="#7a3b52"
+          />
+          <path
+            className="pet-mouth-sad"
+            d="M29.5 45 q2.2 -2.2 5 0"
+            fill="none"
+            stroke="#7a3b52"
+            strokeWidth="1.6"
+            strokeLinecap="round"
           />
           <ellipse cx="26.5" cy="56" rx="4" ry="2.7" fill="#ffe3ef" stroke="#f5a9c8" strokeWidth="2" />
           <ellipse cx="37.5" cy="56" rx="4" ry="2.7" fill="#ffe3ef" stroke="#f5a9c8" strokeWidth="2" />
@@ -745,6 +790,7 @@ function PetFriend({
       <span className="pet-zzz pet-zzz-1">z</span>
       <span className="pet-zzz pet-zzz-2">Z</span>
       <span className="pet-zzz pet-zzz-3">z</span>
+      <span className="pet-tear" />
       <span className="pet-ground" />
       <span className="pet-thought">?</span>
       <span className="pet-trail pet-trail-1" />
@@ -1812,6 +1858,7 @@ function NowPlaying({
   cheer = null,
   idleSinceRef = null,
   onPetAction = null,
+  mood = 'neutral',
 }) {
   const barRef = useRef(null)
   const draggingRef = useRef(false)
@@ -2155,6 +2202,7 @@ function NowPlaying({
             cheer={cheer}
             idleSinceRef={idleSinceRef}
             onPetAction={onPetAction}
+            mood={mood}
           />
         </div>
         <div className="np-cover">
@@ -2655,6 +2703,128 @@ try {
   }, [track])
 }
 
+const MOOD_WINDOW_MS = 3600
+const MOOD_MIN_AUDIBLE_RATIO = 0.2
+
+function useMoodDetector({ playing }) {
+  const [mood, setMood] = useState('neutral')
+  const moodRef = useRef('neutral')
+  const lockRef = useRef(null)
+
+  useEffect(() => {
+    if (!playing) {
+      moodRef.current = 'neutral'
+      lockRef.current = null
+      setMood('neutral')
+      return undefined
+    }
+
+    let raf = 0
+    let win = {
+      t0: performance.now(),
+      frames: 0,
+      amp: 0,
+      low: 0,
+      high: 0,
+      audible: 0,
+      prev: 0,
+      onsets: 0,
+      lastOnset: 0,
+    }
+    graph.getContext()
+    const analyser = graph.getAnalyser()
+    const data = new Uint8Array(analyser ? analyser.frequencyBinCount : 64)
+
+    const classify = (w) => {
+      const secs = w.frames / 60
+      if (secs <= 0 || w.frames < 30 || w.audible / w.frames < MOOD_MIN_AUDIBLE_RATIO) return 'neutral'
+      const loud = w.amp / w.frames / 255
+      const low = w.low / w.frames / 255
+      const high = w.high / w.frames / 255
+      const onsetRate = w.onsets / secs
+      if (loud < 0.045) return 'neutral'
+      const trebleRatio = low > 0 ? high / low : high > 0 ? 2 : 0
+      const bassRatio = high > 0 ? low / high : low > 0 ? 2 : 0
+      if (onsetRate >= 1.0) {
+        if (trebleRatio >= 0.95) return 'hype'
+        return 'dancante'
+      }
+      if (loud < 0.11) {
+        if (bassRatio >= 1.6 || trebleRatio <= 0.45) return 'triste'
+        return 'calmo'
+      }
+      if (trebleRatio >= 0.95) return 'alegre'
+      if (loud >= 0.17) return 'dancante'
+      return 'calmo'
+    }
+
+    const step = (t) => {
+      if (!raf) return
+      if (analyser) analyser.getByteFrequencyData(data)
+      const n = data.length
+      const loN = Math.max(1, Math.floor(n * 0.18))
+      const hiN = Math.max(1, n - Math.floor(n * 0.5))
+      let sum = 0
+      let lowSum = 0
+      let highSum = 0
+      for (let i = 0; i < n; i += 1) {
+        const v = data[i]
+        sum += v
+        if (i < loN) lowSum += v
+        if (i >= n * 0.5) highSum += v
+      }
+      const amp = sum / n
+      win.frames += 1
+      win.amp += amp
+      win.low += lowSum / loN
+      win.high += highSum / hiN
+      if (amp > 5) win.audible += 1
+      if (amp > win.prev + 5 && amp > 14 && t - win.lastOnset > 190) {
+        win.onsets += 1
+        win.lastOnset = t
+      }
+      win.prev = amp
+      if (t - win.t0 >= MOOD_WINDOW_MS) {
+        const c = classify(win)
+        if (c !== 'neutral') {
+          if (lockRef.current) {
+            if (lockRef.current === c) {
+              moodRef.current = c
+              lockRef.current = null
+              setMood(c)
+            } else {
+              lockRef.current = c
+            }
+          } else if (moodRef.current !== c) {
+            lockRef.current = c
+          }
+        }
+        win = {
+          t0: t,
+          frames: 0,
+          amp: 0,
+          low: 0,
+          high: 0,
+          audible: 0,
+          prev: amp,
+          onsets: 0,
+          lastOnset: t,
+        }
+      }
+      raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => {
+      raf = 0
+      moodRef.current = 'neutral'
+      lockRef.current = null
+      setMood('neutral')
+    }
+  }, [playing])
+
+  return mood
+}
+
 function usePlayer(library, speed = 1, onStart) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -2875,6 +3045,25 @@ function usePlayer(library, speed = 1, onStart) {
       startIndex(i)
       if (!shuffleRef.current) {
         const nextIds = libRef.current.slice(i + 1).map((t) => t.id)
+        queueRef.current = nextIds
+        setQueue(nextIds)
+      }
+    },
+    [startIndex],
+  )
+
+  const playByList = useCallback(
+    (tracks, id) => {
+      const objList = tracks && tracks.length ? tracks : null
+      if (!objList) return
+      const lib = libRef.current
+      const i = objList.findIndex((t) => t.id === id)
+      const idx = lib.findIndex((t) => t.id === id)
+      if (i < 0 || idx < 0) return
+      scopeRef.current = objList.map((t) => t.id)
+      startIndex(idx)
+      if (!shuffleRef.current) {
+        const nextIds = objList.slice(i + 1).map((t) => t.id)
         queueRef.current = nextIds
         setQueue(nextIds)
       }
@@ -3131,6 +3320,7 @@ const progress = duration ? elapsed / duration : 0
     toggle,
     pausePlayback,
     select,
+    playByList,
     next,
     prev,
     seek,
@@ -5568,6 +5758,7 @@ function App() {
     duration,
     toggle,
     select,
+    playByList: playerPlayByList,
     next,
     prev,
     seek,
@@ -5611,6 +5802,7 @@ function App() {
         : track,
     [onlineActive, onlineTrack, track],
   )
+  const mood = useMoodDetector({ playing: !!playing })
   const displayPlaying = onlineActive ? onlinePlaying : playing
   const displayProgress = onlineActive ? onlineProgress : progress
   const displayElapsed = onlineActive ? onlineElapsed : elapsed
@@ -6081,22 +6273,11 @@ setInstallEvt(null)
 
   const playByList = useCallback(
     (tracks, id) => {
-      const objList = tracks && tracks.length ? tracks : null
-      if (!objList) return
-      const i = objList.findIndex((t) => t.id === id)
-      const idx = library.findIndex((t) => t.id === id)
-      if (i < 0 || idx < 0) return
       stopOnline()
-      scopeRef.current = objList.map((t) => t.id)
-      startIndex(idx)
-      if (!shuffleRef.current) {
-        const nextIds = objList.slice(i + 1).map((t) => t.id)
-        queueRef.current = nextIds
-        setQueue(nextIds)
-      }
+      playerPlayByList(tracks, id)
       setShowNowPlaying(true)
     },
-    [library, startIndex, stopOnline],
+    [playerPlayByList, stopOnline],
   )
 
   const queueNextLocal = useCallback(
@@ -6573,6 +6754,7 @@ setInstallEvt(null)
                   cheer={cheer}
                   idleSinceRef={idleSinceRef}
                   onPetAction={handlePetAction}
+                  mood={mood}
                 />
                 <button className="btn-primary" onClick={() => fileInputRef.current?.click()}>
                   + Adicionar músicas
@@ -7019,6 +7201,7 @@ setInstallEvt(null)
           cheer={cheer}
           idleSinceRef={idleSinceRef}
           onPetAction={handlePetAction}
+          mood={mood}
         />
       )}
 
