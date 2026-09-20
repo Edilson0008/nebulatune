@@ -219,6 +219,7 @@ button {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  will-change: transform;
   cursor: grab;
   touch-action: none;
   animation: pet-float 3.2s ease-in-out infinite;
@@ -2350,6 +2351,8 @@ button {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 14px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
 }
 
 /* ---------- Player ---------- */
@@ -3446,6 +3449,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 400px;
 }
 
 .np-search-item {
@@ -4101,6 +4106,8 @@ button {
 .queue-list {
   display: flex;
   flex-direction: column;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 400px;
 }
 
 .queue-list .queue-row:hover {
@@ -5141,6 +5148,8 @@ button {
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
   gap: 14px;
   margin-bottom: 26px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 230px;
 }
 
 .playlist-card {
@@ -5515,6 +5524,12 @@ button {
 .pet-mouth-sad,
 .pet-eyes-sad {
   opacity: 0;
+}
+
+.pet-eyes-happy,
+.pet-eyes-sad,
+.pet-mouth-sad {
+  transition: opacity 0.35s ease;
 }
 
 .pet-tear {

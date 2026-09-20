@@ -2758,19 +2758,38 @@ try {
 
 const MOOD_WINDOW_MS = 3600
 const MOOD_MIN_AUDIBLE_RATIO = 0.2
+const MOOD_UPBEAT = new Set(['alegre', 'dancante', 'hype'])
+const moodClamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v)
 
-function useMoodDetector({ playing }) {
+function moodFromFeatures({ loud, onsetRate, bassRatio, treble }) {
+  const B = moodClamp01(treble / 1.5)
+  if (onsetRate < 0.7) return loud < 0.16 ? 'triste' : 'calmo'
+  if (onsetRate < 1.0) {
+    if (B >= 0.5 && loud >= 0.12) return 'alegre'
+    if (bassRatio >= 1.5 && loud >= 0.16) return 'dancante'
+    if (loud < 0.15) return 'triste'
+    return 'calmo'
+  }
+  if (onsetRate >= 1.5) {
+    if (B >= 0.55 && loud >= 0.14) return 'hype'
+    return 'dancante'
+  }
+  if (bassRatio >= 1.5 && B < 0.5) return 'dancante'
+  if (B >= 0.5 && loud >= 0.11) return 'alegre'
+  if (loud >= 0.14) return 'dancante'
+  return 'calmo'
+}
+
+function useMoodDetector({ playing, sig }) {
   const [mood, setMood] = useState('neutral')
   const moodRef = useRef('neutral')
   const lockRef = useRef(null)
 
   useEffect(() => {
-    if (!playing) {
-      moodRef.current = 'neutral'
-      lockRef.current = null
-      setMood('neutral')
-      return undefined
-    }
+    moodRef.current = 'neutral'
+    lockRef.current = null
+    setMood('neutral')
+    if (!playing) return undefined
 
     let raf = 0
     let win = {
@@ -2788,27 +2807,17 @@ function useMoodDetector({ playing }) {
     const analyser = graph.getAnalyser()
     const data = new Uint8Array(analyser ? analyser.frequencyBinCount : 64)
 
-    const classify = (w) => {
+    const analyze = (w) => {
       const secs = w.frames / 60
-      if (secs <= 0 || w.frames < 30 || w.audible / w.frames < MOOD_MIN_AUDIBLE_RATIO) return 'neutral'
+      if (secs <= 0 || w.frames < 30 || w.audible / w.frames < MOOD_MIN_AUDIBLE_RATIO) return null
       const loud = w.amp / w.frames / 255
       const low = w.low / w.frames / 255
       const high = w.high / w.frames / 255
-      const onsetRate = w.onsets / secs
-      if (loud < 0.045) return 'neutral'
-      const trebleRatio = low > 0 ? high / low : high > 0 ? 2 : 0
+      if (loud < 0.045) return null
+      const treble = low > 0 ? high / low : high > 0 ? 2 : 0
       const bassRatio = high > 0 ? low / high : low > 0 ? 2 : 0
-      if (onsetRate >= 1.0) {
-        if (trebleRatio >= 0.95) return 'hype'
-        return 'dancante'
-      }
-      if (loud < 0.11) {
-        if (bassRatio >= 1.6 || trebleRatio <= 0.45) return 'triste'
-        return 'calmo'
-      }
-      if (trebleRatio >= 0.95) return 'alegre'
-      if (loud >= 0.17) return 'dancante'
-      return 'calmo'
+      const onsetRate = w.onsets / secs
+      return { loud, onsetRate, bassRatio, treble }
     }
 
     const step = (t) => {
@@ -2838,18 +2847,24 @@ function useMoodDetector({ playing }) {
       }
       win.prev = amp
       if (t - win.t0 >= MOOD_WINDOW_MS) {
-        const c = classify(win)
-        if (c !== 'neutral') {
-          if (lockRef.current) {
-            if (lockRef.current === c) {
+        const a = analyze(win)
+        if (a) {
+          const c = moodFromFeatures(a)
+          const prev = moodRef.current
+          const lock = lockRef.current
+          if (lock && lock.c === c) {
+            const movingToUpbeat = MOOD_UPBEAT.has(c)
+            const fromDownbeat = prev !== 'neutral' && !MOOD_UPBEAT.has(prev)
+            const req = movingToUpbeat && fromDownbeat ? 3 : 2
+            if (lock.n + 1 >= req) {
               moodRef.current = c
               lockRef.current = null
               setMood(c)
             } else {
-              lockRef.current = c
+              lockRef.current = { c, n: lock.n + 1 }
             }
-          } else if (moodRef.current !== c) {
-            lockRef.current = c
+          } else if (prev !== c) {
+            lockRef.current = { c, n: 1 }
           }
         }
         win = {
@@ -2869,11 +2884,8 @@ function useMoodDetector({ playing }) {
     raf = requestAnimationFrame(step)
     return () => {
       raf = 0
-      moodRef.current = 'neutral'
-      lockRef.current = null
-      setMood('neutral')
     }
-  }, [playing])
+  }, [playing, sig])
 
   return mood
 }
@@ -2883,6 +2895,8 @@ function usePlayer(library, speed = 1, onStart) {
   const [playing, setPlaying] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [duration, setDuration] = useState(0)
+  const lastElapsedRef = useRef(-1)
+  const lastDurationRef = useRef(-1)
   const audioRef = useRef(null)
   const modeRef = useRef('synth')
   const indexRef = useRef(0)
@@ -3296,11 +3310,27 @@ function usePlayer(library, speed = 1, onStart) {
       if (cancelled) return
       if (modeRef.current === 'file') {
         const a = getAudio()
-        setElapsed(a.currentTime || 0)
-        setDuration(a.duration || libRef.current[indexRef.current]?.duration || 0)
+        const e = a.currentTime || 0
+        if (Math.abs(e - lastElapsedRef.current) >= 0.1) {
+          lastElapsedRef.current = e
+          setElapsed(e)
+        }
+        const d = a.duration || libRef.current[indexRef.current]?.duration || 0
+        if (d !== lastDurationRef.current) {
+          lastDurationRef.current = d
+          setDuration(d)
+        }
       } else {
-        setElapsed(engine.getElapsed())
-        setDuration(engine.getDuration())
+        const e = engine.getElapsed()
+        if (Math.abs(e - lastElapsedRef.current) >= 0.1) {
+          lastElapsedRef.current = e
+          setElapsed(e)
+        }
+        const d = engine.getDuration() || 0
+        if (d !== lastDurationRef.current) {
+          lastDurationRef.current = d
+          setDuration(d)
+        }
       }
       raf = requestAnimationFrame(rafTick)
     }
@@ -5855,7 +5885,7 @@ function App() {
         : track,
     [onlineActive, onlineTrack, track],
   )
-  const mood = useMoodDetector({ playing: !!playing })
+  const mood = useMoodDetector({ playing: !!playing, sig: track?.id })
   const displayPlaying = onlineActive ? onlinePlaying : playing
   const displayProgress = onlineActive ? onlineProgress : progress
   const displayElapsed = onlineActive ? onlineElapsed : elapsed
