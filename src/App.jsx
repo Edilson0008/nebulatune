@@ -89,6 +89,13 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.8.6',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Playlists de verdade: agora, ao tocar uma música dentro de uma playlist, as próximas, as anteriores e o aleatório ficam limitados às músicas daquela playlist — antes o app seguia tocando o resto da biblioteca depois da playlist.' },
+    ],
+  },
+  {
     version: '1.8.5',
     date: 'Setembro de 2026',
     items: [
@@ -2670,6 +2677,7 @@ function usePlayer(library, speed = 1, onStart) {
   const shuffleRef = useRef(false)
   const [queue, setQueue] = useState([])
   const queueRef = useRef([])
+  const scopeRef = useRef(null)
   const speedRef = useRef(speed)
 
   useEffect(() => {
@@ -2802,7 +2810,22 @@ function usePlayer(library, speed = 1, onStart) {
   }, [getAudio, playWithRetry])
 
   const randomIndex = useCallback(() => {
-    const n = libRef.current.length
+    const lib = libRef.current
+    const scope = scopeRef.current
+    if (scope && scope.length) {
+      const inLib = scope.filter((id) => lib.some((t) => t.id === id))
+      if (inLib.length <= 1) return indexRef.current
+      const curId = lib[indexRef.current]?.id
+      let pick = curId
+      let guard = 0
+      do {
+        pick = inLib[Math.floor(Math.random() * inLib.length)]
+        guard += 1
+      } while (pick === curId && guard < 20)
+      const idx = lib.findIndex((t) => t.id === pick)
+      return idx >= 0 ? idx : indexRef.current
+    }
+    const n = lib.length
     if (n <= 1) return 0
     let i = indexRef.current
     while (i === indexRef.current) i = Math.floor(Math.random() * n)
@@ -2811,7 +2834,8 @@ function usePlayer(library, speed = 1, onStart) {
 
   const next = useCallback(
     (_auto = false) => {
-      const n = libRef.current.length
+      const lib = libRef.current
+      const n = lib.length
       if (!n) return
       if (shuffleRef.current) {
         startIndex(randomIndex())
@@ -2821,10 +2845,23 @@ function usePlayer(library, speed = 1, onStart) {
         const head = queueRef.current[0]
         queueRef.current = queueRef.current.slice(1)
         setQueue(queueRef.current)
-        const idx = libRef.current.findIndex((t) => t.id === head)
+        const idx = lib.findIndex((t) => t.id === head)
         if (idx >= 0) {
           startIndex(idx)
           return
+        }
+      }
+      const scope = scopeRef.current
+      if (scope && scope.length) {
+        const curId = lib[indexRef.current]?.id
+        const ci = curId ? scope.indexOf(curId) : -1
+        for (let step = 1; step <= scope.length; step += 1) {
+          const pick = scope[((ci < 0 ? -1 : ci) + step) % scope.length]
+          const idx = pick !== undefined ? lib.findIndex((t) => t.id === pick) : -1
+          if (idx >= 0) {
+            startIndex(idx)
+            return
+          }
         }
       }
       startIndex((indexRef.current + 1) % n)
@@ -2834,6 +2871,7 @@ function usePlayer(library, speed = 1, onStart) {
 
   const select = useCallback(
     (i) => {
+      scopeRef.current = null
       startIndex(i)
       if (!shuffleRef.current) {
         const nextIds = libRef.current.slice(i + 1).map((t) => t.id)
@@ -2916,11 +2954,25 @@ function usePlayer(library, speed = 1, onStart) {
   }, [])
 
   const prev = useCallback(() => {
-    const n = libRef.current.length
+    const lib = libRef.current
+    const n = lib.length
     if (!n) return
     if (shuffleRef.current) {
       startIndex(randomIndex())
       return
+    }
+    const scope = scopeRef.current
+    if (scope && scope.length) {
+      const curId = lib[indexRef.current]?.id
+      const ci = curId ? scope.indexOf(curId) : -1
+      for (let step = 1; step <= scope.length; step += 1) {
+        const pick = scope[((ci < 0 ? -1 : ci) - step + scope.length) % scope.length]
+        const idx = pick !== undefined ? lib.findIndex((t) => t.id === pick) : -1
+        if (idx >= 0) {
+          startIndex(idx)
+          return
+        }
+      }
     }
     startIndex((indexRef.current - 1 + n) % n)
   }, [startIndex, randomIndex])
@@ -6027,6 +6079,26 @@ setInstallEvt(null)
     [library, select, stopOnline],
   )
 
+  const playByList = useCallback(
+    (tracks, id) => {
+      const objList = tracks && tracks.length ? tracks : null
+      if (!objList) return
+      const i = objList.findIndex((t) => t.id === id)
+      const idx = library.findIndex((t) => t.id === id)
+      if (i < 0 || idx < 0) return
+      stopOnline()
+      scopeRef.current = objList.map((t) => t.id)
+      startIndex(idx)
+      if (!shuffleRef.current) {
+        const nextIds = objList.slice(i + 1).map((t) => t.id)
+        queueRef.current = nextIds
+        setQueue(nextIds)
+      }
+      setShowNowPlaying(true)
+    },
+    [library, startIndex, stopOnline],
+  )
+
   const queueNextLocal = useCallback(
     (id) => {
       queueNext(id)
@@ -6664,7 +6736,7 @@ setInstallEvt(null)
                       <TrackList
                         tracks={plTracks}
                         currentId={track?.id}
-                        onSelect={playById}
+                        onSelect={(id) => playByList(plTracks, id)}
                         onRemove={(id) => removeFromPlaylist(pl.id, id)}
                         onToggleFavorite={toggleFavorite}
                         onQueueNext={queueNextLocal}
