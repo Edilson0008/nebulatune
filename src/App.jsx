@@ -5,7 +5,7 @@ import { COVERS, featuredCovers } from './data/tracks'
 import * as engine from './audio/engine'
 import * as graph from './audio/graph'
 import { EQ_FREQS } from './audio/graph'
-import { ACCENTS, SPEEDS, useSettings } from './settings'
+import { ACCENTS, SPEEDS, useSettings, usePetStats } from './settings'
 import { PRESETS, useEqualizer } from './audio/equalizer'
 import { clearTracks, deleteTrack, getAllTracks, getAllFiles, getFile, putTrack, putTracks, toMeta } from './storage/db'
 import { APP_VERSION, SITE_URL } from './app-config'
@@ -88,6 +88,18 @@ function nf(n) {
 }
 
 const CHANGELOG = [
+  {
+    version: '1.8.3',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Gatinho virtual no Início: ele anda pela tela, salta, gira, espreguiça, dança e canta junto com a música (e rebola quando o equalizador está com muito grave), fica curioso explorando os botões do app e dorme com zZz.' },
+      { type: 'novo', text: 'Ele reage a você e fala em balõezinhos: toque faz carinho e miado ("adoro!"), dois toques fazem ele girar ("sorte!"), três toques dão um susto ("que susto!"), segurar deixa ele bravo ("grr...") — e ele volta correndo te receber quando você volta ao app.' },
+      { type: 'novo', text: 'Ele também comenta seus gostos: reconhece a música mais tocada ("essa é a tua preferida!"), comemora de 10 em 10 reproduções e favoritas, e reclama quando você fica um tempo sem mexer no app ("que tédio...").' },
+      { type: 'novo', text: 'Nova página "Seu gatinho" no Perfil: mostra quantos toques, corações, sonecas, miados e sustos ele já viveu com você, a frase de humor dele e as capas das suas músicas favoritas.' },
+      { type: 'novo', text: 'Novo ajuste "Som do gatinho" em Configurações → Aparência: liga ou desliga o miado dele.' },
+      { type: 'correcao', text: 'Layout do Perfil arrumado: a caixa de "Nome" agora fica logo abaixo da foto, e o cartão "Seu gatinho" usa as cores do tema (legível no modo escuro).' },
+    ],
+  },
   {
     version: '1.8.2',
     date: 'Setembro de 2026',
@@ -246,6 +258,485 @@ function Cover({ colors, image, size = 40, radius = 8 }) {
   )
 }
 
+const random = (a, b) => a + Math.random() * (b - a)
+
+function PetFriend({
+  size = 46,
+  playing = false,
+  eqEnabled = false,
+  eqPreset = 'flat',
+  favPing = 0,
+  shuffle = false,
+  trackId = null,
+  sleepMode = null,
+  sleepRemaining = null,
+  soundOn = true,
+  cheer = null,
+  onPetAction = null,
+  idleSinceRef = null,
+}) {
+  const [anim, setAnim] = useState(null)
+  const [burst, setBurst] = useState('')
+  const [drag, setDrag] = useState(null)
+  const [speech, setSpeech] = useState(null)
+  const lastAnimRef = useRef([])
+  const lastCuriousRef = useRef('')
+  const rootRef = useRef(null)
+  const burstT = useRef(null)
+  const sayT = useRef(null)
+  const phraseT = useRef(null)
+  const speechSeq = useRef(0)
+  const touchRef = useRef(null)
+  const tapRef = useRef(0)
+  const tapCountRef = useRef(0)
+  const tapWindowT = useRef(null)
+  const lastHiddenRef = useRef(0)
+  const meowRef = useRef(null)
+  const lastTrackRef = useRef(null)
+  const favPrevRef = useRef(0)
+  const cheerSeenRef = useRef(null)
+  const onActionRef = useRef(onPetAction)
+  const boredTellRef = useRef(0)
+  onActionRef.current = onPetAction
+
+  const heavy =
+    eqEnabled && ['bass', 'hiphop', 'funk', 'eletro', 'dance', 'rock', 'loudness'].includes(eqPreset)
+  const hour = new Date().getHours()
+  const drowsy =
+    sleepMode != null && (sleepMode === 'end' || (sleepRemaining != null && sleepRemaining <= 30))
+
+  const say = useCallback((text, ms = 2600) => {
+    speechSeq.current += 1
+    setSpeech({ text, id: speechSeq.current })
+    clearTimeout(sayT.current)
+    if (ms) sayT.current = setTimeout(() => setSpeech(null), ms)
+  }, [])
+
+  const triggerBurst = useCallback(
+    (b, ms = 1300, phrasePool = null) => {
+      clearTimeout(burstT.current)
+      setBurst(b)
+      if (phrasePool) {
+        const P = {
+          heart: ['adoro!', 'coraçãozinho pra ela!', 'essa entra na lista!', 'que fofo!'],
+          scared: ['ih!', 'que susto!'],
+          angry: ['grr...', 'não gostei!', 'fica quieto!'],
+          roulette: ['sorte!', 'rumo ao aleatório!'],
+          cuddle: ['hehe...', 'que bom!', 'mais!'],
+          return: ['oi de novo!', 'senti tua falta!', 'cadê você?'],
+        }
+        say(P[phrasePool][Math.floor(Math.random() * P[phrasePool].length)], Math.min(3000, ms + 1200))
+      }
+      if (ms) burstT.current = setTimeout(() => setBurst(''), ms)
+    },
+    [say],
+  )
+
+  const playMeow = useCallback(() => {
+    if (!soundOn) return
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext
+      const ctx = meowRef.current || new AC()
+      if (!meowRef.current) meowRef.current = ctx
+      if (ctx.state === 'suspended') ctx.resume()
+      onActionRef.current?.('meow')
+      const t0 = ctx.currentTime
+      const osc = ctx.createOscillator()
+      const g = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(620, t0)
+      osc.frequency.exponentialRampToValueAtTime(980, t0 + 0.28)
+      osc.frequency.exponentialRampToValueAtTime(640, t0 + 0.55)
+      g.gain.setValueAtTime(0.0001, t0)
+      g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.08)
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6)
+      osc.connect(g).connect(ctx.destination)
+      osc.start(t0)
+      osc.stop(t0 + 0.62)
+    } catch {
+      /* áudio indisponível */
+    }
+  }, [soundOn])
+
+  useEffect(() => {
+    if (cheer && cheer.id !== cheerSeenRef.current) {
+      cheerSeenRef.current = cheer.id
+      triggerBurst('heart', 1700, 'heart')
+      say(cheer.text, 3200)
+    }
+  }, [cheer, say, triggerBurst])
+
+  useEffect(() => {
+    if (trackId !== lastTrackRef.current) {
+      const changed = lastTrackRef.current != null
+      lastTrackRef.current = trackId
+      if (changed && shuffle && playing) triggerBurst('roulette', 1500, 'roulette')
+    }
+  }, [trackId, shuffle, playing, triggerBurst])
+
+  useEffect(() => {
+    if (favPing && favPing !== favPrevRef.current) {
+      favPrevRef.current = favPing
+      onActionRef.current?.('heart')
+      triggerBurst('heart', 1800, 'heart')
+      playMeow()
+    }
+  }, [favPing, triggerBurst, playMeow])
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        const away = Date.now() - lastHiddenRef.current
+        if (lastHiddenRef.current && away > 40000) {
+          onActionRef.current?.('heart')
+          triggerBurst('heart', 1800, 'return')
+          playMeow()
+        }
+      } else {
+        lastHiddenRef.current = Date.now()
+      }
+    }
+    document.addEventListener('visibilitychange', onVis)
+    document.addEventListener('pageshow', onVis)
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      document.removeEventListener('pageshow', onVis)
+    }
+  }, [triggerBurst, playMeow])
+
+  useEffect(() => {
+    let t
+    const loop = () => {
+      t = setTimeout(() => {
+        const idleFor = idleSinceRef ? Date.now() - (idleSinceRef.current || Date.now()) : 0
+        const bored = idleFor > 90000
+        if (bored && Date.now() - boredTellRef.current > 60000) {
+          boredTellRef.current = Date.now()
+          const boredPhrases = ['que tédio...', 'vem brincar...', 'alguém aí?', 'tão quieto...']
+          say(boredPhrases[Math.floor(Math.random() * boredPhrases.length)], 2400)
+        }
+        const playOpts = ['sing', 'dance', 'hype', 'sing', 'dance', 'hop', 'sing', 'hype']
+        if (heavy) playOpts.push('headbang', 'headbang')
+        const idleOpts = ['walk', 'twirl', 'glint', 'hop', 'look', 'wiggle', 'stretch', 'sleep', 'sleep', 'glint', 'curious']
+        if (bored) idleOpts.push('curious', 'curious', 'curious', 'walk', 'walk')
+        if (sleepMode) idleOpts.push('sleep', 'yawn')
+        if (hour >= 22 || hour < 6) idleOpts.push('sleep', 'sleep', 'yawn')
+        if (hour >= 6 && hour < 12) idleOpts.push('stretch', 'glint')
+        if (hour >= 12 && hour < 19) idleOpts.push('twirl', 'glint', 'glint')
+        if (hour >= 19 && hour < 23) idleOpts.push('yawn', 'sleep')
+        const opts = playing ? playOpts : idleOpts
+        const avoid = lastAnimRef.current
+        const options = opts.filter((x) => !avoid.includes(x))
+        const pick = (options.length ? options : opts)[Math.floor(Math.random() * (options.length ? options : opts).length)]
+        lastAnimRef.current = avoid.concat(pick).slice(-2)
+        const el = rootRef.current
+        if (pick === 'walk' && el) {
+          const left = el.getBoundingClientRect().left
+          el.style.setProperty('--walk-x', `${Math.max(8, Math.round(left - 16))}px`)
+        }
+        if (pick === 'curious' && el) {
+          const selectors = [
+            '.lib-head-right .btn-primary',
+            '.quick-tile',
+            '.app-version-chip',
+            '.search-wrap .search',
+            '.mobile-tabs',
+            '.player .player-controls',
+          ]
+          const valid = selectors.map((s) => [s, document.querySelector(s)]).filter(([, n]) => n)
+          const avail = valid.filter(([s]) => s !== lastCuriousRef.current)
+          const list = avail.length ? avail : valid
+          if (list.length) {
+            const [sel, node] = list[Math.floor(Math.random() * list.length)]
+            lastCuriousRef.current = sel
+            const tr = node.getBoundingClientRect()
+            const pr = el.getBoundingClientRect()
+            let dx = tr.left - pr.left - 14
+            let dy = tr.top + tr.height / 2 - (pr.top + pr.height / 2)
+            dy = Math.max(-150, Math.min(150, dy))
+            el.style.setProperty('--qx', `${Math.round(dx)}px`)
+            el.style.setProperty('--qy', `${Math.round(dy)}px`)
+          }
+        }
+        setAnim(pick)
+        if (pick === 'sleep' || pick === 'yawn') onActionRef.current?.('sleep')
+        const dur =
+          { sing: 4600, dance: 3200, hype: 3200, sleep: 3000, walk: 5600, twirl: 1500, glint: 2200, curious: 4600, yawn: 2600, headbang: 2400 }[pick] ??
+          1700
+        if (phraseT.current) clearTimeout(phraseT.current)
+        phraseT.current = setTimeout(
+          () => {
+            if (Math.random() < 0.5) {
+              const pools = {
+                sleep: ['zZz...', 'tô com sono...', 'hrmmm...'],
+                yawn: ['haaah...', 'soninho chegando...'],
+                headbang: ['que grave!', 'queeee!', 'pesado!'],
+                curious: ['o que é isso?', 'qué-é isso?'],
+              }
+              const pool = pools[pick]
+                ? pools[pick]
+                : playing
+                  ? ['que música boa!', 'essa é top!', 'meu som!', 'curtindo!', 'no beat!', 'uuuu!']
+                  : ['oi!', 'e aí?!', 'tô de boa...', 'que legal!', 'ué?', 'nossa, quanta música!', 'óia eu!', 'hehe']
+              say(pool[Math.floor(Math.random() * pool.length)], 2600)
+            }
+          },
+          dur * 0.4 + random(300, 800),
+        )
+        t = setTimeout(() => {
+          setAnim(null)
+          loop()
+        }, dur + random(900, 2400))
+      }, random(1400, 4200))
+    }
+    loop()
+    return () => {
+      clearTimeout(t)
+      if (phraseT.current) clearTimeout(phraseT.current)
+      if (sayT.current) clearTimeout(sayT.current)
+      if (tapWindowT.current) clearTimeout(tapWindowT.current)
+    }
+  }, [playing, heavy, sleepMode, hour, say])
+
+  const onPointerDown = (e) => {
+    const el = rootRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    touchRef.current = { t0: Date.now(), x0: e.clientX, y0: e.clientY, homeLeft: r.left, homeTop: r.top, active: false }
+    el.setPointerCapture?.(e.pointerId)
+  }
+
+  const onPointerMove = (e) => {
+    const t = touchRef.current
+    if (!t) return
+    if (!t.active && Math.hypot(e.clientX - t.x0, e.clientY - t.y0) > 9) {
+      t.active = true
+      setAnim(null)
+    }
+    if (t.active) {
+      const el = rootRef.current
+      const x = Math.round(e.clientX - t.homeLeft)
+      const y = Math.round(e.clientY - t.homeTop)
+      if (el) {
+        el.style.setProperty('--dx', `${x}px`)
+        el.style.setProperty('--dy', `${y}px`)
+      }
+      setDrag({ x, y })
+    }
+  }
+
+  const onPointerUp = (e) => {
+    const t = touchRef.current
+    touchRef.current = null
+    if (!t) return
+    const el = rootRef.current
+    try {
+      el?.releasePointerCapture?.(e.pointerId)
+    } catch {
+      /* ignore */
+    }
+    if (t.active) {
+      setDrag(null)
+      setBurst('slide')
+      burstT.current = setTimeout(() => setBurst(''), 900)
+      return
+    }
+    const dt = Date.now() - t.t0
+    if (dt < 300) {
+      const now = Date.now()
+      if (tapWindowT.current) {
+        clearTimeout(tapWindowT.current)
+        tapWindowT.current = null
+      }
+      if (now - tapRef.current < 340) {
+        tapCountRef.current += 1
+      } else {
+        tapCountRef.current = 1
+      }
+      tapRef.current = now
+      if (tapCountRef.current >= 3) {
+        tapRef.current = 0
+        tapCountRef.current = 0
+        onActionRef.current?.('scared')
+        triggerBurst('scared', 1500, 'scared')
+        playMeow()
+        return
+      }
+      tapWindowT.current = setTimeout(
+        () => {
+          tapWindowT.current = null
+          const n = tapCountRef.current
+          tapRef.current = 0
+          tapCountRef.current = 0
+          if (n >= 2) {
+            onActionRef.current?.('touch')
+            triggerBurst('roulette', 1500, 'roulette')
+            playMeow()
+            return
+          }
+          onActionRef.current?.('touch')
+          const moods = ['cuddle', 'heart', 'cuddle', 'cuddle', 'meow']
+          const pick = moods[Math.floor(Math.random() * moods.length)]
+          if (pick === 'meow') {
+            playMeow()
+            triggerBurst('heart', 1200, 'heart')
+          } else {
+            if (pick === 'heart') onActionRef.current?.('heart')
+            triggerBurst(pick, pick === 'cuddle' ? 1700 : 1400, pick)
+            playMeow()
+          }
+        },
+        320,
+      )
+      return
+    }
+    if (dt >= 500) {
+      onActionRef.current?.('touch')
+      triggerBurst('angry', 1500, 'angry')
+    }
+  }
+
+  const classes = [
+    'pet',
+    `pet-${anim || ''}`,
+    `pet-${burst || ''}`,
+    drag ? 'pet-held' : '',
+    drowsy ? 'pet-drowsy' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const style = drag
+    ? { width: size, height: size, transform: `translate(${drag.x}px, ${drag.y}px)` }
+    : { width: size, height: size }
+
+  return (
+    <span
+      ref={rootRef}
+      className={classes}
+      style={style}
+      aria-hidden="true"
+      role="img"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    >
+      <svg viewBox="0 0 64 64" width={size} height={size}>
+        <g className="pet-body">
+          <path
+            className="pet-tail"
+            d="M42 48 Q62 52 58 40 Q55 28 60 26"
+            fill="none"
+            stroke="#f5a9c8"
+            strokeWidth="8"
+            strokeLinecap="round"
+            style={{ transformBox: 'fill-box', transformOrigin: '0% 100%' }}
+          />
+          <path
+            className="pet-tail"
+            d="M42 48 Q62 52 58 40 Q55 28 60 26"
+            fill="none"
+            stroke="#ffc2d9"
+            strokeWidth="5.4"
+            strokeLinecap="round"
+            style={{ transformBox: 'fill-box', transformOrigin: '0% 100%' }}
+          />
+          <circle cx="32" cy="38" r="21" fill="#ffe3ef" stroke="#f5a9c8" strokeWidth="2" />
+          <path
+            d="M16 21 L17 7 L26 20 Z"
+            fill="#ffe3ef"
+            stroke="#f5a9c8"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M48 21 L47 7 L38 20 Z"
+            fill="#ffe3ef"
+            stroke="#f5a9c8"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <path d="M18.2 19.2 L17.9 10.8 L24.6 16.8 Z" fill="#ff9fc4" />
+          <path d="M45.8 19.2 L46.1 10.8 L39.4 16.8 Z" fill="#ff9fc4" />
+          <path
+            d="M30.5 19 q1 1.3 1.5 0 q0.5 1.3 1.5 0"
+            fill="none"
+            stroke="#f5a9c8"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+          <g className="pet-eye" style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
+            <circle cx="25.5" cy="35" r="3.4" fill="#7a3b52" />
+            <circle cx="38.5" cy="35" r="3.4" fill="#7a3b52" />
+            <circle cx="26.6" cy="33.8" r="1.2" fill="#fff" opacity="0.95" />
+            <circle cx="39.6" cy="33.8" r="1.2" fill="#fff" opacity="0.95" />
+          </g>
+          <g className="pet-eyes-happy" style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
+            <path d="M23.2 33.5 q2.4 -2.4 4.8 0" fill="none" stroke="#7a3b52" strokeWidth="2" strokeLinecap="round" />
+            <path d="M36 33.5 q2.4 -2.4 4.8 0" fill="none" stroke="#7a3b52" strokeWidth="2" strokeLinecap="round" />
+          </g>
+          <g className="pet-eyes-angry" style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
+            <path d="M22.4 32.4 l6 3.4 M22.4 35.8 l6 -3.4" stroke="#7a3b52" strokeWidth="2" strokeLinecap="round" />
+            <path d="M35.6 32.4 l6 3.4 M35.6 35.8 l6 -3.4" stroke="#7a3b52" strokeWidth="2" strokeLinecap="round" />
+            <path d="M28 46 q4 -3.2 8 0" fill="none" stroke="#7a3b52" strokeWidth="1.8" strokeLinecap="round" />
+          </g>
+          <g className="pet-eyes-scared">
+            <circle cx="25.5" cy="35" r="4.4" fill="#fff" stroke="#7a3b52" strokeWidth="1.5" />
+            <circle cx="38.5" cy="35" r="4.4" fill="#fff" stroke="#7a3b52" strokeWidth="1.5" />
+            <circle cx="25.5" cy="35.6" r="1.6" fill="#7a3b52" />
+            <circle cx="38.5" cy="35.6" r="1.6" fill="#7a3b52" />
+          </g>
+          <ellipse cx="20" cy="43" rx="4.2" ry="2.6" fill="#ff9fc4" opacity="0.5" />
+          <ellipse cx="44" cy="43" rx="4.2" ry="2.6" fill="#ff9fc4" opacity="0.5" />
+          <path d="M10 34.5 L16.5 36 M9 39 L16.5 40" stroke="#f5a9c8" strokeWidth="1.3" strokeLinecap="round" opacity="0.8" />
+          <path d="M54 34.5 L47.5 36 M55 39 L47.5 40" stroke="#f5a9c8" strokeWidth="1.3" strokeLinecap="round" opacity="0.8" />
+          <path
+            className="pet-mouth-w"
+            d="M28 43 q2.1 1.9 4 0 q1.9 1.9 4 0"
+            fill="none"
+            stroke="#7a3b52"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+          <path
+            className="pet-mouth-open"
+            d="M29.5 43.2 a2.5 2.2 0 0 0 5 0 a2.5 2.2 0 0 0 -5 0"
+            fill="#7a3b52"
+          />
+          <ellipse cx="26.5" cy="56" rx="4" ry="2.7" fill="#ffe3ef" stroke="#f5a9c8" strokeWidth="2" />
+          <ellipse cx="37.5" cy="56" rx="4" ry="2.7" fill="#ffe3ef" stroke="#f5a9c8" strokeWidth="2" />
+        </g>
+      </svg>
+      <span className="pet-note pet-note-1">♪</span>
+      <span className="pet-note pet-note-2">♫</span>
+      <span className="pet-note pet-note-3">♪</span>
+      <span className="pet-star pet-star-1">✦</span>
+      <span className="pet-star pet-star-2">✦</span>
+      <span className="pet-hrt pet-hrt-1">♥</span>
+      <span className="pet-hrt pet-hrt-2">♥</span>
+      <span className="pet-hrt pet-hrt-3">♥</span>
+      <span className="pet-bang">!</span>
+      <span className="pet-sweat pet-sweat-1" />
+      <span className="pet-sweat pet-sweat-2" />
+      <span className="pet-steam pet-steam-1" />
+      <span className="pet-steam pet-steam-2" />
+      <span className="pet-zzz pet-zzz-1">z</span>
+      <span className="pet-zzz pet-zzz-2">Z</span>
+      <span className="pet-zzz pet-zzz-3">z</span>
+      <span className="pet-ground" />
+      <span className="pet-thought">?</span>
+      <span className="pet-trail pet-trail-1" />
+      <span className="pet-trail pet-trail-2" />
+      <span className="pet-trail pet-trail-3" />
+      {speech && (
+        <span key={speech.id} className="pet-bubble">
+          {speech.text}
+        </span>
+      )}
+    </span>
+  )
+}
+
 function Sidebar({ view, setView, onPickFiles }) {
   return (
     <aside className="sidebar">
@@ -377,7 +868,7 @@ function BackgroundFX({ bgAnimated, cosmosAnimated }) {
   )
 }
 
-function Profile({ settings, api, library, onPlay }) {
+function Profile({ settings, api, library, onPlay, petStats }) {
   const avatarInputRef = useRef(null)
   const [statsPeriod, setStatsPeriod] = useState('week')
 
@@ -457,6 +948,60 @@ function Profile({ settings, api, library, onPlay }) {
           />
         </div>
       </div>
+
+      {petStats && (
+        <div className="settings-card">
+          <h2 className="section-title">Seu gatinho 🐾</h2>
+          <div className="pet-stats-grid">
+            <div className="pet-stat-chip">
+              <b>{petStats.touches || 0}</b>
+              <span>Toques</span>
+            </div>
+            <div className="pet-stat-chip">
+              <b>{petStats.hearts || 0}</b>
+              <span>Corações</span>
+            </div>
+            <div className="pet-stat-chip">
+              <b>{petStats.sleeps || 0}</b>
+              <span>Sonecas</span>
+            </div>
+            <div className="pet-stat-chip">
+              <b>{petStats.meows || 0}</b>
+              <span>Miados</span>
+            </div>
+            <div className="pet-stat-chip">
+              <b>{petStats.scares || 0}</b>
+              <span>Sustos</span>
+            </div>
+            <div className="pet-stat-chip">
+              <b>{library.filter((t) => t.fav).length}</b>
+              <span>Favoritas</span>
+            </div>
+          </div>
+          <div className="pet-mood-line">
+            {petStats.touches > 15 && petStats.hearts > 4
+              ? 'Muito mimado — vive no carinho!'
+              : petStats.sleeps > 10
+                ? 'Dorminhoco profissional!'
+                : petStats.scares > 3
+                  ? 'Leva susto, mas continua sorrindo!'
+                  : 'Feliz no seu cantinho. 🐱'}
+          </div>
+          {library.some((t) => t.fav) && (
+            <div className="pet-fav-row">
+              <span className="pet-fav-label">Favoritas dele:</span>
+              <div className="pet-cover-row">
+                {library
+                  .filter((t) => t.fav)
+                  .slice(0, 8)
+                  .map((t) => (
+                    <Cover key={t.id} colors={t.cover} image={t.coverUrl} size={34} radius={9} />
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="settings-card">
         <h2 className="section-title">Cor de destaque</h2>
@@ -4222,6 +4767,21 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
 
         <div className="settings-row">
           <div className="settings-info">
+            <span className="settings-label">Som do gatinho</span>
+            <span className="settings-desc">Miado do bichinho ao tocar ou quando algo bom acontece.</span>
+          </div>
+          <button
+            className={`eq-switch ${settings.petSound !== false ? 'on' : ''}`}
+            role="switch"
+            aria-checked={settings.petSound !== false}
+            onClick={() => api.setPetSound(!(settings.petSound !== false))}
+          >
+            <span className="eq-switch-knob" />
+          </button>
+        </div>
+
+        <div className="settings-row">
+          <div className="settings-info">
             <span className="settings-label">Fundo animado</span>
             <span className="settings-desc">Estrelas pulsantes no fundo do app.</span>
           </div>
@@ -4514,6 +5074,22 @@ function App() {
   const [now, setNow] = useState(() => new Date())
   const eq = useEqualizer()
   const { settings: appSettings, api: settingsApi } = useSettings()
+  const { petStats, bumpPet } = usePetStats()
+  const handlePetAction = useCallback(
+    (a) => {
+      const map = { touch: 'touches', heart: 'hearts', scared: 'scares', sleep: 'sleeps', meow: 'meows' }
+      const k = map[a]
+      if (k) bumpPet(k)
+    },
+    [bumpPet],
+  )
+  const [cheer, setCheer] = useState(null)
+  const cheerIdRef = useRef(0)
+  const topSeenRef = useRef(null)
+  const playsCheeredRef = useRef(new Set())
+  const favBaseRef = useRef(null)
+  const favCelebRef = useRef(0)
+  const idleSinceRef = useRef(Date.now())
   const dragCounter = useRef(0)
   const fileInputRef = useRef(null)
   const folderInputRef = useRef(null)
@@ -4527,6 +5103,17 @@ function App() {
   useEffect(() => {
     libraryRef.current = library
   }, [library])
+
+  useEffect(() => {
+    const mark = () => {
+      idleSinceRef.current = Date.now()
+    }
+    const evs = ['pointerdown', 'mousedown', 'touchstart', 'keydown', 'wheel', 'scroll']
+    evs.forEach((ev) => window.addEventListener(ev, mark, { passive: true }))
+    return () => {
+      evs.forEach((ev) => window.removeEventListener(ev, mark))
+    }
+  }, [])
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60000)
@@ -5027,6 +5614,43 @@ function App() {
   const trackId = displayTrack?.id
 
   useEffect(() => {
+    if (!trackId || !playing || !library.length) return
+    const cur = library.find((t) => t.id === trackId)
+    if (!cur) return
+    const curPlays = cur.plays || 0
+    if (curPlays > 0 && curPlays % 10 === 0 && !playsCheeredRef.current.has(`${trackId}:${curPlays}`)) {
+      playsCheeredRef.current.add(`${trackId}:${curPlays}`)
+      cheerIdRef.current += 1
+      setCheer({ id: cheerIdRef.current, text: `essa você já ouviu ${curPlays} vezes! é tua!` })
+      return
+    }
+    if (curPlays >= 3 && topSeenRef.current !== trackId) {
+      const isTop = library.every((t) => t.id === trackId || (t.plays || 0) <= curPlays)
+      if (isTop) {
+        topSeenRef.current = trackId
+        cheerIdRef.current += 1
+        const phrases = ['essa é a tua preferida!', 'aaa, essa é a tua cara!', 'tua música!']
+        setCheer({ id: cheerIdRef.current, text: phrases[Math.floor(Math.random() * phrases.length)] })
+      }
+    }
+  }, [trackId, playing, library])
+
+  useEffect(() => {
+    const favCount = library.filter((t) => t.fav).length
+    if (favBaseRef.current == null) favBaseRef.current = favCount
+    if (favCount > favBaseRef.current && favCount % 10 === 0 && favCount > favCelebRef.current) {
+      favCelebRef.current = favCount
+      cheerIdRef.current += 1
+      const phrases = [
+        `${favCount} favoritas no coração!`,
+        `uff, ${favCount} favoritas!`,
+        `já são ${favCount} músicas que você ama!`,
+      ]
+      setCheer({ id: cheerIdRef.current, text: phrases[Math.floor(Math.random() * phrases.length)] })
+    }
+  }, [library])
+
+  useEffect(() => {
     if (!trackId || loadedLyricsRef.current.has(trackId)) return undefined
     let cancelled = false
     const current = displayTrackRef.current
@@ -5195,8 +5819,12 @@ function App() {
       )
     : []
 
+  const [favPing, setFavPing] = useState(0)
+
   const toggleFavorite = useCallback((id) => {
+    const wasFav = libraryRef.current?.find((t) => t.id === id)?.fav
     setLibrary((prev) => prev.map((t) => (t.id === id ? { ...t, fav: !t.fav } : t)))
+    if (!wasFav) setFavPing((n) => n + 1)
   }, [])
 
   const startOnline = useCallback(
@@ -5784,15 +6412,32 @@ setInstallEvt(null)
 
         {view === 'inicio' && (
           <section className="view">
-            <div className="lib-head">
+            <div className="lib-head lib-head-home">
               <h1 className="greeting">
                 {appSettings.userName
                   ? `${greetingForHour(now.getHours())}, ${appSettings.userName} ✦`
                   : `${greetingForHour(now.getHours())} ✦`}
               </h1>
-              <button className="btn-primary" onClick={() => fileInputRef.current?.click()}>
-                + Adicionar músicas
-              </button>
+              <span className="lib-head-right">
+                <PetFriend
+                  size={46}
+                  playing={!!playing}
+                  eqEnabled={eq.settings.enabled}
+                  eqPreset={eq.settings.preset}
+                  favPing={favPing}
+                  shuffle={shuffle}
+                  trackId={track?.id || null}
+                  sleepMode={sleepMode}
+                  sleepRemaining={sleepRemaining}
+                  soundOn={appSettings.petSound !== false}
+                  cheer={cheer}
+                  idleSinceRef={idleSinceRef}
+                  onPetAction={handlePetAction}
+                />
+                <button className="btn-primary" onClick={() => fileInputRef.current?.click()}>
+                  + Adicionar músicas
+                </button>
+              </span>
             </div>
 
             {loadingLib ? (
@@ -6103,7 +6748,7 @@ setInstallEvt(null)
           </section>
         )}
       {view === 'perfil' && (
-          <Profile settings={appSettings} api={settingsApi} library={library} onPlay={playById} />
+          <Profile settings={appSettings} api={settingsApi} library={library} onPlay={playById} petStats={petStats} />
         )}
       {view === 'online' && (
           <OnlineView

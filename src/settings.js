@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 
 const KEY = 'nt.settings'
+const PSTAT_KEY = 'nt.petstats'
+
+const PSTAT_DEFAULTS = { touches: 0, hearts: 0, sleeps: 0, scares: 0, meows: 0 }
 
 export const ACCENTS = {
   violet: { name: 'Violeta', accent: '#8b5cf6', accent2: '#c084fc' },
@@ -21,6 +24,7 @@ const DEFAULTS = {
   avatar: '',
   bgAnimated: true,
   cosmosAnimated: true,
+  petSound: true,
 }
 
 function merge(raw) {
@@ -60,10 +64,36 @@ export function useSettings() {
       setAvatar: (value) => setSettings((s) => ({ ...s, avatar: value })),
       setBgAnimated: (value) => setSettings((s) => ({ ...s, bgAnimated: value })),
       setCosmosAnimated: (value) => setSettings((s) => ({ ...s, cosmosAnimated: value })),
+      setPetSound: (value) => setSettings((s) => ({ ...s, petSound: value })),
       setAll: (value) => setSettings((s) => ({ ...s, ...(value || {}) })),
     }),
     [],
   )
 
   return { settings, api }
+}
+
+export function usePetStats() {
+  const [petStats, setPetStats] = useState(() => {
+    try {
+      return { ...PSTAT_DEFAULTS, ...JSON.parse(localStorage.getItem(PSTAT_KEY) || '{}') }
+    } catch {
+      return { ...PSTAT_DEFAULTS }
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PSTAT_KEY, JSON.stringify(petStats))
+    } catch {
+      /* armazenamento indisponível */
+    }
+  }, [petStats])
+
+  const bumpPet = useMemo(
+    () => (key) => setPetStats((s) => ({ ...s, [key]: (s[key] || 0) + 1 })),
+    [],
+  )
+
+  return { petStats, bumpPet }
 }
