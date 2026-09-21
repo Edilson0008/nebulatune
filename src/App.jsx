@@ -5445,6 +5445,146 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
   )
 }
 
+/* ─────────────────────────────────────────────
+   Tela bonita de boas-vindas / login (1ª vez,
+   sem conta, ou depois de sair da conta)
+   ───────────────────────────────────────────── */
+function WelcomeScreen({ cloud, cloudRedirect }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [mode, setMode] = useState('signup') // 'signup' | 'signin'
+  const [err, setErr] = useState('')
+  const [sending, setSending] = useState(false)
+
+  const submitAuth = (e) => {
+    e.preventDefault()
+    if (!email || !password || sending) return
+    setErr('')
+    setSending(true)
+    const p = mode === 'signup'
+      ? cloud.signUp(email, password, cloudRedirect)
+      : cloud.signIn(email, password)
+    Promise.resolve(p)
+      .catch((er) => setErr(er?.message || 'Não deu certo. Confere e tenta de novo.'))
+      .finally(() => setSending(false))
+  }
+
+  return (
+    <div className="welcome-hero" id="top">
+      <div className="welcome-brand">
+        <div className="welcome-logo">
+          <svg viewBox="0 0 24 24" width="58" height="58" fill="none" stroke="currentColor" strokeWidth="1.4">
+            <path d="M13 2 4.5 12.5H11L9.5 22 19 10.5h-6.5L13 2z" strokeLinejoin="round" strokeLinecap="round" />
+          </svg>
+        </div>
+        <h1 className="welcome-title">NebulaTune</h1>
+        <p className="welcome-tag">Sua música, seu pet e suas descobertas — tudo na sua conta.</p>
+      </div>
+
+      <form className="welcome-box" onSubmit={submitAuth}>
+        <div className="welcome-box-head">
+          <button type="button" className={mode === 'signup' ? 'welcome-tab on' : 'welcome-tab'} onClick={() => { setMode('signup'); setErr('') }}>
+            Criar conta
+          </button>
+          <button type="button" className={mode === 'signin' ? 'welcome-tab on' : 'welcome-tab'} onClick={() => { setMode('signin'); setErr('') }}>
+            Entrar
+          </button>
+        </div>
+
+        <input
+          className="welcome-input"
+          type="email"
+          placeholder="Seu e-mail"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+        />
+        <input
+          className="welcome-input"
+          type="password"
+          placeholder="Sua senha"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+        />
+
+        {err && <p className="welcome-err">{err}</p>}
+
+        <button className="welcome-submit" type="submit" disabled={sending || !email || !password}>
+          {sending
+            ? 'Um instante…'
+            : mode === 'signup'
+              ? 'Criar minha conta ✦'
+              : 'Entrar no app ✦'}
+        </button>
+
+        <div className="welcome-divider"><span>ou</span></div>
+
+        <button
+          className="welcome-google"
+          type="button"
+          onClick={() => {
+            setErr('')
+            try {
+              cloud.google(cloudRedirect)
+            } catch (er) {
+              setErr(er?.message || 'Não consegui abrir o Google. Tenta de novo.')
+            }
+          }}
+        >
+          <svg viewBox="0 0 48 48" width="20" height="20">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          Continuar com Google
+        </button>
+      </form>
+
+      <p className="welcome-foot">
+        Seus dados ficam guardados na sua conta. Nada fica do aparelho.
+      </p>
+    </div>
+  )
+}
+
+/* Card de boas-vindas — só na 1ª vez, guardado NA CONTA */
+function WelcomeCard({ onDone }) {
+  const perks = [
+    { icon: 'M12 3v10M12 13a4 4 0 1 0 4 4', label: 'Pet que reage às suas músicas' },
+    { icon: 'M5 12h14M12 5v14', label: 'Igualador para deixar do seu jeito' },
+    { icon: 'M12 3l7 4v10l-7 4-7-4V7l7-4z', label: 'Biblioteca sincronizada na nuvem' },
+    { icon: 'M5 5l14 14M19 5L5 19', label: 'Colabore e descubra no seu ritmo' },
+  ]
+  return (
+    <div className="welcome-card">
+      <div className="welcome-card-glow" />
+      <div className="welcome-card-head">
+        <span className="welcome-card-badge">✦ Bem-vindo(a) ao NebulaTune!</span>
+        <h2>Seu universo musical está pronto</h2>
+        <p>Conheça o que já pode fazer por aqui:</p>
+      </div>
+      <div className="welcome-card-grid">
+        {perks.map((p) => (
+          <span className="welcome-card-fact" key={p.label}>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d={p.icon} />
+            </svg>
+            <span>{p.label}</span>
+          </span>
+        ))}
+      </div>
+      <button className="welcome-card-btn" onClick={onDone}>
+        Começar ✦
+      </button>
+      <button className="welcome-card-skip" onClick={onDone}>
+        Ver depois
+      </button>
+    </div>
+  )
+}
+
 function sleepNativeStart(timestampMs) {
   try {
     if (IS_NATIVE && window.Capacitor?.Plugins?.SleepTimer) {
@@ -6632,6 +6772,35 @@ setInstallEvt(null)
     if (dragCounter.current <= 0) setDragOver(false)
   }
 
+  // ── Gate de conta (1ª vez / saiu da conta = tela bonita) ──────────────
+  if (!cloud.authReady) {
+    return (
+      <div className={`app ${IS_NATIVE ? 'app-native' : ''}`} id="top">
+        <div className="welcome-hero welcome-loading">
+          <div className="welcome-logo spin">
+            <svg viewBox="0 0 24 24" width="52" height="52" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
+            </svg>
+          </div>
+          <p className="welcome-tag">Preparando o seu NebulaTune…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (cloud.cloudEnabled && !cloud.user) {
+    return (
+      <WelcomeScreen
+        cloud={cloud}
+        cloudRedirect={
+          IS_NATIVE
+            ? `${SITE_URL}/?nt=app`
+            : `${window.location.origin}${window.location.pathname}`
+        }
+      />
+    )
+  }
+
   return (
     <div
       className={`app ${IS_NATIVE ? 'app-native' : ''}`}
@@ -6760,6 +6929,9 @@ setInstallEvt(null)
 
         {view === 'inicio' && (
           <section className="view">
+            {cloud.user && appSettings.welcomeSeen !== true && (
+              <WelcomeCard onDone={() => settingsApi.set('welcomeSeen', true)} />
+            )}
             <div className="lib-head lib-head-home">
               <h1 className="greeting">
                 {appSettings.userName

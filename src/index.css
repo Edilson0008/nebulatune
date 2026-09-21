@@ -11,3 +11,20 @@ body {
   overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
 }
+
+/* ==== Nova tela de boas-vindas (1.9.7) ==== */
+.welcome-hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:28px 20px;gap:20px;position:relative;overflow:hidden}.welcome-hero .welcome-logo{width:118px;height:118px;border-radius:30px;background:linear-gradient(135deg,var(--accent,#8b5cf6),var(--accent-2,#c084fc));display:flex;align-items:center;justify-content:center;box-shadow:0 18px 50px rgba(139,92,246,.45);font-size:56px;animation:welcome-pop .6s cubic-bezier(.2,.8,.2,1)}.welcome-hero h1{font-size:34px;margin:6px 0 2px;letter-spacing:.5px;background:linear-gradient(90deg,var(--accent,#8b5cf6),var(--accent-2,#c084fc));-webkit-background-clip:text;background-clip:text;color:transparent}.welcome-hero .welcome-tag{opacity:.75;max-width:340px;margin:0}.welcome-hero .welcome-facts{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:2px}.welcome-fact{display:flex;flex-direction:column;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px 16px;min-width:86px}.welcome-fact svg{color:var(--accent,#8b5cf6)}.welcome-fact span{font-size:11px;opacity:.8}.welcome-hero .btn-primary{padding:14px 30px;font-size:16px}.welcome-hero .welcome-alt{margin-top:10px;display:flex;flex-direction:column;gap:8px;width:100%;max-width:340px}.welcome-hero .auth-input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;font-size:15px}.welcome-hero .auth-input::placeholder{color:rgba(255,255,255,.45)}.welcome-hero .welcome-err{color:#fb7185;font-size:13px;margin:0}.welcome-hero .welcome-google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;max-width:340px;padding:13px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:#fff;color:#111;font-weight:600;font-size:15px}.welcome-hero .welcome-foot{position:absolute;bottom:14px;font-size:11px;opacity:.4}.welcome-logo-wrap{display:flex;align-items:center;justify-content:center}.pet-mini{border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);padding:6px}.welcome-thanks{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:13px;opacity:.8}
+
+/* ==== Card de boas-vindas 1a vez (guardado NA CONTA) ==== */
+.welcome-card{position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.1);border-radius:20px;background:linear-gradient(155deg,rgba(139,92,246,.14),rgba(0,0,0,.3));padding:22px 22px 16px;margin:2px 0 14px;text-align:left;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.welcome-card-glow{position:absolute;top:-70px;right:-40px;width:260px;height:260px;background:radial-gradient(circle,rgba(139,92,246,.35),transparent 70%);filter:blur(12px);pointer-events:none}
+.welcome-card-head{display:flex;flex-direction:column;gap:8px;position:relative;align-items:flex-start}
+.welcome-card-badge{font-size:12px;letter-spacing:.5px;color:var(--accent,#8b5cf6);background:rgba(139,92,246,.14);border:1px solid rgba(139,92,246,.3);padding:4px 12px;border-radius:999px;font-weight:600}
+.welcome-card h2{margin:2px 0 0;font-size:22px}
+.welcome-card p{margin:0;opacity:.72;font-size:14px;line-height:1.5}
+.welcome-card-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;position:relative}
+.welcome-card-fact{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:13px;padding:10px 14px;font-size:13px}
+.welcome-card-fact svg{color:var(--accent,#8b5cf6);flex:none}
+.welcome-card-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;position:relative}
+.welcome-card-actions .btn-primary{padding:12px 24px}
+.welcome-card-skip{background:none;border:none;color:rgba(255,255,255,.55);font-size:13px;cursor:pointer;padding:6px}
