@@ -53,15 +53,16 @@
   TRAVANDO/CONGELANDO após as otimizações feitas "pelo celular". Investigar
   performance (lista memoizada, throttle de elapsed, content-visibility,
   animações do gatinho/partículas/planetas) e corrigir.
-  → **FEITO (21/09, ainda NÃO publicado):** os pontos pesados foram corrigidos
-  (ver "Feito em 21/09" abaixo). Falta o usuário testar e publicar.
+  → **FEITO E PUBLICADO (21/09, commit e5c3bcb na main):** os pontos pesados
+  foram corrigidos (ver "Feito em 21/09" abaixo). Falta só o usuário instalar
+  o APK novo no celular e apertar "Sincronizar agora".
 - Ao lançar versão nova, manter em sincronia:
   `APP_VERSION` (`src/app-config.js`), `versionName`/`versionCode`
   (`android/app/build.gradle`). O `version.json` do site é gerado sozinho a
   partir do `APP_VERSION` no deploy.
 - `versionName`/`versionCode` ainda são atualizados à mão no `build.gradle`.
 
-## Feito em 21/09 (em cima da 1.9.2, ainda NÃO publicado)
+## Feito e PUBLICADO em 21/09 (1.9.3 na main — commit e5c3bcb)
 - **DESEMPENHO — app/site travando (pedido do usuário):**
   - O tempo da música era atualizado ~60x por segundo (requestAnimationFrame)
     e forçava o app a redesenhar a cada tick. Agora atualiza 2x por segundo —
