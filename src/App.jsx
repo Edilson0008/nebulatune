@@ -89,6 +89,15 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.9.4',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Sincronização no estilo Spotify: agora todo aparelho APLICA de verdade o que vem da conta — antes, quando você sincronizava, o app podia mostrar "tudo certo" mas não atualizar a biblioteca nem o gatinho com o que veio da nuvem. Agora o aparelho é só um "cliente" da conta: ao sincronizar, ele sobe o que tem (somando com a nuvem) e baixa e aplica a conta completa.' },
+      { type: 'novo', text: 'Para você conferir, as Configurações agora mostram lado a lado: "Na nuvem agora" (o que está guardado na sua conta) e "Neste aparelho" (o que o aparelho tem). Se estiverem diferentes, o app avisa que ainda não bateu — e o "Sincronizar agora" resolve.' },
+      { type: 'correcao', text: 'O recebimento da nuvem nunca mais é "pulado": antes, se o aparelho achasse que já tinha visto aquele conteúdo, ele não aplicava — fazendo a biblioteca e o gatinho ficarem velhos mesmo com a conta atualizada.' },
+    ],
+  },
+  {
     version: '1.9.3',
     date: 'Setembro de 2026',
     items: [
@@ -5048,6 +5057,12 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
                   {cloud.cloudSummary.pet
                     ? ` · gatinho: ${cloud.cloudSummary.pet.touches} toques, ${cloud.cloudSummary.pet.hearts} corações, ${cloud.cloudSummary.pet.sleeps} dormidas, ${cloud.cloudSummary.pet.scares} sustos, ${cloud.cloudSummary.pet.meows} miados`
                     : ''}
+                  <br />
+                  📱 <strong>Neste aparelho:</strong> {library.length} músicas,{' '}
+                  {library.filter((t) => t.fav === true).length} favoritadas
+                  {cloud.cloudSummary.tracks !== library.length
+                    ? ' · ⚠️ ainda não batem — aperte "Sincronizar agora"'
+                    : ''}
                 </p>
               )}
 
@@ -6057,32 +6072,12 @@ function App() {
     })
   }, [])
 
-  const cloudSigRef = useRef('')
-
   const applyCloudBackup = useCallback(
     (data) => {
-      const cloudMetaSig = (d) =>
-        JSON.stringify({
-          t: (d.tracks || [])
-            .map((x) => [
-              x.id,
-              x.title,
-              x.artist,
-              Math.round(x.duration || 0),
-              x.fav === true,
-              x.plays || 0,
-              JSON.stringify(x.playDays || {}),
-              x.addedAt || 0,
-            ])
-            .sort(),
-          s: d.settings || null,
-          e: d.equalizer || null,
-          l: d.lyricSync || null,
-          p: Array.isArray(d.playlists) ? d.playlists : null,
-          pet: d.petStats || null,
-        })
-      const sig = cloudMetaSig(data)
-      if (sig === cloudSigRef.current) return
+      // Sempre aplica o que veio da nuvem — um aparelho nunca "pula" um
+      // recebimento. Biblioteca, favoritas, pontuações e ajustes passam a
+      // refletir a conta a cada sincronização (o aparelho vira só um
+      // "cliente" da nuvem, no estilo Spotify).
       const cloudTracks = tracksFromBackup(data)
       const localByCloud = new Map(libraryRef.current.map((t) => [t.id, t]))
       // Mescla cada música baixada com a que já está neste aparelho, para
@@ -6124,7 +6119,6 @@ function App() {
         .finally(() => {
           replacingRef.current = false
         })
-      cloudSigRef.current = sig
       if (data.settings && typeof data.settings === 'object') settingsApi.setAll(data.settings)
       if (data.equalizer && typeof data.equalizer === 'object') eq.importSettings(data.equalizer)
       if (data.lyricSync && typeof data.lyricSync === 'object') {

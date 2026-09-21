@@ -226,12 +226,14 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
       try {
         const info = await cloudInfo(userId)
         if (cancelled) return
-        if (!info.exists) {
-          armedRef.current = true
-          doPush(userId, true)
-        } else {
-          await doPull(userId, info.updatedAt)
+        // Sempre sobe o que este aparelho tem (a nuvem MESCLA, nada se perde)
+        // e depois baixa a conta completa e aplica — o aparelho reflete a
+        // nuvem desde o primeiro carregamento.
+        await doPush(userId, true)
+        if (!cancelled && info.exists) {
+          await doPull(userId, info.updatedAt || null)
         }
+        armedRef.current = true
       } catch {
         /* tenta de novo depois */
       }
@@ -340,13 +342,14 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     if (!userId) return
     try {
       const info = await cloudInfo(userId)
-      // Sempre baixa o que tem na nuvem primeiro (mesclando com o deste
-      // aparelho) e depois envia a união — assim o botão "Sincronizar agora"
-      // deixa tudo igual de forma garantida.
+      // 1º SOBE o que este aparelho tem — a nuvem MESCLA (nada se perde).
+      // Assim as músicas/pontuações locais entram na conta primeiro.
+      await doPush(userId, true)
+      // 2º BAIXA a conta completa e aplica no aparelho — o aparelho passa a
+      // refletir a nuvem (estilo Spotify: só um "cliente" da conta).
       if (info.exists) {
         await doPull(userId, info.updatedAt)
       }
-      await doPush(userId, true)
     } catch (e) {
       setStatus('error')
       setMessage(traduzErro(e))

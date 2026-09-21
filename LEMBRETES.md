@@ -44,8 +44,8 @@
   próprio app atualiza.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.2** (APK real na main + zip do código em
-  `public/projeto/nebulatune-src.zip`). Fonte da verdade = GitHub.
+- Versão atual publicada/remota: **1.9.4 / código 30** (APK real na main +
+  site). Fonte da verdade = GitHub.
 - **ATENÇÃO (21/09):** pasta sincronizada com o GitHub via `git reset --hard
   origin/main` (backups: `%TEMP%\opencode\nebulatune-*.patch`). NÃO trabalhar
   sobre versão antiga.
@@ -61,6 +61,26 @@
   (`android/app/build.gradle`). O `version.json` do site é gerado sozinho a
   partir do `APP_VERSION` no deploy.
 - `versionName`/`versionCode` ainda são atualizados à mão no `build.gradle`.
+
+## Feito e PUBLICADO em 21/09 (1.9.4/30 na main — continuação da sincronização)
+- **BUG CONFIRMADO pelo diagnóstico do usuário (21/09):** com a mesma conta
+  (edilsondias0008@gmail.com), o celular mostrava "Na nuvem: 28 músicas" mas a
+  biblioteca tinha 27 e o gatinho não recebia as pontuações do outro aparelho.
+  Causa: o `applyCloudBackup` (src/App.jsx) tinha um filtro de assinatura
+  (`cloudSigRef`) que fazia o aparelho PULAR a aplicação do recebimento quando
+  achava que já tinha visto aquele conteúdo. Removido o filtro: **todo pull
+  agora aplica de verdade** (biblioteca, favoritas, gatinho, ajustes).
+- **Estilo Spotify:** no `useCloudSync.js`, o "Sincronizar agora" e o primeiro
+  carregamento agora fazem PUSH primeiro (sobe o que o aparelho tem, a nuvem
+  mescla) e PULL depois (baixa a conta completa e aplica). O aparelho vira um
+  "cliente" da nuvem.
+- **Aviso comparativo nas Configurações:** mostra "✅ Na nuvem agora: X músicas,
+  Y favoritadas · gatinho: …" E "📱 Neste aparelho: Z músicas" — se baterem os
+  números, está tudo na conta; se não, o app mostra "⚠️ ainda não batem".
+- O resumo da nuvem agora vem do `index.json` FINAL após a mescla
+  (`pushBackup` devolve `{updatedAt, final}` em src/cloud.js), então os dois
+  aparelhos exibem os mesmos números da conta.
+- APK 1.9.4/30 com tudo isso (build androi com JDK 21).
 
 ## Feito e PUBLICADO em 21/09 (1.9.3 na main — commit e5c3bcb)
 - **DESEMPENHO — app/site travando (pedido do usuário):**
