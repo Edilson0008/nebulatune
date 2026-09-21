@@ -97,6 +97,7 @@ const CHANGELOG = [
       { type: 'novo', text: 'As pontuações do gatinho agora são sincronizadas na sua conta: o carinho, a atenção e os momentos com ele ficam somados entre aparelhos (e nunca diminuem).' },
       { type: 'correcao', text: 'Sincronização mais confiável: se sobrar algo sem enviar para a conta (ex.: sem internet), o app reenvia sozinho a cada poucos segundos e na hora que você volta para o app.' },
       { type: 'correcao', text: 'Sincronização NUNCA mais apaga dados: antes, quando dois aparelhos usavam a mesma conta, um aparelho podia enviar por cima e apagar favoritos, contagens do gatinho e músicas do outro. Agora a nuvem MESCLA: favoritos se juntam (se qualquer aparelho favoritou, fica favoritado), pontuações do gatinho somam, músicas e playlists não somem — cada aparelho guarda as suas músicas e tudo fica consistente.' },
+      { type: 'correcao', text: 'O botão "Sincronizar agora" agora faz uma sincronização completa e garantida: baixa tudo da conta, junta com o que está no aparelho e envia tudo de volta — nenhum favorito ou pontuação se perde durante o caminho.' },
     ],
   },
   {
@@ -5034,6 +5035,22 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
                 </p>
               )}
 
+              {cloud.cloudSummary && (
+                <p className="settings-note sync-proof">
+                  ✅ <strong>Na nuvem agora:</strong> {cloud.cloudSummary.tracks} músicas,{' '}
+                  {cloud.cloudSummary.favs} favoritadas
+                  {cloud.lastSync
+                    ? ` · último envio às ${new Date(cloud.lastSync).toLocaleTimeString('pt-BR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}`
+                    : ''}
+                  {cloud.cloudSummary.pet
+                    ? ` · gatinho: ${cloud.cloudSummary.pet.touches} toques, ${cloud.cloudSummary.pet.hearts} corações, ${cloud.cloudSummary.pet.sleeps} dormidas, ${cloud.cloudSummary.pet.scares} sustos, ${cloud.cloudSummary.pet.meows} miados`
+                    : ''}
+                </p>
+              )}
+
               {cloud.status === 'error' && cloud.message && (
                 <p className="settings-note settings-note-error">{cloud.message}</p>
               )}
@@ -6067,9 +6084,29 @@ function App() {
       const sig = cloudMetaSig(data)
       if (sig === cloudSigRef.current) return
       const cloudTracks = tracksFromBackup(data)
+      const localByCloud = new Map(libraryRef.current.map((t) => [t.id, t]))
+      // Mescla cada música baixada com a que já está neste aparelho, para
+      // nunca perder favorito/estatísticas locais se a nuvem vier sem eles
+      // (ex.: outro aparelho antigo tinha sobrescrito a nuvem).
+      const mergedTracks = cloudTracks.map((ct) => {
+        const lt = localByCloud.get(ct.id)
+        if (!lt) return ct
+        const playDays = { ...(lt.playDays || {}), ...(ct.playDays || {}) }
+        for (const [day, v] of Object.entries(lt.playDays || {})) {
+          const n = Number(v) || 0
+          if (n > (Number(playDays[day]) || 0)) playDays[day] = n
+        }
+        return {
+          ...ct,
+          fav: lt.fav === true || ct.fav === true,
+          plays: Math.max(lt.plays || 0, ct.plays || 0),
+          playDays,
+          addedAt: Math.min(lt.addedAt || Infinity, ct.addedAt || Infinity),
+        }
+      })
       const cloudIds = new Set(cloudTracks.map((t) => t.id))
       const localOnly = libraryRef.current.filter((t) => !cloudIds.has(t.id))
-      const tracks = [...cloudTracks, ...localOnly]
+      const tracks = [...mergedTracks, ...localOnly]
       libraryRef.current.forEach((t) => {
         if (!cloudIds.has(t.id)) return
         if (t.src) URL.revokeObjectURL(t.src)

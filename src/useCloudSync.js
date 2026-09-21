@@ -76,12 +76,34 @@ function backupSignature(backup) {
   })
 }
 
+// Resumo do que está na nuvem (para o usuário ver que os dados subiram).
+function summarizeCloud(backup) {
+  if (!backup || !Array.isArray(backup.tracks)) return null
+  const favs = backup.tracks.filter((t) => t && t.fav === true).length
+  const pet = backup.petStats && typeof backup.petStats === 'object' ? backup.petStats : null
+  return {
+    tracks: backup.tracks.length,
+    favs,
+    lastFav: favs > 0 ? 'sim' : 'não',
+    pet: pet
+      ? {
+          touches: Number(pet.touches) || 0,
+          hearts: Number(pet.hearts) || 0,
+          sleeps: Number(pet.sleeps) || 0,
+          scares: Number(pet.scares) || 0,
+          meows: Number(pet.meows) || 0,
+        }
+      : null,
+  }
+}
+
 export function useCloudSync({ library, settings, equalizer, lyricSync, playlists = null, petStats = null, loading, applyRemote }) {
   const [user, setUser] = useState(null)
   const [authReady, setAuthReady] = useState(!cloudEnabled)
   const [status, setStatus] = useState('')
   const [message, setMessage] = useState('')
   const [lastSync, setLastSync] = useState(null)
+  const [cloudSummary, setCloudSummary] = useState(null)
 
   const armedRef = useRef(false)
   const applyingRef = useRef(false)
@@ -121,6 +143,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
       const updatedAt = await pushBackup(id, backup)
       pushedSigRef.current = sig
       if (updatedAt) lastRemoteRef.current = updatedAt
+      setCloudSummary(summarizeCloud(backup))
       setLastSync(new Date())
       setStatus('ok')
       setMessage('')
@@ -146,6 +169,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
       // feito com o estado DEPOIS de aplicar a nuvem (o próximo ciclo de push
       // manda a versão mesclada de verdade). Assim um aparelho nunca envia
       // dados velhos por cima do que acabou de baixar.
+      setCloudSummary(summarizeCloud(data))
       lastRemoteRef.current = data.exportedAt || knownUpdatedAt || null
       setLastSync(new Date())
       setStatus('ok')
@@ -312,11 +336,13 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     if (!userId) return
     try {
       const info = await cloudInfo(userId)
-      if (info.exists && info.updatedAt && info.updatedAt !== lastRemoteRef.current) {
+      // Sempre baixa o que tem na nuvem primeiro (mesclando com o deste
+      // aparelho) e depois envia a união — assim o botão "Sincronizar agora"
+      // deixa tudo igual de forma garantida.
+      if (info.exists) {
         await doPull(userId, info.updatedAt)
-      } else {
-        await doPush(userId, true)
       }
+      await doPush(userId, true)
     } catch (e) {
       setStatus('error')
       setMessage(traduzErro(e))
@@ -330,6 +356,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     status,
     message,
     lastSync,
+    cloudSummary,
     signIn,
     signUp,
     google,

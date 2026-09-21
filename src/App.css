@@ -4690,6 +4690,14 @@ button {
   color: #ff6b6b;
 }
 
+.sync-proof {
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 255, 135, 0.22);
+  border-radius: 10px;
+  background: rgba(0, 255, 135, 0.07);
+  color: var(--text-1);
+}
+
 .swatch-grid {
   display: flex;
   gap: 8px;
