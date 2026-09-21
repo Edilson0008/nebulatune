@@ -26,7 +26,11 @@ export function dataUrlToBlob(data) {
 export async function buildBackup({ library = [], settings, equalizer, lyricSync, playlists = null, petStats = null } = {}) {
   const items = []
   for (const t of library) {
-    const stored = t.audioBlob || t.coverBlob ? null : await getFile(t.id).catch(() => null)
+    // O arquivo de áudio é o dado mais importante: procura no banco SEMPRE que
+    // faltar na memória. (Antes, ter só a capa em memória fazia o app pular a
+    // busca do áudio — e a música subia para a conta sem som.)
+    const stored =
+      !t.audioBlob || !t.coverBlob ? await getFile(t.id).catch(() => null) : null
     items.push({
       id: t.id,
       title: t.title,
@@ -67,10 +71,16 @@ export function parseBackup(raw) {
 
 export function tracksFromBackup(data, startAt = Date.now()) {
   const now = startAt
-  return data.tracks
-    .filter((t) => t && t.audioData)
+  // TODAS as músicas da conta entram na biblioteca, mesmo que o arquivo de som
+  // ainda não tenha descido. Antes, músicas sem áudio eram DESCARTADAS — então
+  // um aparelho nunca chegava ao mesmo número de músicas da nuvem (ficava
+  // "faltando" a música e o aviso de "ainda não batem" nunca sumia).
+  const list = Array.isArray(data?.tracks) ? data.tracks : []
+  return list
+    .filter((t) => t && typeof t === 'object')
     .map((t, i) => {
-      const audioBlob = dataUrlToBlob(t.audioData)
+      const hasAudio = typeof t.audioData === 'string' && t.audioData.length > 0
+      const audioBlob = hasAudio ? dataUrlToBlob(t.audioData) : null
       const coverBlob = dataUrlToBlob(t.coverData)
       return {
         id: typeof t.id === 'string' && t.id ? t.id : `restore-${now}-${i}`,
@@ -86,8 +96,10 @@ export function tracksFromBackup(data, startAt = Date.now()) {
         audioBlob,
         coverBlob,
         coverRemote: t.coverRemote || null,
-        src: URL.createObjectURL(audioBlob),
+        src: audioBlob ? URL.createObjectURL(audioBlob) : null,
         coverUrl: coverBlob ? URL.createObjectURL(coverBlob) : t.coverRemote || null,
+        // Marca a música que está na conta mas cujo som ainda não baixou.
+        audioMissing: !audioBlob,
       }
     })
 }

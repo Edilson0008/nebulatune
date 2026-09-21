@@ -89,6 +89,16 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.9.5',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Músicas que estão na sua conta mas cujo arquivo de som ainda não desceu NÃO somem mais da biblioteca. Antes, uma música vinda sem o som era jogada fora na hora de aplicar — era isso que fazia o aparelho nunca chegar ao mesmo número de músicas da nuvem (ex.: conta com 28, aparelho teimando em 27). Agora ela aparece normalmente, marcada como "sem áudio", e o som baixa na próxima sincronização.' },
+      { type: 'correcao', text: 'Mudanças de ajustes agora SOBEM de verdade: trocar o tema, o nome, a descrição, o avatar, a velocidade ou o equalizador em um aparelho passa a valer na conta (antes a versão antiga da nuvem vencia e a sua mudança era ignorada).' },
+      { type: 'correcao', text: 'O envio do áudio ficou mais garantido: o app agora procura o arquivo de som sempre que ele não estiver carregado, mesmo quando a música já tem capa — antes, ter a capa podia fazer a música subir sem som.' },
+      { type: 'correcao', text: 'Se um arquivo de som falhar ao baixar, o resto da sincronização continua normalmente (antes, um arquivo com problema podia travar o recebimento inteiro).' },
+    ],
+  },
+  {
     version: '1.9.4',
     date: 'Setembro de 2026',
     items: [
@@ -1328,6 +1338,14 @@ const TrackList = reactMemo(function TrackList({
             <span className="track-artist">{t.artist}</span>
           </div>
           <span className="track-album">{t.album}</span>
+          {t.audioMissing && (
+            <span
+              className="track-noaudio"
+              title="Esta música está na sua conta, mas o arquivo de som ainda não desceu para este aparelho"
+            >
+              sem áudio
+            </span>
+          )}
           <span className="track-duration">{t.duration ? formatTime(t.duration) : '--:--'}</span>
           {onToggleFavorite && (
             <button
@@ -3051,7 +3069,26 @@ function usePlayer(library, speed = 1, onStart) {
   }, [playWithRetry])
 
   const startIndex = useCallback((i) => {
-    const t = libRef.current[i]
+    const libAll = libRef.current
+    // Se a música escolhida está na conta mas o som ainda não desceu para este
+    // aparelho, procura a próxima que tenha som — assim não toca um som de
+    // demonstração no lugar da música de verdade.
+    if (
+      libAll[i]?.audioMissing &&
+      !libAll[i]?.hasAudio &&
+      !libAll[i]?.src &&
+      !libAll[i]?.audioBlob
+    ) {
+      for (let step = 1; step < libAll.length; step += 1) {
+        const j = (i + step) % libAll.length
+        const c = libAll[j]
+        if (c && (c.src || c.audioBlob || c.hasAudio || !c.audioMissing)) {
+          i = j
+          break
+        }
+      }
+    }
+    const t = libAll[i]
     if (!t) return
     indexRef.current = i
     setCurrentIndex(i)
@@ -5060,6 +5097,9 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
                   <br />
                   📱 <strong>Neste aparelho:</strong> {library.length} músicas,{' '}
                   {library.filter((t) => t.fav === true).length} favoritadas
+                  {library.filter((t) => t.audioMissing).length > 0
+                    ? ` · ${library.filter((t) => t.audioMissing).length} ainda baixando o som`
+                    : ''}
                   {cloud.cloudSummary.tracks !== library.length
                     ? ' · ⚠️ ainda não batem — aperte "Sincronizar agora"'
                     : ''}
@@ -6091,12 +6131,24 @@ function App() {
           const n = Number(v) || 0
           if (n > (Number(playDays[day]) || 0)) playDays[day] = n
         }
+        // Se o áudio não veio da nuvem mas este aparelho já o tem, mantém o
+        // local. (O src antigo é recriado porque o de baixo é revogado.)
+        const audioBlob = ct.audioBlob || lt.audioBlob || null
+        const src = ct.src || (audioBlob ? URL.createObjectURL(audioBlob) : null)
+        const coverBlob = ct.coverBlob || lt.coverBlob || null
+        const coverUrl =
+          ct.coverUrl || (coverBlob ? URL.createObjectURL(coverBlob) : ct.coverRemote || null)
         return {
           ...ct,
           fav: lt.fav === true || ct.fav === true,
           plays: Math.max(lt.plays || 0, ct.plays || 0),
           playDays,
           addedAt: Math.min(lt.addedAt || Infinity, ct.addedAt || Infinity),
+          audioBlob,
+          src,
+          coverBlob,
+          coverUrl,
+          audioMissing: !(src || audioBlob),
         }
       })
       const cloudIds = new Set(cloudTracks.map((t) => t.id))

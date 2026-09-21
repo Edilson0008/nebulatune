@@ -235,14 +235,18 @@ export async function pullBackup(userId) {
 
   if (index && index.v >= 3 && Array.isArray(index.tracks)) {
     const tracks = []
+    let missingAudio = 0
     for (const meta of index.tracks) {
       let audioData = null
       let coverData = null
       if (meta.audioKey) {
+        // Se UM áudio falhar, a sincronização NÃO é derrubada: a música entra
+        // na biblioteca mesmo assim (sem som) e a próxima sincronização tenta
+        // baixar de novo.
         const { data, error } = await storage().download(`${userId}/${meta.audioKey}`)
-        if (error) throw error
-        audioData = await blobToDataUrl(data)
+        if (!error && data) audioData = await blobToDataUrl(data)
       }
+      if (!audioData) missingAudio += 1
       if (meta.coverKey) {
         const { data } = await storage().download(`${userId}/${meta.coverKey}`)
         if (data) coverData = await blobToDataUrl(data)
@@ -254,6 +258,7 @@ export async function pullBackup(userId) {
       type: 'backup-completo',
       exportedAt: index.updatedAt || new Date().toISOString(),
       count: tracks.length,
+      missingAudio,
       tracks,
       settings: index.settings || null,
       equalizer: index.equalizer || null,
@@ -295,6 +300,22 @@ function mergePetStats(localPet, cloudPet) {
     }
   }
   return base
+}
+
+// Ajustes (tema, nome, bio, avatar, velocidade, equalizador…): junta o que está
+// na nuvem com o que este aparelho tem, e o valor DESTE aparelho vence — é a
+// mudança mais recente. Só não deixa um valor vazio apagar algo já salvo.
+function mergeSettings(local, cloud) {
+  const out = cloud && typeof cloud === 'object' ? { ...cloud } : {}
+  if (!local || typeof local !== 'object') return Object.keys(out).length ? out : null
+  for (const [k, v] of Object.entries(local)) {
+    if (v === undefined) continue
+    const empty = v === '' || v === null
+    const existed = out[k] !== undefined && out[k] !== '' && out[k] !== null
+    if (empty && existed) continue
+    out[k] = v
+  }
+  return Object.keys(out).length ? out : null
 }
 
 // Playlists: junta por id; músicas dentro de cada playlist somam (sem repetir).
@@ -339,6 +360,7 @@ export async function pushBackup(userId, backup) {
   const refs = new Set()
   const metas = []
   const seenIds = new Set()
+  const audioFailures = []
 
   for (const t of backup.tracks || []) {
     const meta = { ...t }
@@ -350,18 +372,43 @@ export async function pushBackup(userId, backup) {
 
     if (t.audioData) {
       const parsed = splitDataUrl(t.audioData)
-      if (parsed) {
-        const key = `${TRACKS_DIR}/${id}-${t.audioData.length}.bin`
-        refs.add(key)
+      const key = parsed ? `${TRACKS_DIR}/${id}-${t.audioData.length}.bin` : null
+      if (key) {
         meta.audioKey = key
-        if (!existing.has(key)) {
-          const { error } = await storage().upload(
-            `${userId}/${key}`,
-            new Blob([parsed.bytes], { type: parsed.mime }),
-            { upsert: true, contentType: parsed.mime, cacheControl: '3600' },
-          )
-          if (error) throw error
+        if (existing.has(key)) {
+          refs.add(key)
+        } else {
+          try {
+            const { error } = await storage().upload(
+              `${userId}/${key}`,
+              new Blob([parsed.bytes], { type: parsed.mime }),
+              { upsert: true, contentType: parsed.mime, cacheControl: '3600' },
+            )
+            if (error) throw error
+            refs.add(key)
+          } catch (err) {
+            // Um arquivo problemático (ex.: grande demais para o servidor) NÃO
+            // pode travar a sincronização inteira: a música continua na conta
+            // (sem som por enquanto) e o resto — inclusive ajustes e as outras
+            // músicas — sobe normalmente. O app avisa qual música falhou.
+            audioFailures.push({
+              id: meta.id,
+              title: meta.title || '',
+              reason: String(err?.message || err || '').slice(0, 160),
+            })
+            if (prev?.audioKey) {
+              meta.audioKey = prev.audioKey
+              refs.add(prev.audioKey)
+            } else {
+              delete meta.audioKey
+            }
+          }
         }
+      } else if (prev?.audioKey) {
+        meta.audioKey = prev.audioKey
+        refs.add(prev.audioKey)
+      } else {
+        delete meta.audioKey
       }
     } else if (prev?.audioKey) {
       meta.audioKey = prev.audioKey
@@ -380,7 +427,16 @@ export async function pushBackup(userId, backup) {
             new Blob([parsed.bytes], { type: parsed.mime }),
             { upsert: true, contentType: parsed.mime, cacheControl: '3600' },
           )
-          if (error) throw error
+          if (error) {
+            // A capa não é essencial: não trava o envio, tenta de novo depois.
+            refs.delete(key)
+            if (prev?.coverKey) {
+              meta.coverKey = prev.coverKey
+              refs.add(prev.coverKey)
+            } else {
+              delete meta.coverKey
+            }
+          }
         }
       }
     } else if (prev?.coverKey) {
@@ -417,10 +473,13 @@ export async function pushBackup(userId, backup) {
     metas.push(prev)
   }
 
-  // Ajustes: o que já está na nuvem tem prioridade; só usa o local se lá não tiver.
-  const settings = prevIndex?.settings || backup.settings || null
-  const equalizer = prevIndex?.equalizer || backup.equalizer || null
-  const lyricSync = mergePlayDays(backup.lyricSync, prevIndex?.lyricSync)
+  // Ajustes: a mudança feita NESTE aparelho vence (senão trocar o tema, o nome
+  // ou o equalizador aqui nunca chegaria à conta). O que só existe na nuvem
+  // continua. Letra sincronizada: idem (offset pode ser negativo, então não dá
+  // para usar "o maior").
+  const settings = mergeSettings(backup.settings, prevIndex?.settings)
+  const equalizer = mergeSettings(backup.equalizer, prevIndex?.equalizer)
+  const lyricSync = { ...(prevIndex?.lyricSync || {}), ...(backup.lyricSync || {}) }
   const playlists = mergePlaylists(backup.playlists, prevIndex?.playlists)
   const petStats = mergePetStats(backup.petStats, prevIndex?.petStats)
 
@@ -446,7 +505,8 @@ export async function pushBackup(userId, backup) {
 
   // Devolve o estado FINAL da nuvem (depois da mescla com o que o outro
   // aparelho tinha enviado) para o app mostrar a verdade: a união de tudo.
-  return { updatedAt: index.updatedAt, final: index }
+  // `audioFailures` lista músicas cujo SOM não subiu (o resto subiu normal).
+  return { updatedAt: index.updatedAt, final: index, audioFailures }
 }
 
 async function cleanupOld(userId, keep) {

@@ -25,8 +25,8 @@ function traduzErro(e) {
     return 'A senha precisa ter ao menos 6 caracteres.'
   if (/invalid format|unable to validate email/i.test(msg)) return 'E-mail inválido.'
   if (/rate limit|too many/i.test(msg)) return 'Muitas tentativas. Espere um pouco.'
-  if (/maximum allowed size/i.test(msg))
-    return 'Arquivo grande demais para um único envio. Tente de novo — o envio agora é dividido.'
+  if (/maximum allowed size|exceeded the maximum|payload too large|entity too large|too large/i.test(msg))
+    return 'Um arquivo é grande demais para o servidor de nuvem (limite do plano). O restante foi salvo na conta.'
   if (/limit exceeded|resource exhausted/i.test(msg))
     return 'Limite de armazenamento da nuvem atingido. Considere liberar espaço ou apagar backups antigos.'
   if (/failed to fetch|networkerror|network error|load failed|typeerror.*fetch|econnreset|timeout/i.test(msg))
@@ -65,17 +65,6 @@ function signature({ library, settings, equalizer, lyricSync, playlists = null, 
   })
 }
 
-function backupSignature(backup) {
-  return signature({
-    library: backup?.tracks || [],
-    settings: backup?.settings,
-    equalizer: backup?.equalizer,
-    lyricSync: backup?.lyricSync,
-    playlists: backup?.playlists,
-    petStats: backup?.petStats,
-  })
-}
-
 // Resumo do que está na nuvem (para o usuário ver que os dados subiram).
 function summarizeCloud(backup) {
   if (!backup || !Array.isArray(backup.tracks)) return null
@@ -111,6 +100,10 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
   const resolvedForRef = useRef(null)
   const pushedSigRef = useRef('')
   const lastRemoteRef = useRef(null)
+  // Guarda um aviso/erro do ENVIO para que o passo de baixar (que roda logo
+  // depois) não apague a mensagem — senão o app dizia "tudo certo" mesmo
+  // quando uma música não conseguia subir.
+  const pushWarnRef = useRef('')
 
   const dataRef = useRef({ library, settings, equalizer, lyricSync, playlists, petStats })
   const applyRef = useRef(applyRemote)
@@ -133,9 +126,9 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
   const userId = user?.id || null
 
   const doPush = useCallback(async (id, force = false) => {
-    if (!cloudEnabled || !id || busyRef.current) return
+    if (!cloudEnabled || !id || busyRef.current) return { ok: true, failures: [] }
     const sig = signature(dataRef.current)
-    if (!force && sig === pushedSigRef.current) return
+    if (!force && sig === pushedSigRef.current) return { ok: true, failures: [] }
     busyRef.current = true
     setStatus('syncing')
     try {
@@ -149,23 +142,37 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
       // lados exibem os mesmos números e fica fácil conferir.
       setCloudSummary(summarizeCloud(finalCloud))
       setLastSync(new Date())
-      setStatus('ok')
-      setMessage('')
+      const failures = res?.audioFailures || []
+      if (failures.length) {
+        const names = failures
+          .slice(0, 2)
+          .map((f) => f.title || f.id)
+          .join(', ')
+        pushWarnRef.current = `A conta salvou tudo, mas o som de ${failures.length} música(s) não subiu (${names}). O resto foi sincronizado.`
+        setStatus('error')
+        setMessage(pushWarnRef.current)
+      } else {
+        pushWarnRef.current = ''
+        setStatus('ok')
+        setMessage('')
+      }
+      return { ok: true, failures }
     } catch (e) {
+      pushWarnRef.current = traduzErro(e)
       setStatus('error')
-      setMessage(traduzErro(e))
+      setMessage(pushWarnRef.current)
+      return { ok: false, failures: [] }
     } finally {
       busyRef.current = false
     }
   }, [])
 
   const doPull = useCallback(async (id, knownUpdatedAt) => {
-    if (!cloudEnabled || !id) return
+    if (!cloudEnabled || !id) return { ok: true }
     setStatus('syncing')
     try {
       const data = await pullBackup(id)
       if (!data) throw new Error('nenhum dado na nuvem')
-      const cloudSig = backupSignature(data)
       applyingRef.current = true
       await applyRef.current(data)
       armedRef.current = true
@@ -176,11 +183,20 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
       setCloudSummary(summarizeCloud(data))
       lastRemoteRef.current = data.exportedAt || knownUpdatedAt || null
       setLastSync(new Date())
-      setStatus('ok')
-      setMessage('')
+      // Se o envio deixou um aviso/erro pendente, NÃO apaga aqui — o usuário
+      // precisa ver que algo não subiu.
+      if (pushWarnRef.current) {
+        setStatus('error')
+        setMessage(pushWarnRef.current)
+      } else {
+        setStatus('ok')
+        setMessage('')
+      }
+      return { ok: true, missingAudio: data.missingAudio || 0 }
     } catch (e) {
       setStatus('error')
       setMessage(traduzErro(e))
+      return { ok: false }
     } finally {
       applyingRef.current = false
     }
@@ -334,6 +350,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     resolvedForRef.current = null
     pushedSigRef.current = ''
     lastRemoteRef.current = null
+    pushWarnRef.current = ''
     setStatus('')
     setMessage('')
   }, [])
@@ -343,7 +360,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     try {
       const info = await cloudInfo(userId)
       // 1º SOBE o que este aparelho tem — a nuvem MESCLA (nada se perde).
-      // Assim as músicas/pontuações locais entram na conta primeiro.
+      // Assim as músicas/pontuações/ajustes locais entram na conta primeiro.
       await doPush(userId, true)
       // 2º BAIXA a conta completa e aplica no aparelho — o aparelho passa a
       // refletir a nuvem (estilo Spotify: só um "cliente" da conta).

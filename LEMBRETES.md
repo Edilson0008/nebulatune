@@ -44,7 +44,7 @@
   próprio app atualiza.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.4 / código 30** (APK real na main +
+- Versão atual publicada/remota: **1.9.5 / código 31** (APK real na main +
   site). Fonte da verdade = GitHub.
 - **ATENÇÃO (21/09):** pasta sincronizada com o GitHub via `git reset --hard
   origin/main` (backups: `%TEMP%\opencode\nebulatune-*.patch`). NÃO trabalhar
@@ -61,6 +61,36 @@
   (`android/app/build.gradle`). O `version.json` do site é gerado sozinho a
   partir do `APP_VERSION` no deploy.
 - `versionName`/`versionCode` ainda são atualizados à mão no `build.gradle`.
+
+## Feito e PUBLICADO em 21/09 (1.9.5/31 na main — envio à prova de falhas + tudo sobe)
+- **DIAGNÓSTICO (21/09, verificado de verdade):** o servidor Supabase está OK —
+  login, leitura e envio funcionam (testado com a conta-teste: login 200,
+  listagem do bucket 200, upload 200). Logo, o problema não é o servidor.
+- **BUG GRAVE ENCONTRADO (envio escondido):** `syncNow` fazia push e, logo
+  depois, pull; o pull sempre fazia `setMessage('')` — então, se o ENVIO
+  falhasse, a mensagem de erro era APAGADA e o app dizia "tudo certo" mesmo sem
+  nada ter subido. Agora o aviso/erro do envio é preservado (`pushWarnRef`).
+- **BUG GRAVE ENCONTRADO (1 arquivo travava TUDO):** no `pushBackup`, se o
+  upload do som de UMA música falhasse (ex.: arquivo maior que o limite do
+  servidor), o `throw error` derrubava o envio inteiro — nem as configurações
+  subiam. Agora o arquivo problemático é pulado (a música fica na conta sem som
+  por enquanto), o resto sobe e o app AVISA qual música falhou
+  (`audioFailures`).
+- **BUG ENCONTRADO (configurações não subiam):** `pushBackup` usava
+  `settings = prevIndex?.settings || backup.settings` — a nuvem ANTIGA vencia
+  sempre, então trocar tema/nome/bio/avatar/velocidade/equalizador nunca
+  chegava à conta. Agora `mergeSettings` dá prioridade ao que este aparelho
+  acabou de mexer (sem deixar vazio apagar valor existente). Letras: local
+  vence (offset pode ser negativo, então não dá para usar "o maior").
+- **BUG ENCONTRADO (música sem som sumia):** `tracksFromBackup` descartava
+  músicas sem `audioData` → aparelho nunca chegava ao número da nuvem (27 vs
+  28). Agora TODAS entram (marcadas `audioMissing`); o app mostra "sem áudio",
+  pula ao tocar e tenta baixar de novo. `buildBackup` também passou a procurar
+  o áudio mesmo quando a música tem capa (antes a capa fazia pular a busca e a
+  música subia sem som).
+- **Puxar mais resistente:** falha no download de um som não derruba mais a
+  sincronização inteira (`pullBackup`).
+- APK 1.9.5/31 (JDK 21) + site.
 
 ## Feito e PUBLICADO em 21/09 (1.9.4/30 na main — continuação da sincronização)
 - **BUG CONFIRMADO pelo diagnóstico do usuário (21/09):** com a mesma conta
