@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo as reactMemo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import './App.css'
 import { COVERS, featuredCovers } from './data/tracks'
@@ -88,6 +88,44 @@ function nf(n) {
 }
 
 const CHANGELOG = [
+  {
+    version: '1.9.1',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'O app agora só redesenha a lista de músicas quando ela muda de verdade: antes, a cada passada do timer (para atualizar o tempo tocando), o app redesenha centenas de linhas da biblioteca sem precisar — agora ele deixa tudo parado e só mexe no que mudou. Listas enormes (700+ músicas) ficam ainda mais leves, sem nenhum trabalho desperdiçado.' },
+    ],
+  },
+  {
+    version: '1.9.0',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'O gatinho agora sente o clima da música de verdade: em música lenta ou triste ele fica triste e desanimado (em vez de insistir em dançar), em música calma ele relaxa, em música alegre ele sorri, em música dançante ele empolga e em música agitada ele vai à loucura. Ele só deixa de ficar triste quando a música realmente melhora — para não ficar oscilando sem parar.' },
+      { type: 'novo', text: 'O humor dele reseta a cada música: quando troca a faixa, o gatinho começa de novo de um humor neutro e vai reagindo ao que está tocando.' },
+      { type: 'correcao', text: 'App mais fluido: o tempo da música na interface é atualizado de forma mais controlada e as listas usam um truque do navegador para rolar com muito menos trabalho — menos travamentos e queda de quadros.' },
+    ],
+  },
+  {
+    version: '1.8.9',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'O balão de fala do gatinho voltou para cima da cabeça dele na tela inicial — antes ele tinha descido para baixo em todas as telas; agora ele só desce na tela "Tocando agora", como sempre foi.' },
+    ],
+  },
+  {
+    version: '1.8.8',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'O balão de fala do gatinho não corta mais na borda da tela nem fica escondido atrás da barra de cima.' },
+    ],
+  },
+  {
+    version: '1.8.7',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'O gatinho reage ao clima da música: triste, calmo, alegre, dançante ou agitado — e com por enquanto o app não precisava mais daquela validação.' },
+      { type: 'correcao', text: 'Corrigido um problema ao tocar uma música dentro de uma playlist pelo "Tocando agora".' },
+    ],
+  },
   {
     version: '1.8.6',
     date: 'Setembro de 2026',
@@ -1196,7 +1234,7 @@ function Profile({ settings, api, library, onPlay, petStats }) {
   )
 }
 
-function TrackList({
+const TrackList = reactMemo(function TrackList({
   tracks,
   currentId,
   onSelect,
@@ -1449,7 +1487,7 @@ function TrackList({
       ))}
     </div>
   )
-}
+})
 
 function TrackEdit({ track, onSave, onClose }) {
   const [title, setTitle] = useState(track.title || '')
@@ -6205,14 +6243,16 @@ function App() {
     clearTracks().catch(() => {})
   }, [library, stopAndReset])
 
-  const results = query
-    ? library.filter(
-        (t) =>
-          t.title.toLowerCase().includes(query.toLowerCase()) ||
-          t.artist.toLowerCase().includes(query.toLowerCase()) ||
-          t.album.toLowerCase().includes(query.toLowerCase()),
-      )
-    : []
+  const results = useMemo(() => {
+    if (!query) return []
+    const q = query.toLowerCase()
+    return library.filter(
+      (t) =>
+        t.title.toLowerCase().includes(q) ||
+        t.artist.toLowerCase().includes(q) ||
+        t.album.toLowerCase().includes(q),
+    )
+  }, [query, library])
 
   const [favPing, setFavPing] = useState(0)
 
