@@ -443,7 +443,10 @@ export async function pushBackup(userId, backup) {
   if (error) throw error
 
   await cleanupOld(userId, refs)
-  return index.updatedAt
+
+  // Devolve o estado FINAL da nuvem (depois da mescla com o que o outro
+  // aparelho tinha enviado) para o app mostrar a verdade: a união de tudo.
+  return { updatedAt: index.updatedAt, final: index }
 }
 
 async function cleanupOld(userId, keep) {

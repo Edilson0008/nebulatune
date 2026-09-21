@@ -140,10 +140,14 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     setStatus('syncing')
     try {
       const backup = await buildBackup(dataRef.current)
-      const updatedAt = await pushBackup(id, backup)
+      const res = await pushBackup(id, backup)
+      const finalCloud = res?.final || backup
       pushedSigRef.current = sig
-      if (updatedAt) lastRemoteRef.current = updatedAt
-      setCloudSummary(summarizeCloud(backup))
+      if (res?.updatedAt) lastRemoteRef.current = res.updatedAt
+      // Mostra o que está REALMENTE na nuvem após a mescla (a união dos dois
+      // aparelhos), não apenas o que este aparelho enviou — assim os dois
+      // lados exibem os mesmos números e fica fácil conferir.
+      setCloudSummary(summarizeCloud(finalCloud))
       setLastSync(new Date())
       setStatus('ok')
       setMessage('')
