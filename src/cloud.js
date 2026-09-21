@@ -268,8 +268,68 @@ export async function pullBackup(userId) {
   return JSON.parse(await data.text())
 }
 
+// Junta os contadores por dia (ex.: plays de cada aparelho somam — nunca perde).
+function mergePlayDays(localDays, cloudDays) {
+  const out = {}
+  const add = (obj) => {
+    if (!obj || typeof obj !== 'object') return
+    for (const [day, v] of Object.entries(obj)) {
+      const n = Number(v) || 0
+      if (n > (Number(out[day]) || 0)) out[day] = n
+    }
+  }
+  add(localDays)
+  add(cloudDays)
+  return out
+}
+
+// Pontuações do gatinho: cada aparelho contribui, o total só cresce.
+function mergePetStats(localPet, cloudPet) {
+  const keys = ['touches', 'hearts', 'sleeps', 'scares', 'meows']
+  const base = cloudPet && typeof cloudPet === 'object' ? { ...cloudPet } : {}
+  if (localPet && typeof localPet === 'object') {
+    for (const k of keys) {
+      const l = Number(localPet[k]) || 0
+      const c = Number(base[k]) || 0
+      base[k] = Math.max(l, c)
+    }
+  }
+  return base
+}
+
+// Playlists: junta por id; músicas dentro de cada playlist somam (sem repetir).
+function mergePlaylists(localPlaylists, cloudPlaylists) {
+  const byId = new Map()
+  const add = (list) => {
+    if (!Array.isArray(list)) return
+    for (const p of list) {
+      if (!p || !p.id) continue
+      const prev = byId.get(p.id)
+      const ids = Array.isArray(p.trackIds) ? p.trackIds : []
+      if (!prev) {
+        byId.set(p.id, { ...p, trackIds: [...ids] })
+      } else {
+        prev.name = p.name || prev.name
+        prev.trackIds = [...new Set([...prev.trackIds, ...ids])]
+      }
+    }
+  }
+  add(cloudPlaylists)
+  add(localPlaylists)
+  return [...byId.values()]
+}
+
 export async function pushBackup(userId, backup) {
   if (!supabase) return
+
+  // O que já está na nuvem (só metadados — sem baixar os áudios de novo).
+  // Serve de base para MESCLAR em vez de apagar: nada que o outro aparelho
+  // salvou (favoritos, plays, pontuações, músicas) é perdido por um envio.
+  const prevIndex = await readIndex(userId)
+  const prevMetas = new Map()
+  if (prevIndex && Array.isArray(prevIndex.tracks)) {
+    for (const m of prevIndex.tracks) prevMetas.set(m.id, m)
+  }
 
   const existing = new Set()
   for (const dir of [TRACKS_DIR, COVERS_DIR]) {
@@ -278,12 +338,15 @@ export async function pushBackup(userId, backup) {
 
   const refs = new Set()
   const metas = []
+  const seenIds = new Set()
 
   for (const t of backup.tracks || []) {
     const meta = { ...t }
     delete meta.audioData
     delete meta.coverData
     const id = safeKey(t.id)
+    seenIds.add(id)
+    const prev = prevMetas.get(id)
 
     if (t.audioData) {
       const parsed = splitDataUrl(t.audioData)
@@ -300,6 +363,9 @@ export async function pushBackup(userId, backup) {
           if (error) throw error
         }
       }
+    } else if (prev?.audioKey) {
+      meta.audioKey = prev.audioKey
+      refs.add(prev.audioKey)
     }
 
     if (t.coverData) {
@@ -317,20 +383,56 @@ export async function pushBackup(userId, backup) {
           if (error) throw error
         }
       }
+    } else if (prev?.coverKey) {
+      meta.coverKey = prev.coverKey
+      refs.add(prev.coverKey)
     }
 
+    // FUNDE com o que o outro aparelho havia salvo — nunca apaga:
+    // favorito fica marcado se QUALQUER aparelho marcou; plays/pontos somam;
+    // data de adição fica a mais antiga.
+    meta.fav = t.fav === true || prev?.fav === true
+    meta.plays = Math.max(Number(t.plays) || 0, Number(prev?.plays) || 0)
+    meta.playDays = mergePlayDays(t.playDays, prev?.playDays)
+    const addedA = Number(t.addedAt) || Infinity
+    const addedB = Number(prev?.addedAt) || Infinity
+    meta.addedAt = Math.min(addedA, addedB)
+    if (!Number.isFinite(meta.addedAt)) meta.addedAt = Date.now()
+    if (prev) {
+      if (!meta.title) meta.title = prev.title
+      if (!meta.artist) meta.artist = prev.artist
+      if (!meta.album) meta.album = prev.album
+      if (!meta.cover) meta.cover = prev.cover
+      if (!meta.coverRemote) meta.coverRemote = prev.coverRemote
+    }
     metas.push(meta)
   }
+
+  // Músicas que estão na nuvem mas não existem neste aparelho continuam na
+  // conta (senão um envio do aparelho "sem elas" as apagaria da nuvem).
+  for (const [id, prev] of prevMetas) {
+    if (seenIds.has(id)) continue
+    if (prev.audioKey) refs.add(prev.audioKey)
+    if (prev.coverKey) refs.add(prev.coverKey)
+    metas.push(prev)
+  }
+
+  // Ajustes: o que já está na nuvem tem prioridade; só usa o local se lá não tiver.
+  const settings = prevIndex?.settings || backup.settings || null
+  const equalizer = prevIndex?.equalizer || backup.equalizer || null
+  const lyricSync = mergePlayDays(backup.lyricSync, prevIndex?.lyricSync)
+  const playlists = mergePlaylists(backup.playlists, prevIndex?.playlists)
+  const petStats = mergePetStats(backup.petStats, prevIndex?.petStats)
 
   const index = {
     v: 3,
     updatedAt: new Date().toISOString(),
     count: metas.length,
-    settings: backup.settings || null,
-    equalizer: backup.equalizer || null,
-    lyricSync: backup.lyricSync || null,
-    playlists: Array.isArray(backup.playlists) ? backup.playlists : null,
-    petStats: backup.petStats || null,
+    settings,
+    equalizer,
+    lyricSync,
+    playlists,
+    petStats,
     tracks: metas,
   }
   const { error } = await storage().upload(

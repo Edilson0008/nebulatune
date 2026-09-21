@@ -4923,15 +4923,6 @@ button {
   z-index: 2;
 }
 
-.np-halo {
-  position: absolute;
-  inset: -9%;
-  width: 118%;
-  height: 118%;
-  z-index: 1;
-  pointer-events: none;
-}
-
 .np-particles {
   position: absolute;
   inset: 0;

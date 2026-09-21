@@ -71,6 +71,9 @@
     em resolução máxima e continuavam trabalhando mesmo com o app em segundo
     plano. Agora a resolução é limitada (visual igual) e o desenho pausa
     quando a tela não está visível.
+  - **HALO (anéis de luz da capa no "Tocando agora") REMOVIDO por completo** a
+    pedido do usuário (ele suspeitava dos travamentos naquela aba). Foi tirado
+    o `<AudioHalo>` do JSX, a função inteira e o CSS `.np-halo`.
   - Detector de humor do gatinho também pausa quando o app está em segundo
     plano.
   - Assinatura da sincronização (que serializa a biblioteca inteira) era
@@ -84,6 +87,16 @@
 - **Pontuações do gatinho agora sincronizam na conta!** Antes ficavam só no
   aparelho (`nt.petstats`). Agora vão no backup (`petStats` no `index.json`) e
   mesclam sem nunca diminuir.
+- **BUG CRÍTICO DE SINCRONIZAÇÃO (relatado pelo usuário em 21/09):** dois
+  aparelhos com a mesma conta ficavam com dados diferentes (favoritos e
+  gatinho não batiam). Causa: o envio SOBRESCREVIA a nuvem com o backup
+  inteiro do aparelho, apagando o que o outro tinha salvo. Correção no
+  `pushBackup` (`src/cloud.js`): agora MESCLA com o `index.json` que já está
+  na nuvem — favoritos somam (OR), `plays`/`playDays`/pontuações do gatinho
+  ficam com o MAIOR valor, músicas que existem só na nuvem continuam na conta,
+  playlists juntam por id e os ajustes da nuvem têm prioridade. Também
+  protegido no `doPull` (`src/useCloudSync.js`): não marca o estado como
+  "enviado" antes de aplicar a nuvem (evita reenvio de dados velhos).
 
 ## Ação recorrente
 - De tempos em tempos, lembrar o usuário dos itens pendentes (agora: login com
@@ -107,7 +120,22 @@
 - Importar músicas: pasta no PC (web) e "Importar músicas do aparelho" no app
   (plugin Android `MediaImporter`, permissões `READ_MEDIA_AUDIO`/`READ_EXTERNAL_STORAGE`).
 - Para o app nativo, o plugin resolve 1 arquivo por chamada (base64 é pesado para
-  a ponte); o `local.properties` precisa de `sdk.dir=/opt/android-sdk` (lote local).
+  a ponte); o `android/local.properties` aponta para o SDK deste PC:
+  `sdk.dir=C\:\\Users\\edils\\AppData\\Local\\Android\\Sdk` (não usar
+  `/opt/android-sdk` — era caminho de outro computador e faz o build falhar).
+
+## Ambiente deste PC (configurado em 21/09)
+- **GitHub / push:** autenticação salva no **Cofre de Credenciais do Windows**
+  (Git Credential Manager, `credential.helper manager` no global). Push funciona
+  sem digitar nada — se pedir senha de novo, é só autorizar a janela que abre.
+- **Java para build do APK:** JDK 21 (obrigatório — o plugin do app pede
+  toolchain Java 21) em `C:\Users\edils\jdk-21\jdk-21.0.12.1+1`
+  (JAVA_HOME do usuário aponta pra lá e fica salvo).
+  ⚠️ JDK 17 não é suficiente (erro "Cannot find a Java installation matching
+  languageVersion=21") e NÃO usar o `jbr` do Android Studio (JDK 25 — o Gradle
+  8.14 não roda). Se o build falhar com "JAVA_HOME is not set", redefinir:
+  `setx JAVA_HOME "C:\Users\edils\jdk-21\jdk-21.0.12.1+1"`.
+- **pnpm** instalado globalmente (usado pelo `scripts/build-android.sh`).
 
 ## Pendente: repetição A-B (feature 14)
 - Ainda nÃO implementada (usuário pediu para deixar para depois).

@@ -96,6 +96,7 @@ const CHANGELOG = [
       { type: 'novo', text: 'Descrição no perfil: você pode escrever uma frase sobre você, que fica ao lado da foto e é salva na sua conta.' },
       { type: 'novo', text: 'As pontuações do gatinho agora são sincronizadas na sua conta: o carinho, a atenção e os momentos com ele ficam somados entre aparelhos (e nunca diminuem).' },
       { type: 'correcao', text: 'Sincronização mais confiável: se sobrar algo sem enviar para a conta (ex.: sem internet), o app reenvia sozinho a cada poucos segundos e na hora que você volta para o app.' },
+      { type: 'correcao', text: 'Sincronização NUNCA mais apaga dados: antes, quando dois aparelhos usavam a mesma conta, um aparelho podia enviar por cima e apagar favoritos, contagens do gatinho e músicas do outro. Agora a nuvem MESCLA: favoritos se juntam (se qualquer aparelho favoritou, fica favoritado), pontuações do gatinho somam, músicas e playlists não somem — cada aparelho guarda as suas músicas e tudo fica consistente.' },
     ],
   },
   {
@@ -2316,7 +2317,6 @@ function NowPlaying({
           />
         </div>
         <div className="np-cover">
-          <AudioHalo active={playing} />
           <Cover colors={track.cover} image={track.coverUrl} size="min(56vw, 260px)" radius={22} />
         </div>
 
@@ -4029,113 +4029,6 @@ function NowParticles() {
   }, [])
 
   return <canvas ref={ref} className="np-particles" aria-hidden="true" />
-}
-
-function AudioHalo({ active }) {
-  const ref = useRef(null)
-  const activeRef = useRef(active)
-
-  useEffect(() => {
-    activeRef.current = active
-  }, [active])
-
-  useEffect(() => {
-    const canvas = ref.current
-    if (!canvas) return undefined
-    let c2d
-    try {
-      c2d = canvas.getContext('2d')
-    } catch {
-      return undefined
-    }
-    if (!c2d) return undefined
-    graph.getContext()
-    const analyser = graph.getAnalyser()
-    const data = new Uint8Array(analyser ? analyser.frequencyBinCount : 64)
-    let raf = 0
-
-    const draw = () => {
-      raf = requestAnimationFrame(draw)
-      if (typeof document !== 'undefined' && document.hidden) return
-      const rect = canvas.getBoundingClientRect()
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
-      const w = Math.max(1, Math.round(rect.width * dpr))
-      const h = Math.max(1, Math.round(rect.height * dpr))
-      if (canvas.width !== w || canvas.height !== h) {
-        canvas.width = w
-        canvas.height = h
-      }
-      c2d.clearRect(0, 0, w, h)
-      if (analyser && activeRef.current) analyser.getByteFrequencyData(data)
-      else data.fill(0)
-
-      const cx = w / 2
-      const cy = h / 2
-      const R = Math.min(w, h) * 0.42
-      const bands = data.length || 64
-      const bandLevel = (from, to) => {
-        const s = Math.max(1, Math.floor(bands * from))
-        const e = Math.max(s + 1, Math.floor(bands * to))
-        let sum = 0
-        for (let i = s; i < e; i += 1) sum += data[i]
-        return Math.max(0, Math.min(1, (sum / (e - s)) / 255))
-      }
-
-      const t = performance.now() / 1000
-      c2d.lineCap = 'round'
-      c2d.shadowColor = 'rgba(120,255,220,0.55)'
-      c2d.shadowBlur = 6 * dpr
-      const rings = [
-        {
-          r: R, band: [0, 0.14], speed: 0.5, width: 2.2, alpha: 0.5,
-          col: [126, 255, 204], planet: { size: 3.6, offset: 0.9, col: [220, 255, 245] },
-        },
-        {
-          r: R * 1.17, band: [0.14, 0.42], speed: -0.32, width: 1.8, alpha: 0.36,
-          col: [140, 226, 255], planet: { size: 2.6, offset: 2.5, col: [200, 245, 255] },
-        },
-        {
-          r: R * 1.34, band: [0.42, 1], speed: 0.2, width: 1.4, alpha: 0.24,
-          col: [198, 170, 255], planet: { size: 1.9, offset: 4.2, col: [235, 225, 255] },
-        },
-      ]
-      for (let ri = 0; ri < rings.length; ri += 1) {
-        const cfg = rings[ri]
-        const lvl = bandLevel(cfg.band[0], cfg.band[1])
-        const radius = cfg.r * (1 + lvl * 0.055)
-        const rot = t * cfg.speed + ri * 0.9
-        const a = cfg.alpha * (0.3 + lvl * 0.7)
-        const col = cfg.col.join(',')
-        c2d.strokeStyle = `rgba(${col},${a.toFixed(3)})`
-        c2d.lineWidth = cfg.width * dpr
-        c2d.beginPath()
-        c2d.arc(cx, cy, radius, rot, rot + 1.7 * Math.PI)
-        c2d.stroke()
-        const ex = cx + Math.cos(rot + 1.7 * Math.PI) * radius
-        const ey = cy + Math.sin(rot + 1.7 * Math.PI) * radius
-        c2d.shadowBlur = 4 * dpr
-        c2d.fillStyle = `rgba(${col},${Math.min(1, a * 1.35).toFixed(3)})`
-        c2d.beginPath()
-        c2d.arc(ex, ey, cfg.width * dpr * 1.5, 0, Math.PI * 2)
-        c2d.fill()
-        const pa = t * cfg.speed * 0.9 + cfg.planet.offset
-        const px = cx + Math.cos(pa) * radius
-        const py = cy + Math.sin(pa) * radius
-        const ps = cfg.planet.size * dpr * (1 + lvl * 0.35)
-        c2d.shadowColor = `rgba(${cfg.planet.col.join(',')},0.9)`
-        c2d.shadowBlur = 10 * dpr
-        c2d.fillStyle = `rgba(${cfg.planet.col.join(',')},${Math.min(1, a + 0.35).toFixed(3)})`
-        c2d.beginPath()
-        c2d.arc(px, py, ps, 0, Math.PI * 2)
-        c2d.fill()
-      }
-      c2d.shadowBlur = 0
-    }
-    raf = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(raf)
-  }, [])
-
-  return <canvas ref={ref} className="np-halo" aria-hidden="true" />
 }
 
 const TRANS_KEY = 'nt.trans'

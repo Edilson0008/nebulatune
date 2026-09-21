@@ -142,7 +142,10 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
       applyingRef.current = true
       await applyRef.current(data)
       armedRef.current = true
-      pushedSigRef.current = cloudSig
+      // ⚠️ Não marca o estado local como "já enviado" aqui: o envio é sempre
+      // feito com o estado DEPOIS de aplicar a nuvem (o próximo ciclo de push
+      // manda a versão mesclada de verdade). Assim um aparelho nunca envia
+      // dados velhos por cima do que acabou de baixar.
       lastRemoteRef.current = data.exportedAt || knownUpdatedAt || null
       setLastSync(new Date())
       setStatus('ok')
