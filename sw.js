@@ -1,6 +1,6 @@
 const CACHE_SHELL = 'nebulatune-shell-v1'
 const CACHE_ASSETS = 'nebulatune-assets-v1'
-const SHELL_URLS = ['/', '/index.html', '/manifest.webmanifest', '/nebula.svg', '/favicon.svg']
+const SHELL_URLS = ['./', './index.html', './manifest.webmanifest', './nebula.svg', './favicon.svg']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -32,7 +32,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url)
 
-  if (url.pathname.startsWith('/apk/')) return
+  if (url.pathname.includes('version.json') || url.pathname.startsWith('/apk/')) return
 
   if (req.mode === 'navigate') {
     event.respondWith(
@@ -40,12 +40,12 @@ self.addEventListener('fetch', (event) => {
         .then((res) => {
           if (res && res.ok) {
             const copy = res.clone()
-            caches.open(CACHE_SHELL).then((c) => c.put('/index.html', copy))
+            caches.open(CACHE_SHELL).then((c) => c.put('./index.html', copy))
           }
           return res
         })
         .catch(() =>
-          caches.match('/index.html').then((hit) => hit || caches.match('/')),
+          caches.match('./index.html').then((hit) => hit || caches.match('./')),
         ),
     )
     return
