@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 
-const KEY = 'nt.settings'
-const PSTAT_KEY = 'nt.petstats'
-
 const PSTAT_DEFAULTS = { touches: 0, hearts: 0, sleeps: 0, scares: 0, meows: 0 }
 
 export const ACCENTS = {
@@ -33,21 +30,7 @@ function merge(raw) {
 }
 
 export function useSettings() {
-  const [settings, setSettings] = useState(() => {
-    try {
-      return merge(JSON.parse(localStorage.getItem(KEY) || '{}'))
-    } catch {
-      return { ...DEFAULTS }
-    }
-  })
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(settings))
-    } catch {
-      /* armazenamento indisponível */
-    }
-  }, [settings])
+  const [settings, setSettings] = useState(() => ({ ...DEFAULTS }))
 
   useEffect(() => {
     const a = ACCENTS[settings.accent] || ACCENTS.violet
@@ -76,21 +59,7 @@ export function useSettings() {
 }
 
 export function usePetStats() {
-  const [petStats, setPetStats] = useState(() => {
-    try {
-      return { ...PSTAT_DEFAULTS, ...JSON.parse(localStorage.getItem(PSTAT_KEY) || '{}') }
-    } catch {
-      return { ...PSTAT_DEFAULTS }
-    }
-  })
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(PSTAT_KEY, JSON.stringify(petStats))
-    } catch {
-      /* armazenamento indisponível */
-    }
-  }, [petStats])
+  const [petStats, setPetStats] = useState(() => ({ ...PSTAT_DEFAULTS }))
 
   const bumpPet = useMemo(
     () => (key) => setPetStats((s) => ({ ...s, [key]: (s[key] || 0) + 1 })),

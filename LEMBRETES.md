@@ -43,8 +43,22 @@
 - PRIMEIRA atualização é manual: instalar uma vez o APK novo. Depois disso o
   próprio app atualiza.
 
+## Feito e PUBLICADO em 22/09 (1.9.7/33 — NADA sobra no aparelho)
+- **SÓ NUVEM, de verdade:** depois que quem apaga são a conta e a exclusão
+  propaga, o último bastião de dados locais caiu. Os ajustes do equalizador,
+  os ajustes gerais e as estatísticas do gatinho NÃO ficam mais gravados no
+  aparelho (`localStorage` removido de `src/settings.js`, de
+  `src/audio/equalizer.js` e dos `PetStats`). Tudo que existe é o que está na
+  sua conta: ao entrar, o app cria um "retrato de fábrica" só em memória e
+  cada aparelho converge para os mesmos números. Apagar a conta ("Apagar
+  todos os meus dados" → `cloud.purgeAll`) zera em todos os aparelhos.
+- **Reset de fábrica de verdade:** o tapinha em "redefinir" (`main.jsx`,
+  one-shot `nt.v2reset`) limpa o `localStorage` para valer — quem quer do
+  zero, nasce do zero.
+- Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
+
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.6 / código 32** (APK real na main +
+- Versão atual publicada/remota: **1.9.7 / código 33** (APK real na main +
   site). Fonte da verdade = GitHub.
 - **ATENÇÃO (21/09):** pasta sincronizada com o GitHub via `git reset --hard
   origin/main` (backups: `%TEMP%\opencode\nebulatune-*.patch`). NÃO trabalhar

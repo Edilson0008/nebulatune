@@ -1,7 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
 import { SUPABASE_URL, SUPABASE_ANON_KEY, SITE_URL } from './app-config'
-import { blobToDataUrl } from './backup'
-import { getFile } from './storage/db'
 
 export const cloudEnabled = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
 
@@ -105,6 +103,11 @@ if (typeof window !== 'undefined') {
   }
 }
 
+// ---------------------------------------------------------------------------
+// ARMAZENAMENTO (arquivos de som/capa). O TEXTO dos dados fica nas tabelas do
+// banco; aqui só ficam os bytes dos áudios e capas, baixados sob demanda.
+// ---------------------------------------------------------------------------
+
 const BUCKET = 'backups'
 const INDEX_FILE = 'index.json'
 const LEGACY_FILE = 'backup.json'
@@ -119,21 +122,6 @@ function safeKey(value) {
     .slice(0, 80)
 }
 
-function splitDataUrl(data) {
-  if (!data) return null
-  const comma = data.indexOf(',')
-  if (comma < 0) return null
-  const mime = /^data:([^;]+)/.exec(data.slice(0, comma))?.[1] || 'application/octet-stream'
-  try {
-    const bin = atob(data.slice(comma + 1))
-    const bytes = new Uint8Array(bin.length)
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-    return { mime, bytes }
-  } catch {
-    return null
-  }
-}
-
 async function listAll(path) {
   const out = []
   const page = 1000
@@ -146,6 +134,10 @@ async function listAll(path) {
   }
   return out
 }
+
+// ---------------------------------------------------------------------------
+// AUTENTICAÇÃO
+// ---------------------------------------------------------------------------
 
 export async function getSession() {
   if (!supabase) return null
@@ -199,6 +191,394 @@ export async function exchangeOAuthCode(code) {
   return data
 }
 
+// ---------------------------------------------------------------------------
+// NOVO SISTEMA: tabelas + RLS. SNAPSHOT CANÔNICO (formato único usado tanto no
+// aparelho quanto na nuvem, para as comparações de sincronização).
+// ---------------------------------------------------------------------------
+
+export const EMPTY_SNAPSHOT = {
+  settings: null,
+  equalizer: null,
+  tracks: new Map(),
+  playlists: new Map(),
+  playlistEntries: new Map(),
+  petStats: null,
+  lyricSync: new Map(),
+}
+
+// Linhas com formato fixo (mesma ordem de chaves) para o JSON ser comparável.
+export function canonTrackRow(t) {
+  return {
+    id: String(t?.id || ''),
+    title: t?.title || '',
+    artist: t?.artist || '',
+    album: t?.album || '',
+    duration: Math.round(Number(t?.duration) || 0),
+    cover: Array.isArray(t?.cover) ? t.cover : null,
+    coverRemote: t?.coverRemote || null,
+    addedAt: Number(t?.addedAt) || 0,
+    plays: Number(t?.plays) || 0,
+    playDays: t?.playDays && typeof t.playDays === 'object' ? t.playDays : {},
+    fav: t?.fav === true,
+    audioKey: safeKey(t?.audioKey || t?.cloudAudioKey || null),
+    coverKey: safeKey(t?.coverKey || null),
+    hasAudio: Boolean(t?.hasAudio === true || (t?.audioBlob && t.audioBlob.size)),
+    hasCover: Boolean(t?.hasCover === true || (t?.coverBlob && t.coverBlob.size)),
+  }
+}
+
+export function canonPlaylistRow(p) {
+  return {
+    id: String(p?.id || ''),
+    name: p?.name || '',
+    createdAt: Number(p?.createdAt) || 0,
+  }
+}
+
+export function canonEntryRow(playlistId, trackId, position) {
+  return {
+    playlistId: String(playlistId),
+    trackId: String(trackId),
+    position: Number(position) || 0,
+  }
+}
+
+export function canonLyricRow(trackId, offset) {
+  return { trackId: String(trackId), offset: Number(offset) || 0 }
+}
+
+export function canonPetStats(p) {
+  return {
+    touches: Number(p?.touches) || 0,
+    hearts: Number(p?.hearts) || 0,
+    sleeps: Number(p?.sleeps) || 0,
+    scares: Number(p?.scares) || 0,
+    meows: Number(p?.meows) || 0,
+  }
+}
+
+export const entryKey = (playlistId, trackId) => `${String(playlistId)}\u0000${String(trackId)}`
+
+function rowToTrack(r) {
+  return canonTrackRow({
+    id: r.id,
+    title: r.title,
+    artist: r.artist,
+    album: r.album,
+    duration: r.duration,
+    cover: r.cover,
+    coverRemote: r.cover_remote,
+    addedAt: r.added_at,
+    plays: r.plays,
+    playDays: r.play_days,
+    fav: r.fav,
+    audioKey: r.audio_key,
+    coverKey: r.cover_key,
+    hasAudio: r.has_audio,
+    hasCover: r.has_cover,
+  })
+}
+
+function isTablesMissingError(err) {
+  const msg = String(err?.message || err || '')
+  return /relation .*does not exist|PGRST205|supertoken/.test(msg)
+}
+
+// Baixa TODOS os dados textuais da conta (as linhas das tabelas) de uma vez.
+export async function pullFromDb(userId) {
+  if (!supabase) return null
+  const queries = [
+    supabase.from('user_settings').select('*').eq('user_id', userId).maybeSingle(),
+    supabase.from('tracks').select('*').eq('user_id', userId),
+    supabase.from('playlists').select('*').eq('user_id', userId),
+    supabase.from('playlist_tracks').select('*').eq('user_id', userId),
+    supabase.from('pet_stats').select('*').eq('user_id', userId).maybeSingle(),
+    supabase.from('lyric_sync').select('*').eq('user_id', userId),
+  ]
+  const results = await Promise.all(queries)
+  const error = results.find((r) => r.error)
+  if (error) {
+    if (isTablesMissingError(error.error)) error.error.isTablesMissing = true
+    throw error.error
+  }
+  const [settingsRes, tracksRes, playlistsRes, entriesRes, petRes, lyricRes] = results
+
+  const snapshot = {
+    settings: settingsRes.data?.settings ?? null,
+    equalizer: settingsRes.data?.equalizer ?? null,
+    tracks: new Map((tracksRes.data || []).map((r) => [String(r.id), rowToTrack(r)])),
+    playlists: new Map(
+      (playlistsRes.data || []).map((r) => [
+        String(r.id),
+        canonPlaylistRow({ id: r.id, name: r.name, createdAt: r.created_at }),
+      ]),
+    ),
+    playlistEntries: new Map(),
+    petStats: petRes.data ? canonPetStats(petRes.data) : null,
+    lyricSync: new Map(
+      (lyricRes.data || []).map((r) => [String(r.track_id), canonLyricRow(r.track_id, r.offset)]),
+    ),
+  }
+  for (const e of entriesRes.data || []) {
+    snapshot.playlistEntries.set(entryKey(e.playlist_id, e.track_id), canonEntryRow(e.playlist_id, e.track_id, e.position))
+  }
+  return snapshot
+}
+
+// Compara o que o aparelho tem AGORA com a última base recebida e diz o que
+// precisa ser gravado na nuvem (linha por linha — exclusão VALE de verdade).
+export function computeDiff(localSnap, baseSnap) {
+  const base = baseSnap || EMPTY_SNAPSHOT
+  const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+
+  const trackUpsert = []
+  const trackDeleteIds = []
+  const trackDeleteKeys = []
+  for (const [id, row] of localSnap.tracks) {
+    const bRow = base.tracks.get(id)
+    if (!bRow || !same(canonTrackRow(row), canonTrackRow(bRow))) {
+      trackUpsert.push({
+        ...row,
+        // Nunca perde a referência do áudio já gravado na nuvem.
+        audioKey: row.audioKey || bRow?.audioKey || null,
+        coverKey: row.coverKey || bRow?.coverKey || null,
+      })
+    }
+  }
+  for (const [id, bRow] of base.tracks) {
+    if (!localSnap.tracks.has(id)) {
+      trackDeleteIds.push(id)
+      if (bRow?.audioKey) trackDeleteKeys.push(`${TRACKS_DIR}/${bRow.audioKey}`.replace(`${TRACKS_DIR}/${safeKey(bRow.audioKey)}`, `tracks/${safeKey(bRow.audioKey)}`))
+      if (bRow?.coverKey) trackDeleteKeys.push(`${COVERS_DIR}/${safeKey(bRow.coverKey)}`)
+    }
+  }
+
+  const playlistUpsert = []
+  const playlistDeleteIds = []
+  for (const [id, row] of localSnap.playlists) {
+    const bRow = base.playlists.get(id)
+    if (!bRow || !same(canonPlaylistRow(row), canonPlaylistRow(bRow))) playlistUpsert.push(row)
+  }
+  for (const id of base.playlists.keys()) {
+    if (!localSnap.playlists.has(id)) playlistDeleteIds.push(id)
+  }
+
+  const entryUpsert = []
+  const entryDeleteKeys = []
+  for (const [key, row] of localSnap.playlistEntries) {
+    const bRow = base.playlistEntries.get(key)
+    if (!bRow || !same(canonEntryRow(row.playlistId, row.trackId, row.position), bRow)) entryUpsert.push(row)
+  }
+  for (const key of base.playlistEntries.keys()) {
+    if (!localSnap.playlistEntries.has(key)) entryDeleteKeys.push(key)
+  }
+
+  const lyricUpsert = []
+  const lyricDeleteIds = []
+  for (const [id, row] of localSnap.lyricSync) {
+    const bRow = base.lyricSync.get(id)
+    if (!bRow || !same(canonLyricRow(row.trackId, row.offset), bRow)) lyricUpsert.push(row)
+  }
+  for (const id of base.lyricSync.keys()) {
+    if (!localSnap.lyricSync.has(id)) lyricDeleteIds.push(id)
+  }
+
+  const settingsChanged = !same(localSnap.settings, base.settings)
+  const equalizerChanged = !same(localSnap.equalizer, base.equalizer)
+  const petChanged = !same(canonPetStats(localSnap.petStats), canonPetStats(base.petStats))
+
+  const empty =
+    !settingsChanged &&
+    !equalizerChanged &&
+    !petChanged &&
+    trackUpsert.length === 0 &&
+    trackDeleteIds.length === 0 &&
+    playlistUpsert.length === 0 &&
+    playlistDeleteIds.length === 0 &&
+    entryUpsert.length === 0 &&
+    entryDeleteKeys.length === 0 &&
+    lyricUpsert.length === 0 &&
+    lyricDeleteIds.length === 0
+
+  return {
+    settingsChanged,
+    equalizerChanged,
+    petChanged,
+    trackUpsert,
+    trackDeleteIds,
+    trackDeleteKeys,
+    playlistUpsert,
+    playlistDeleteIds,
+    entryUpsert,
+    entryDeleteKeys,
+    lyricUpsert,
+    lyricDeleteIds,
+    empty,
+  }
+}
+
+function trackToDb(row, userId) {
+  return {
+    user_id: userId,
+    id: row.id,
+    title: row.title,
+    artist: row.artist,
+    album: row.album,
+    duration: row.duration,
+    cover: Array.isArray(row.cover) && row.cover.length ? row.cover : null,
+    cover_remote: row.coverRemote || null,
+    added_at: row.addedAt,
+    plays: row.plays,
+    play_days: row.playDays,
+    fav: row.fav,
+    audio_key: row.audioKey || null,
+    cover_key: row.coverKey || null,
+    has_audio: row.hasAudio,
+    has_cover: row.hasCover,
+    updated_at: new Date().toISOString(),
+  }
+}
+
+// Grava na nuvem exatamente o que o diff mandou (insere, atualiza, apaga).
+export async function pushDiffToDb(userId, localSnap, diff) {
+  if (!supabase) return
+  const now = new Date().toISOString()
+  const ops = []
+
+  if (diff.settingsChanged || diff.equalizerChanged) {
+    ops.push(
+      supabase.from('user_settings').upsert(
+        {
+          user_id: userId,
+          settings: localSnap.settings && typeof localSnap.settings === 'object' ? localSnap.settings : {},
+          equalizer: localSnap.equalizer && typeof localSnap.equalizer === 'object' ? localSnap.equalizer : null,
+          updated_at: now,
+        },
+        { onConflict: 'user_id' },
+      ),
+    )
+  }
+
+  if (diff.trackUpsert.length) {
+    ops.push(
+      supabase
+        .from('tracks')
+        .upsert(diff.trackUpsert.map((row) => trackToDb(row, userId)), {
+          onConflict: 'user_id,id',
+        }),
+    )
+  }
+  if (diff.trackDeleteIds.length) {
+    // Apaga a LINHA da tabela. O arquivo de som/capa também sai do storage
+    // (libera espaço), mas a exclusão da música vale pelos dados da tabela.
+    ops.push(
+      supabase.from('tracks').delete().eq('user_id', userId).in('id', diff.trackDeleteIds),
+    )
+    if (diff.trackDeleteKeys.length) {
+      const paths = [...new Set(diff.trackDeleteKeys)].filter((p) => p.includes('/'))
+      if (paths.length) {
+        ops.push(storage().remove(paths.map((p) => `${userId}/${p}`)))
+      }
+    }
+  }
+
+  if (diff.playlistUpsert.length) {
+    ops.push(
+      supabase
+        .from('playlists')
+        .upsert(
+          diff.playlistUpsert.map((p) => ({
+            user_id: userId,
+            id: p.id,
+            name: p.name,
+            created_at: p.createdAt,
+            updated_at: now,
+          })),
+          { onConflict: 'user_id,id' },
+        ),
+    )
+  }
+  if (diff.playlistDeleteIds.length) {
+    ops.push(
+      supabase.from('playlists').delete().eq('user_id', userId).in('id', diff.playlistDeleteIds),
+    )
+  }
+
+  if (diff.entryUpsert.length) {
+    ops.push(
+      supabase
+        .from('playlist_tracks')
+        .upsert(
+          diff.entryUpsert.map((e) => ({
+            user_id: userId,
+            playlist_id: e.playlistId,
+            track_id: e.trackId,
+            position: e.position,
+            updated_at: now,
+          })),
+          { onConflict: 'user_id,playlist_id,track_id' },
+        ),
+    )
+  }
+  for (const key of diff.entryDeleteKeys) {
+    const [playlistId, trackId] = key.split('\u0000')
+    ops.push(
+      supabase
+        .from('playlist_tracks')
+        .delete()
+        .eq('user_id', userId)
+        .eq('playlist_id', playlistId)
+        .eq('track_id', trackId),
+    )
+  }
+
+  if (diff.lyricUpsert.length) {
+    ops.push(
+      supabase
+        .from('lyric_sync')
+        .upsert(
+          diff.lyricUpsert.map((l) => ({
+            user_id: userId,
+            track_id: l.trackId,
+            offset: l.offset,
+            updated_at: now,
+          })),
+          { onConflict: 'user_id,track_id' },
+        ),
+    )
+  }
+  if (diff.lyricDeleteIds.length) {
+    ops.push(
+      supabase.from('lyric_sync').delete().eq('user_id', userId).in('track_id', diff.lyricDeleteIds),
+    )
+  }
+
+  if (diff.petChanged) {
+    ops.push(
+      supabase.from('pet_stats').upsert(
+        { user_id: userId, ...canonPetStats(localSnap.petStats), updated_at: now },
+        { onConflict: 'user_id' },
+      ),
+    )
+  }
+
+  const results = await Promise.all(ops)
+  const failed = results.filter((r) => r && r.error)
+  if (failed.length) throw failed[0].error
+}
+
+// Baixa o ARQUIVO (áudio ou capa) sob demanda — só quando for tocar/ver.
+export async function fetchCloudBlob(userId, key) {
+  if (!supabase || !userId || !key) return null
+  const { data, error } = await storage().download(`${userId}/${key}`)
+  if (error || !data) return null
+  return data
+}
+
+// ---------------------------------------------------------------------------
+// Ajudantes de manutenção de arquivos antigos (legados do sistema em arquivos)
+// ---------------------------------------------------------------------------
+
 async function readIndex(userId) {
   const { data, error } = await storage().download(`${userId}/${INDEX_FILE}`)
   if (error || !data) return null
@@ -209,414 +589,21 @@ async function readIndex(userId) {
   }
 }
 
-export async function cloudInfo(userId) {
-  if (!supabase) return { exists: false, updatedAt: null }
-  const items = await listAll(userId)
-  const index = items.find((o) => o.name === INDEX_FILE)
-  if (index) {
-    let updatedAt = index.updated_at || index.created_at || null
-    const meta = await readIndex(userId)
-    if (meta?.updatedAt) updatedAt = meta.updatedAt
-    return { exists: true, updatedAt, size: index.metadata?.size || null }
-  }
-  const legacy = items.find((o) => o.name === LEGACY_FILE)
-  if (legacy) {
-    return {
-      exists: true,
-      updatedAt: legacy.updated_at || legacy.created_at || null,
-      size: legacy.metadata?.size || null,
-    }
-  }
-  return { exists: false, updatedAt: null }
-}
-
-export async function pullBackup(userId) {
-  if (!supabase) return null
-  const index = await readIndex(userId)
-
-  if (index && index.v >= 3 && Array.isArray(index.tracks)) {
-    const tracks = []
-    let missingAudio = 0
-    for (const meta of index.tracks) {
-      let audioData = null
-      let coverData = null
-      if (meta.audioKey) {
-        // Se UM áudio falhar, a sincronização NÃO é derrubada: a música entra
-        // na biblioteca mesmo assim (sem som) e a próxima sincronização tenta
-        // baixar de novo.
-        const { data, error } = await storage().download(`${userId}/${meta.audioKey}`)
-        if (!error && data) audioData = await blobToDataUrl(data)
-      }
-      if (!audioData) missingAudio += 1
-      if (meta.coverKey) {
-        const { data } = await storage().download(`${userId}/${meta.coverKey}`)
-        if (data) coverData = await blobToDataUrl(data)
-      }
-      tracks.push({ ...meta, audioData, coverData })
-    }
-    return {
-      app: 'NebulaTune',
-      type: 'backup-completo',
-      exportedAt: index.updatedAt || new Date().toISOString(),
-      count: tracks.length,
-      missingAudio,
-      // Músicas excluídas na conta (em qualquer aparelho): o aparelho tira da
-      // biblioteca também, para a exclusão valer em todos os lados.
-      removed: index.removed && typeof index.removed === 'object' ? index.removed : null,
-      tracks,
-      settings: index.settings || null,
-      equalizer: index.equalizer || null,
-      lyricSync: index.lyricSync || null,
-      playlists: Array.isArray(index.playlists) ? index.playlists : null,
-      petStats: index.petStats || null,
-    }
-  }
-
-  const { data, error } = await storage().download(`${userId}/${LEGACY_FILE}`)
-  if (error) throw error
-  return JSON.parse(await data.text())
-}
-
-// Junta os contadores por dia (ex.: plays de cada aparelho somam — nunca perde).
-function mergePlayDays(localDays, cloudDays) {
-  const out = {}
-  const add = (obj) => {
-    if (!obj || typeof obj !== 'object') return
-    for (const [day, v] of Object.entries(obj)) {
-      const n = Number(v) || 0
-      if (n > (Number(out[day]) || 0)) out[day] = n
-    }
-  }
-  add(localDays)
-  add(cloudDays)
-  return out
-}
-
-// Pontuações do gatinho: cada aparelho contribui, o total só cresce.
-function mergePetStats(localPet, cloudPet) {
-  const keys = ['touches', 'hearts', 'sleeps', 'scares', 'meows']
-  const base = cloudPet && typeof cloudPet === 'object' ? { ...cloudPet } : {}
-  if (localPet && typeof localPet === 'object') {
-    for (const k of keys) {
-      const l = Number(localPet[k]) || 0
-      const c = Number(base[k]) || 0
-      base[k] = Math.max(l, c)
-    }
-  }
-  return base
-}
-
-// Ajustes (tema, nome, bio, avatar, velocidade, equalizador…): junta o que está
-// na nuvem com o que este aparelho tem, e o valor DESTE aparelho vence — é a
-// mudança mais recente. Só não deixa um valor vazio apagar algo já salvo.
-function mergeSettings(local, cloud) {
-  const out = cloud && typeof cloud === 'object' ? { ...cloud } : {}
-  if (!local || typeof local !== 'object') return Object.keys(out).length ? out : null
-  for (const [k, v] of Object.entries(local)) {
-    if (v === undefined) continue
-    const empty = v === '' || v === null
-    const existed = out[k] !== undefined && out[k] !== '' && out[k] !== null
-    if (empty && existed) continue
-    out[k] = v
-  }
-  return Object.keys(out).length ? out : null
-}
-
-// Playlists: junta por id; músicas dentro de cada playlist somam (sem repetir).
-function mergePlaylists(localPlaylists, cloudPlaylists) {
-  const byId = new Map()
-  const add = (list) => {
-    if (!Array.isArray(list)) return
-    for (const p of list) {
-      if (!p || !p.id) continue
-      const prev = byId.get(p.id)
-      const ids = Array.isArray(p.trackIds) ? p.trackIds : []
-      if (!prev) {
-        byId.set(p.id, { ...p, trackIds: [...ids] })
-      } else {
-        prev.name = p.name || prev.name
-        prev.trackIds = [...new Set([...prev.trackIds, ...ids])]
-      }
-    }
-  }
-  add(cloudPlaylists)
-  add(localPlaylists)
-  return [...byId.values()]
-}
-
-export async function pushBackup(userId, backup) {
-  if (!supabase) return
-
-  // O que já está na nuvem (só metadados — sem baixar os áudios de novo).
-  // Serve de base para MESCLAR em vez de apagar: nada que o outro aparelho
-  // salvou (favoritos, plays, pontuações, músicas) é perdido por um envio.
-  const prevIndex = await readIndex(userId)
-
-  // Músicas EXCLUÍDAS: a lista vem da conta (apagadas em qualquer aparelho) e
-  // deste aparelho. Sem isso a nuvem "ressuscitava" a música no envio seguinte
-  // (apagava num aparelho e ela voltava a aparecer nos outros).
-  const removedMap = {}
-  const prevRemoved =
-    prevIndex && prevIndex.removed && typeof prevIndex.removed === 'object'
-      ? prevIndex.removed
-      : {}
-  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
-  for (const [key, ts] of Object.entries(prevRemoved)) {
-    const clean = safeKey(key)
-    if (clean && Number(ts) >= cutoff) removedMap[clean] = Number(ts)
-  }
-  for (const id of Array.isArray(backup.removed) ? backup.removed : []) {
-    const clean = safeKey(id)
-    if (clean) removedMap[clean] = Date.now()
-  }
-  const removed = new Set(Object.keys(removedMap))
-
-  const prevMetas = new Map()
-  if (prevIndex && Array.isArray(prevIndex.tracks)) {
-    for (const m of prevIndex.tracks) {
-      const key = safeKey(m.id)
-      if (!key || removed.has(key)) continue
-      prevMetas.set(key, m)
-    }
-  }
-
-  const existing = new Set()
-  for (const dir of [TRACKS_DIR, COVERS_DIR]) {
-    for (const file of await listAll(`${userId}/${dir}`)) existing.add(`${dir}/${file.name}`)
-  }
-
-  const refs = new Set()
-  const metas = []
-  const seenIds = new Set()
-  const audioFailures = []
-
-  // Lê o arquivo do aparelho só quando for realmente necessário enviar.
-  const readLocal = async (trackId) => {
-    try {
-      return await getFile(trackId)
-    } catch {
-      return null
-    }
-  }
-
-  for (const t of backup.tracks || []) {
-    const id = safeKey(t.id)
-    if (!id || removed.has(id)) continue
-    const meta = { ...t }
-    delete meta.audioData
-    delete meta.coverData
-    delete meta.hasAudio
-    delete meta.hasCover
-    seenIds.add(id)
-    const prev = prevMetas.get(id)
-
-    // ---- ÁUDIO --------------------------------------------------------
-    // Só converte/manda o arquivo quando a conta AINDA NÃO tem este áudio.
-    // (Antes, TODO envio convertia o áudio de TODAS as músicas para base64 —
-    // pesado e travava o app em bibliotecas grandes.)
-    let audioData = typeof t.audioData === 'string' && t.audioData ? t.audioData : null
-    const cloudAudio = prev?.audioKey && existing.has(prev.audioKey) ? prev.audioKey : null
-    if (!audioData && !cloudAudio && (t.hasAudio || t.audioBlob)) {
-      const f = await readLocal(t.id)
-      const blob = t.audioBlob || f?.audioBlob || null
-      if (blob && blob.size) audioData = await blobToDataUrl(blob)
-    }
-    if (audioData) {
-      const parsed = splitDataUrl(audioData)
-      const key = parsed ? `${TRACKS_DIR}/${id}-${audioData.length}.bin` : null
-      if (key) {
-        meta.audioKey = key
-        if (existing.has(key)) {
-          refs.add(key)
-        } else {
-          try {
-            const { error } = await storage().upload(
-              `${userId}/${key}`,
-              new Blob([parsed.bytes], { type: parsed.mime }),
-              { upsert: true, contentType: parsed.mime, cacheControl: '3600' },
-            )
-            if (error) throw error
-            refs.add(key)
-          } catch (err) {
-            // Um arquivo problemático (ex.: grande demais para o servidor) NÃO
-            // pode travar a sincronização inteira: a música continua na conta
-            // (sem som por enquanto) e o resto — inclusive ajustes e as outras
-            // músicas — sobe normalmente. O app avisa qual música falhou.
-            audioFailures.push({
-              id: meta.id,
-              title: meta.title || '',
-              reason: String(err?.message || err || '').slice(0, 160),
-            })
-            if (prev?.audioKey) {
-              meta.audioKey = prev.audioKey
-              refs.add(prev.audioKey)
-            } else {
-              delete meta.audioKey
-            }
-          }
-        }
-      } else if (prev?.audioKey) {
-        meta.audioKey = prev.audioKey
-        refs.add(prev.audioKey)
-      } else {
-        delete meta.audioKey
-      }
-    } else if (cloudAudio) {
-      // A conta já tem este áudio: reaproveita sem reenviar.
-      meta.audioKey = cloudAudio
-      refs.add(cloudAudio)
-    } else if (prev?.audioKey) {
-      meta.audioKey = prev.audioKey
-      refs.add(prev.audioKey)
-    } else {
-      delete meta.audioKey
-    }
-
-    // ---- CAPA ---------------------------------------------------------
-    let coverData = typeof t.coverData === 'string' && t.coverData ? t.coverData : null
-    const cloudCover = prev?.coverKey && existing.has(prev.coverKey) ? prev.coverKey : null
-    if (!coverData && !cloudCover && (t.hasCover || t.coverBlob)) {
-      const f = await readLocal(t.id)
-      const blob = t.coverBlob || f?.coverBlob || null
-      if (blob && blob.size) coverData = await blobToDataUrl(blob)
-    }
-    if (coverData) {
-      const parsed = splitDataUrl(coverData)
-      const key = parsed ? `${COVERS_DIR}/${id}-${coverData.length}.bin` : null
-      if (key) {
-        meta.coverKey = key
-        if (!existing.has(key)) {
-          const { error } = await storage().upload(
-            `${userId}/${key}`,
-            new Blob([parsed.bytes], { type: parsed.mime }),
-            { upsert: true, contentType: parsed.mime, cacheControl: '3600' },
-          )
-          if (error) {
-            // A capa não é essencial: não trava o envio, tenta de novo depois.
-            refs.delete(key)
-            if (prev?.coverKey) {
-              meta.coverKey = prev.coverKey
-              refs.add(prev.coverKey)
-            } else {
-              delete meta.coverKey
-            }
-          } else {
-            refs.add(key)
-          }
-        } else {
-          refs.add(key)
-        }
-      } else if (prev?.coverKey) {
-        meta.coverKey = prev.coverKey
-        refs.add(prev.coverKey)
-      } else {
-        delete meta.coverKey
-      }
-    } else if (cloudCover) {
-      meta.coverKey = cloudCover
-      refs.add(cloudCover)
-    } else if (prev?.coverKey) {
-      meta.coverKey = prev.coverKey
-      refs.add(prev.coverKey)
-    } else {
-      delete meta.coverKey
-    }
-
-    // FUNDE com o que o outro aparelho havia salvo — nunca apaga:
-    // favorito fica marcado se QUALQUER aparelho marcou; plays/pontos somam;
-    // data de adição fica a mais antiga.
-    meta.fav = t.fav === true || prev?.fav === true
-    meta.plays = Math.max(Number(t.plays) || 0, Number(prev?.plays) || 0)
-    meta.playDays = mergePlayDays(t.playDays, prev?.playDays)
-    const addedA = Number(t.addedAt) || Infinity
-    const addedB = Number(prev?.addedAt) || Infinity
-    meta.addedAt = Math.min(addedA, addedB)
-    if (!Number.isFinite(meta.addedAt)) meta.addedAt = Date.now()
-    if (prev) {
-      if (!meta.title) meta.title = prev.title
-      if (!meta.artist) meta.artist = prev.artist
-      if (!meta.album) meta.album = prev.album
-      if (!meta.cover) meta.cover = prev.cover
-      if (!meta.coverRemote) meta.coverRemote = prev.coverRemote
-    }
-    metas.push(meta)
-  }
-
-  // Músicas que estão na nuvem mas não existem neste aparelho continuam na
-  // conta (senão um envio do aparelho "sem elas" as apagaria da nuvem).
-  for (const [id, prev] of prevMetas) {
-    if (seenIds.has(id)) continue
-    if (prev.audioKey) refs.add(prev.audioKey)
-    if (prev.coverKey) refs.add(prev.coverKey)
-    metas.push(prev)
-  }
-
-  // Ajustes: `dirty` diz o que ESTE aparelho mudou desde a última vez que
-  // recebeu a conta. Só nesse caso o valor local vence. Se o aparelho não
-  // mexeu (dirty === false), a CONTA manda — assim um aparelho não sobrescreve
-  // com ajuste velho o que o outro acabou de mudar (era a causa de "as
-  // informações continuam diferentes"). Sem `dirty`, o local vence (compatível).
-  const dirty = backup.dirty && typeof backup.dirty === 'object' ? backup.dirty : {}
-  const settings =
-    dirty.settings === false
-      ? (prevIndex?.settings ?? backup.settings ?? null)
-      : mergeSettings(backup.settings, prevIndex?.settings)
-  const equalizer =
-    dirty.equalizer === false
-      ? (prevIndex?.equalizer ?? backup.equalizer ?? null)
-      : mergeSettings(backup.equalizer, prevIndex?.equalizer)
-  const lyricSync =
-    dirty.lyricSync === false
-      ? (prevIndex?.lyricSync ?? backup.lyricSync ?? null)
-      : { ...(prevIndex?.lyricSync || {}), ...(backup.lyricSync || {}) }
-  const playlists =
-    dirty.playlists === false
-      ? Array.isArray(prevIndex?.playlists)
-        ? prevIndex.playlists
-        : (backup.playlists ?? null)
-      : mergePlaylists(backup.playlists, prevIndex?.playlists)
-  const petStats =
-    dirty.petStats === false
-      ? (prevIndex?.petStats ?? backup.petStats ?? null)
-      : mergePetStats(backup.petStats, prevIndex?.petStats)
-
-  const index = {
-    v: 3,
-    updatedAt: new Date().toISOString(),
-    count: metas.length,
-    settings,
-    equalizer,
-    lyricSync,
-    playlists,
-    petStats,
-    removed: removedMap,
-    tracks: metas,
-  }
-  const { error } = await storage().upload(
-    `${userId}/${INDEX_FILE}`,
-    new Blob([JSON.stringify(index)], { type: 'application/json' }),
-    { upsert: true, contentType: 'application/json', cacheControl: '0' },
-  )
-  if (error) throw error
-
-  await cleanupOld(userId, refs)
-
-  // Devolve o estado FINAL da nuvem (depois da mescla com o que o outro
-  // aparelho tinha enviado) para o app mostrar a verdade: a união de tudo.
-  // `audioFailures` lista músicas cujo SOM não subiu (o resto subiu normal).
-  return { updatedAt: index.updatedAt, final: index, audioFailures, removed: removed.size }
-}
-
-async function cleanupOld(userId, keep) {
+async function removeLegacyFiles(userId) {
   try {
     const remove = []
-    for (const item of await listAll(userId)) {
-      if (item.name === INDEX_FILE) continue
-      if (item.name === LEGACY_FILE) {
-        remove.push(`${userId}/${LEGACY_FILE}`)
+    const items = await listAll(userId)
+    for (const item of items) {
+      if (item.name === INDEX_FILE || item.name === LEGACY_FILE) {
+        remove.push(`${userId}/${item.name}`)
         continue
       }
-      if (item.name.startsWith('g-') || item.name.startsWith('part-')) {
+      if (
+        item.name === TRACKS_DIR ||
+        item.name === COVERS_DIR ||
+        item.name.startsWith('g-') ||
+        item.name.startsWith('part-')
+      ) {
         if (item.id == null) {
           for (const f of await listAll(`${userId}/${item.name}`)) {
             remove.push(`${userId}/${item.name}/${f.name}`)
@@ -626,14 +613,122 @@ async function cleanupOld(userId, keep) {
         }
       }
     }
-    for (const dir of [TRACKS_DIR, COVERS_DIR]) {
-      for (const file of await listAll(`${userId}/${dir}`)) {
-        const p = `${dir}/${file.name}`
-        if (!keep.has(p)) remove.push(`${userId}/${p}`)
-      }
-    }
     if (remove.length) await storage().remove(remove)
   } catch {
     // limpeza é opcional; ignora falhas
   }
+}
+
+// Migra os dados ANTIGOS (arquivos) de uma conta para as novas tabelas.
+// Roda UMA vez, no primeiro login de cada usuário com a versão nova — assim
+// ninguém que já tinha conta perde nada. Depois de migrar, apaga os arquivos
+// antigos para não serem importados de novo.
+export async function migrateLegacy(userId) {
+  if (!supabase || !userId) return false
+  const index = await readIndex(userId)
+  if (!index) return false
+  const now = new Date().toISOString()
+  const ops = []
+
+  if (index.settings || index.equalizer) {
+    ops.push(
+      supabase.from('user_settings').upsert(
+        {
+          user_id: userId,
+          settings: index.settings && typeof index.settings === 'object' ? index.settings : {},
+          equalizer: index.equalizer && typeof index.equalizer === 'object' ? index.equalizer : null,
+          updated_at: now,
+        },
+        { onConflict: 'user_id' },
+      ),
+    )
+  }
+
+  const oldTracks = Array.isArray(index.tracks) ? index.tracks.filter((t) => t && t.id) : []
+  const trackRows = oldTracks.map((t) =>
+    trackToDb(
+      canonTrackRow({
+        ...t,
+        audioKey: t.audioKey || null,
+        coverKey: t.coverKey || null,
+        hasAudio: Boolean(t.audioKey || t.hasAudio),
+        hasCover: Boolean(t.coverKey || t.hasCover),
+      }),
+      userId,
+    ),
+  )
+  if (trackRows.length) {
+    ops.push(supabase.from('tracks').upsert(trackRows, { onConflict: 'user_id,id' }))
+  }
+
+  const oldPlaylists = Array.isArray(index.playlists) ? index.playlists : []
+  const plRows = oldPlaylists
+    .filter((p) => p && p.id)
+    .map((p) => ({
+      user_id: userId,
+      id: p.id,
+      name: p.name || '',
+      created_at: Number(p.createdAt) || 0,
+      updated_at: now,
+    }))
+  if (plRows.length) {
+    ops.push(supabase.from('playlists').upsert(plRows, { onConflict: 'user_id,id' }))
+  }
+  const entryRows = []
+  for (const p of oldPlaylists) {
+    const ids = Array.isArray(p.trackIds) ? p.trackIds : []
+    ids.forEach((tid, i) => {
+      if (tid == null) return
+      entryRows.push({ user_id: userId, playlist_id: p.id, track_id: String(tid), position: i, updated_at: now })
+    })
+  }
+  if (entryRows.length) {
+    ops.push(supabase.from('playlist_tracks').upsert(entryRows, { onConflict: 'user_id,playlist_id,track_id' }))
+  }
+
+  if (index.petStats) {
+    ops.push(
+      supabase.from('pet_stats').upsert(
+        { user_id: userId, ...canonPetStats(index.petStats), updated_at: now },
+        { onConflict: 'user_id' },
+      ),
+    )
+  }
+
+  const oldLyric = index.lyricSync && typeof index.lyricSync === 'object' ? index.lyricSync : {}
+  const lyricRows = Object.entries(oldLyric).map(([trackId, offset]) => ({
+    user_id: userId,
+    track_id: String(trackId),
+    offset: Number(offset) || 0,
+    updated_at: now,
+  }))
+  if (lyricRows.length) {
+    ops.push(supabase.from('lyric_sync').upsert(lyricRows, { onConflict: 'user_id,track_id' }))
+  }
+
+  const results = await Promise.allSettled(ops)
+  const failed = results.some(
+    (r) => r.status === 'rejected' || (r.value && r.value.error),
+  )
+  if (failed) return false // não apaga os arquivos: tenta de novo depois
+
+  await removeLegacyFiles(userId)
+  return true
+}
+
+// Apaga TUDO da conta do usuário logado: as linhas das tabelas e os arquivos
+// de som/capa. Usado pelo botão "Apagar todos os meus dados".
+export async function purgeUserData(userId) {
+  if (!supabase || !userId) return
+  const results = await Promise.allSettled([
+    supabase.from('user_settings').delete().eq('user_id', userId),
+    supabase.from('tracks').delete().eq('user_id', userId),
+    supabase.from('playlists').delete().eq('user_id', userId),
+    supabase.from('playlist_tracks').delete().eq('user_id', userId),
+    supabase.from('pet_stats').delete().eq('user_id', userId),
+    supabase.from('lyric_sync').delete().eq('user_id', userId),
+  ])
+  await removeLegacyFiles(userId)
+  const failed = results.some((r) => r.status === 'rejected' || (r.value && r.value.error))
+  if (failed) throw new Error('Não foi possível apagar os dados da conta. Tente de novo.')
 }

@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
 import { applySettings, BAND_COUNT } from './graph'
 
-const STORAGE_KEY = 'nt.equalizer'
-
 export const PRESETS = {
   flat: { label: 'Plano', bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
   rock: { label: 'Rock', bands: [5, 5, 4, 3, 1, 0, 1, 4, 4, 5] },
@@ -35,24 +33,8 @@ export function defaultSettings() {
 }
 
 function loadSettings() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      const clean = { ...parsed }
-      delete clean.preamp
-      return {
-        ...defaultSettings(),
-        ...clean,
-        bands:
-          Array.isArray(parsed.bands) && parsed.bands.length === BAND_COUNT
-            ? parsed.bands
-            : defaultSettings().bands,
-      }
-    }
-  } catch {
-    /* dados inválidos: usa padrão */
-  }
+  // Nada fica gravado no aparelho: cada sessão começa do perfil padrão e o
+  // equalizador que você salvar na conta volta de lá, automático.
   return defaultSettings()
 }
 
@@ -61,14 +43,6 @@ export function useEqualizer() {
 
   useEffect(() => {
     applySettings(settings)
-  }, [settings])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
-    } catch {
-      /* sem espaço */
-    }
   }, [settings])
 
   return {

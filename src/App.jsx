@@ -7,12 +7,11 @@ import * as graph from './audio/graph'
 import { EQ_FREQS } from './audio/graph'
 import { ACCENTS, SPEEDS, useSettings, usePetStats } from './settings'
 import { PRESETS, useEqualizer } from './audio/equalizer'
-import { clearTracks, deleteTrack, getAllTracks, getAllFiles, getFile, putTrack, putTracks, toMeta } from './storage/db'
 import { APP_VERSION, SITE_URL } from './app-config'
 import { Share as CapShare } from '@capacitor/share'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { resolveAudiusStream, searchAudiusTracks, topTracks } from './online'
-import { blobToDataUrl, dataUrlToBlob, tracksFromBackup } from './backup'
+import { blobToDataUrl, dataUrlToBlob } from './backup'
 import { useCloudSync } from './useCloudSync'
 import {
   APK_URL,
@@ -24,7 +23,7 @@ import {
   requestNotificationsPermission,
   wasUpdatePrompted,
 } from './updater'
-import { exchangeOAuthCode, OAUTH_CALLBACK, supabase } from './cloud'
+import { exchangeOAuthCode, fetchCloudBlob, OAUTH_CALLBACK, supabase } from './cloud'
 import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
 import { updateNowPlaying, hideNowPlaying, onMediaAction } from './mediaNotification'
 
@@ -2989,7 +2988,7 @@ function useMoodDetector({ playing, sig }) {
   return mood
 }
 
-function usePlayer(library, speed = 1, onStart) {
+function usePlayer(library, speed = 1, onStart, uidRef) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [elapsed, setElapsed] = useState(0)
@@ -3083,16 +3082,23 @@ function usePlayer(library, speed = 1, onStart) {
     // Se a música escolhida está na conta mas o som ainda não desceu para este
     // aparelho, procura a próxima que tenha som — assim não toca um som de
     // demonstração no lugar da música de verdade.
-    if (
-      libAll[i]?.audioMissing &&
-      !libAll[i]?.hasAudio &&
-      !libAll[i]?.src &&
-      !libAll[i]?.audioBlob
-    ) {
+    const soundable = (c) => c && (c.src || c.audioBlob || c.cloudAudioKey || !c.audioMissing)
+    const nextWithSound = () => {
+      const n = libAll.length
+      for (let step = 1; step < n; step += 1) {
+        const j = (i + step) % n
+        if (soundable(libAll[j])) {
+          startIndex(j)
+          return
+        }
+      }
+      // Nenhuma outra com som: último recurso é o som de demonstração.
+      synthFallback()
+    }
+    if (libAll[i]?.audioMissing && !soundable(libAll[i])) {
       for (let step = 1; step < libAll.length; step += 1) {
         const j = (i + step) % libAll.length
-        const c = libAll[j]
-        if (c && (c.src || c.audioBlob || c.hasAudio || !c.audioMissing)) {
+        if (soundable(libAll[j])) {
           i = j
           break
         }
@@ -3140,29 +3146,36 @@ function usePlayer(library, speed = 1, onStart) {
       startFile(src, t.duration)
       return
     }
-    if (t.hasAudio) {
+    if (t.cloudAudioKey && uidRef && uidRef.current) {
       const token = ++startTokenRef.current
-      getFile(t.id)
-        .then((f) => {
+      // Baixa o som da conta só na hora de tocar (nada fica gravado no
+      // aparelho; tocar precisa de internet).
+      fetchCloudBlob(uidRef.current, t.cloudAudioKey)
+        .then((blob) => {
           if (startTokenRef.current !== token) return
-          if (f && f.audioBlob && f.audioBlob.size) {
-            const src = URL.createObjectURL(f.audioBlob)
+          if (blob && ((blob.size ?? 0) > 0 || blob.type)) {
+            const src = URL.createObjectURL(blob)
             const prevUrl = currentAudioUrlRef.current
             currentAudioUrlRef.current = src
-            const up = { ...t, audioBlob: f.audioBlob, src }
+            const up = { ...t, audioBlob: blob, src, audioMissing: false }
             libRef.current[i] = up
             setLibrary((prev) => prev.map((x) => (x.id === t.id ? up : x)))
             startFile(src, t.duration)
             if (prevUrl && prevUrl !== src) setTimeout(() => URL.revokeObjectURL(prevUrl), 8000)
           } else {
-            synthFallback()
+            nextWithSound()
           }
         })
-        .catch(() => synthFallback())
+        .catch(() => {
+          if (startTokenRef.current !== token) return
+          // Sem internet (ou problema na conta): não toca som de demonstração
+          // no lugar da música de verdade — pula para a próxima com som.
+          nextWithSound()
+        })
       return
     }
     synthFallback()
-  }, [getAudio, playWithRetry])
+  }, [getAudio, playWithRetry, uidRef])
 
   const randomIndex = useCallback(() => {
     const lib = libRef.current
@@ -3941,40 +3954,6 @@ async function fetchLyrics(title, artist, duration) {
   return buildLyrics(best)
 }
 
-function toRecord(track) {
-  return {
-    id: track.id,
-    title: track.title,
-    artist: track.artist,
-    album: track.album,
-    duration: track.duration || 0,
-    cover: track.cover,
-    audioBlob: track.audioBlob || null,
-    coverBlob: track.coverBlob || null,
-    coverRemote: track.coverRemote || null,
-    addedAt: track.addedAt || Date.now(),
-    hasAudio: track.hasAudio === true || Boolean(track.audioBlob && track.audioBlob.size),
-    fav: track.fav === true,
-    plays: track.plays || 0,
-    playDays: track.playDays || {},
-  }
-}
-
-function recordKey(track) {
-  return JSON.stringify([
-    track.title,
-    track.artist,
-    track.album,
-    Math.round(track.duration || 0),
-    track.coverRemote || '',
-    track.coverBlob ? `${track.coverBlob.size}:${track.coverBlob.type}` : '',
-    track.audioBlob ? `${track.audioBlob.size}:${track.audioBlob.type}` : '',
-    track.fav === true ? 1 : 0,
-    track.plays || 0,
-    JSON.stringify(track.playDays || {}),
-  ])
-}
-
 function VSlider({ value, onChange, min = -12, max = 12, step = 1, label, suffix }) {
   const trackRef = useRef(null)
   const draggingRef = useRef(false)
@@ -4089,26 +4068,18 @@ function NowParticles() {
 }
 
 const TRANS_KEY = 'nt.trans'
-let transCache = null
+let transCache = {}
 
 function transCacheLoad() {
   if (transCache) return transCache
-  try {
-    transCache = JSON.parse(localStorage.getItem(TRANS_KEY)) || {}
-  } catch {
-    transCache = {}
-  }
   return transCache
 }
 
 function transCacheSave() {
-  try {
-    const entries = Object.entries(transCache || {})
-    if (entries.length > 600) {
-      transCache = Object.fromEntries(entries.slice(entries.length - 600))
-    }
-    localStorage.setItem(TRANS_KEY, JSON.stringify(transCache))
-  } catch {}
+  const entries = Object.entries(transCache || {})
+  if (entries.length > 600) {
+    transCache = Object.fromEntries(entries.slice(entries.length - 600))
+  }
 }
 
 async function translateLine(text) {
@@ -4878,6 +4849,19 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
   const [updateError, setUpdateError] = useState(false)
   const importInputRef = useRef(null)
 
+  const clearAllData = useCallback(() => {
+    if (!cloud.user) return
+    const first =
+      'Apagar TODOS os seus dados? Isso apaga de verdade a biblioteca, favoritos, playlist, gatinho, ajustes e letras sincronizadas da SUA conta na nuvem e deste aparelho. Outros usuários não são afetados.'
+    const second =
+      'Tem certeza? Não dá para desfazer — depois de apagar, você começa do zero (vira "de fábrica" só para a sua conta).'
+    if (!window.confirm(first)) return
+    if (!window.confirm(second)) return
+    cloud
+      .purgeAll()
+      .catch(() => window.alert('Não consegui apagar tudo agora. Tenta de novo em instantes.'))
+  }, [cloud])
+
   const submitAuth = (mode) => (e) => {
     e.preventDefault()
     if (!email || !password) return
@@ -5081,6 +5065,21 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
                   </button>
                   <button className="btn-ghost btn-ghost-danger" onClick={cloud.signOut}>
                     Sair
+                  </button>
+                </div>
+              </div>
+
+              <div className="settings-row">
+                <div className="settings-info">
+                  <span className="settings-label">Apagar todos os meus dados</span>
+                  <span className="settings-desc">
+                    Apaga de verdade a sua biblioteca, favoritos, playlists, o gatinho e os ajustes
+                    na nuvem e neste aparelho, vira "de fábrica". Não dá para desfazer.
+                  </span>
+                </div>
+                <div className="settings-actions">
+                  <button className="btn-ghost btn-ghost-danger" onClick={clearAllData}>
+                    Apagar tudo
                   </button>
                 </div>
               </div>
@@ -5470,24 +5469,9 @@ if (typeof window !== 'undefined') {
 
 function App() {
   const [library, setLibrary] = useState([])
-  const [loadingLib, setLoadingLib] = useState(true)
-  const [storageError, setStorageError] = useState(false)
+  const [loadingLib, setLoadingLib] = useState(false)
   const [cacheCleanMsg, setCacheCleanMsg] = useState('')
-  const [view, setView] = useState(() => {
-    try {
-      return localStorage.getItem('nt.view') || 'inicio'
-    } catch {
-      return 'inicio'
-    }
-  })
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('nt.view', view)
-    } catch {
-      /* armazenamento indisponível */
-    }
-  }, [view])
+  const [view, setView] = useState('inicio')
   const [query, setQuery] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [showNowPlaying, setShowNowPlaying] = useState(false)
@@ -5516,9 +5500,8 @@ function App() {
   const dragCounter = useRef(0)
   const fileInputRef = useRef(null)
   const folderInputRef = useRef(null)
-  const persistedRef = useRef(new Map())
-  const replacingRef = useRef(false)
-  const libraryRef = useRef(library)
+  const uidRef = useRef('')
+  const libraryRef = useRef([])
   const [updatePrompt, setUpdatePrompt] = useState(null)
   const [updateInstalling, setUpdateInstalling] = useState(false)
   const [updateInstallMsg, setUpdateInstallMsg] = useState('')
@@ -5681,57 +5664,9 @@ function App() {
   }
 
   useEffect(() => {
-    let cancelled = false
-    getAllTracks()
-      .then(async (records) => {
-        if (cancelled) return
-        const tracks = records
-          .filter((r) => r.id)
-          .map((r) => ({
-            ...r,
-            fav: r.fav === true,
-            audioBlob: null,
-            coverBlob: null,
-            src: null,
-            coverUrl: null,
-          }))
-        tracks.forEach((t) => persistedRef.current.set(t.id, recordKey(t)))
-        setLibrary(tracks)
-        const withCovers = await Promise.all(
-          tracks.map(async (t) => {
-            try {
-              const f = await getFile(t.id)
-              if (f && f.coverBlob && f.coverBlob.size) {
-                return { ...t, coverBlob: f.coverBlob, coverUrl: URL.createObjectURL(f.coverBlob) }
-              }
-            } catch {
-              /* sem capa */
-            }
-            return t
-          }),
-        )
-        if (!cancelled) setLibrary(withCovers)
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoadingLib(false)
-      })
-    return () => {
-      cancelled = true
-    }
+    // A biblioteca NÃO é mais gravada no aparelho: ela existe na memória
+    // durante o uso e é trazida da conta (nuvem) ao entrar. Nada fica salvo.
   }, [])
-
-  useEffect(() => {
-    if (loadingLib || replacingRef.current) return
-    library.forEach((t) => {
-      if (!t.audioBlob) return
-      const key = recordKey(t)
-      if (persistedRef.current.get(t.id) !== key) {
-        persistedRef.current.set(t.id, key)
-        putTrack(toMeta(t)).catch(() => setStorageError(true))
-      }
-    })
-  }, [library, loadingLib])
 
   const todayKey = () => {
     const d = new Date()
@@ -5752,20 +5687,7 @@ function App() {
     })
   }, [])
 
-  const [playlists, setPlaylists] = useState(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem('nt.playlists') || '[]')
-      return Array.isArray(raw) ? raw : []
-    } catch {
-      return []
-    }
-  })
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('nt.playlists', JSON.stringify(playlists))
-    } catch {}
-  }, [playlists])
+  const [playlists, setPlaylists] = useState([])
 
   const [activePlaylist, setActivePlaylist] = useState(null)
   const [playlistPickerTrack, setPlaylistPickerTrack] = useState(null)
@@ -5836,19 +5758,7 @@ function App() {
     )
   }, [])
 
-  const [recentSearches, setRecentSearches] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('nt.recent')) || []
-    } catch {
-      return []
-    }
-  })
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('nt.recent', JSON.stringify(recentSearches.slice(0, 8)))
-    } catch {}
-  }, [recentSearches])
+  const [recentSearches, setRecentSearches] = useState([])
 
   const addRecentSearch = useCallback((q) => {
     const term = (q || '').trim().toLowerCase()
@@ -5889,7 +5799,7 @@ function App() {
     playQueueItem,
     queueAdd,
     queueNext,
-  } = usePlayer(library, appSettings.speed, countPlay)
+  } = usePlayer(library, appSettings.speed, countPlay, uidRef)
 
   const onlinePlayer = useOnlinePlayer(appSettings.speed)
   const {
@@ -6102,111 +6012,91 @@ function App() {
     [trackId, storeLyrics],
   )
 
-  const [syncOffsets, setSyncOffsets] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('nt.lyricSync')) || {}
-    } catch {
-      return {}
-    }
-  })
+  const [syncOffsets, setSyncOffsets] = useState({})
 
   const adjustSync = useCallback((id, delta) => {
     setSyncOffsets((prev) => {
       const next = { ...prev, [id]: Math.round(((prev[id] || 0) + delta) * 10) / 10 }
-      try {
-        localStorage.setItem('nt.lyricSync', JSON.stringify(next))
-      } catch {
-        /* armazenamento indisponível */
-      }
       return next
     })
   }, [])
 
   const applyCloudBackup = useCallback(
     (data) => {
-      // Sempre aplica o que veio da nuvem — um aparelho nunca "pula" um
-      // recebimento. Biblioteca, favoritas, pontuações e ajustes passam a
-      // refletir a conta a cada sincronização (o aparelho vira só um
-      // "cliente" da nuvem, no estilo Spotify).
-      // Músicas excluídas na conta (em qualquer aparelho) saem daqui também.
-      const removedIds = new Set(
-        data && data.removed && typeof data.removed === 'object'
-          ? Object.keys(data.removed)
-          : [],
-      )
-      const cloudTracks = tracksFromBackup(data).filter((t) => !removedIds.has(t.id))
+      // A conta é a verdade: cada recebimento traz as linhas das tabelas e o
+      // aparelho passa a refletir a conta (estilo Spotify). Nada é gravado no
+      // aparelho — os áudios baixam só na hora de tocar.
+      const cloudMap = data && data.tracks instanceof Map ? data.tracks : new Map()
+      const cloudTracks = [...cloudMap.values()].filter((t) => t && t.id)
+      const cloudIds = new Set(cloudTracks.map((t) => t.id))
       const localByCloud = new Map(libraryRef.current.map((t) => [t.id, t]))
-      // Mescla cada música baixada com a que já está neste aparelho, para
-      // nunca perder favorito/estatísticas locais se a nuvem vier sem eles
-      // (ex.: outro aparelho antigo tinha sobrescrito a nuvem).
       const mergedTracks = cloudTracks.map((ct) => {
         const lt = localByCloud.get(ct.id)
-        if (!lt) return ct
-        const playDays = { ...(lt.playDays || {}), ...(ct.playDays || {}) }
-        for (const [day, v] of Object.entries(lt.playDays || {})) {
+        const playDays = { ...(lt?.playDays || {}), ...(ct.playDays || {}) }
+        for (const [day, v] of Object.entries(lt?.playDays || {})) {
           const n = Number(v) || 0
           if (n > (Number(playDays[day]) || 0)) playDays[day] = n
         }
-        // Se o áudio não veio da nuvem mas este aparelho já o tem, mantém o
-        // local. (O src antigo é recriado porque o de baixo é revogado.)
-        const audioBlob = ct.audioBlob || lt.audioBlob || null
-        const src = ct.src || (audioBlob ? URL.createObjectURL(audioBlob) : null)
-        const coverBlob = ct.coverBlob || lt.coverBlob || null
-        const coverUrl =
-          ct.coverUrl || (coverBlob ? URL.createObjectURL(coverBlob) : ct.coverRemote || null)
+        // O áudio/capa ficam SÓ na memória (se este aparelho já baixou nesta
+        // sessão). A referência do arquivo na nuvem vem como cloudAudioKey.
+        const audioBlob = lt?.audioBlob || null
+        const src = audioBlob ? URL.createObjectURL(audioBlob) : null
+        const coverBlob = lt?.coverBlob || null
+        const coverUrl = coverBlob
+          ? URL.createObjectURL(coverBlob)
+          : ct.coverRemote || lt?.coverRemote || null
         return {
-          ...ct,
-          fav: lt.fav === true || ct.fav === true,
-          plays: Math.max(lt.plays || 0, ct.plays || 0),
+          id: ct.id,
+          title: ct.title || lt?.title || '',
+          artist: ct.artist || lt?.artist || '',
+          album: ct.album || lt?.album || '',
+          duration: Number(ct.duration) || 0,
+          cover: Array.isArray(ct.cover) ? ct.cover : lt?.cover || null,
+          coverRemote: ct.coverRemote || lt?.coverRemote || null,
+          addedAt: Math.min(Number(lt?.addedAt) || Infinity, Number(ct.addedAt) || Infinity) || Date.now(),
+          fav: ct.fav === true || lt?.fav === true,
+          plays: Math.max(Number(lt?.plays) || 0, Number(ct.plays) || 0),
           playDays,
-          addedAt: Math.min(lt.addedAt || Infinity, ct.addedAt || Infinity),
           audioBlob,
           src,
           coverBlob,
           coverUrl,
-          audioMissing: !(src || audioBlob),
+          audioMissing: !(audioBlob || ct.hasAudio || ct.audioKey),
+          cloudAudioKey: ct.audioKey || null,
+          coverKey: ct.coverKey || null,
         }
       })
-      const cloudIds = new Set(cloudTracks.map((t) => t.id))
-      // Só ficam no aparelho as músicas que existem na conta OU que foram
-      // adicionadas aqui e ainda não tiveram tempo de subir (pendência, que o
-      // próximo envio leva). O que foi excluído na conta sai daqui também.
-      const localOnly = libraryRef.current.filter(
-        (t) => !cloudIds.has(t.id) && !removedIds.has(t.id),
-      )
+      // Músicas que existem aqui mas ainda não subiram ficam (próximo envio).
+      const localOnly = libraryRef.current.filter((t) => !cloudIds.has(t.id))
       const tracks = [...mergedTracks, ...localOnly]
+      // Libera os URLs das músicas que saíram/foram substituídas.
       libraryRef.current.forEach((t) => {
         if (!cloudIds.has(t.id)) return
         if (t.src) URL.revokeObjectURL(t.src)
         if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl)
       })
-      replacingRef.current = true
-      persistedRef.current.clear()
       setLibrary(tracks)
-      clearTracks()
-        .then(() => {
-          tracks.forEach((t) => persistedRef.current.set(t.id, recordKey(t)))
-          return putTracks(tracks.map(toRecord))
-        })
-        .catch(() => setStorageError(true))
-        .finally(() => {
-          replacingRef.current = false
-        })
       if (data.settings && typeof data.settings === 'object') settingsApi.setAll(data.settings)
       if (data.equalizer && typeof data.equalizer === 'object') eq.importSettings(data.equalizer)
-      if (data.lyricSync && typeof data.lyricSync === 'object') {
-        setSyncOffsets(data.lyricSync)
-        try {
-          localStorage.setItem('nt.lyricSync', JSON.stringify(data.lyricSync))
-        } catch {
-          /* armazenamento indisponível */
-        }
+      if (data.lyricSync && data.lyricSync instanceof Map) {
+        const next = {}
+        for (const row of data.lyricSync.values()) next[row.trackId] = row.offset
+        setSyncOffsets(next)
       }
-      if (Array.isArray(data.playlists)) {
+      if (data.playlists instanceof Map) {
+        const entries = data.playlistEntries instanceof Map ? data.playlistEntries : new Map()
         setPlaylists(
-          data.playlists
-            .filter((p) => p && p.id && p.name)
-            .map((p) => ({ ...p, trackIds: Array.isArray(p.trackIds) ? p.trackIds : [] })),
+          [...data.playlists.values()]
+            .filter((p) => p && p.id)
+            .map((p) => ({
+              id: p.id,
+              name: p.name || '',
+              createdAt: p.createdAt || Date.now(),
+              trackIds: [...entries.values()]
+                .filter((e) => e.playlistId === p.id)
+                .sort((a, b) => a.position - b.position)
+                .map((e) => e.trackId),
+            })),
         )
       }
       if (data.petStats && typeof data.petStats === 'object') {
@@ -6226,7 +6116,10 @@ function App() {
     loading: loadingLib,
     applyRemote: applyCloudBackup,
   })
-  const markRemoved = cloud.markRemoved
+
+  useEffect(() => {
+    uidRef.current = cloud?.user?.id || ''
+  }, [cloud?.user?.id])
 
   const syncOffset = trackId ? syncOffsets[trackId] || 0 : 0
   const firstLineTime = lyrics?.lines?.[0]?.time
@@ -6244,14 +6137,12 @@ function App() {
       stopAndReset()
       setLibrary((prev) => prev.filter((x) => x.id !== id))
       setPlaylists((prev) => prev.map((p) => ({ ...p, trackIds: p.trackIds.filter((x) => x !== id) })))
-      persistedRef.current.delete(id)
       if (t.src) URL.revokeObjectURL(t.src)
       if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl)
-      deleteTrack(id).catch(() => {})
-      // Avisa a conta para apagar de verdade (senão a música voltava).
-      markRemoved(id)
+      // A exclusão vale no banco: o diff (base vs. agora) apaga a linha na
+      // nuvem no próximo envio — e reflete em todos os aparelhos.
     },
-    [library, stopAndReset, markRemoved],
+    [library, stopAndReset],
   )
 
   const clearLibrary = useCallback(() => {
@@ -6261,12 +6152,9 @@ function App() {
       if (t.src) URL.revokeObjectURL(t.src)
       if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl)
     })
-    persistedRef.current.clear()
     setLibrary([])
-    clearTracks().catch(() => {})
-    // Apaga tudo na conta também (a biblioteca é a mesma em todos os aparelhos).
-    markRemoved(library.map((t) => t.id))
-  }, [library, stopAndReset, markRemoved])
+    // As linhas somem do banco no próximo envio (diff), valendo p/ todos.
+  }, [library, stopAndReset])
 
   const results = useMemo(() => {
     if (!query) return []
@@ -6365,18 +6253,13 @@ setInstallEvt(null)
         const keys = await caches.keys().catch(() => [])
         await Promise.all(keys.map((k) => caches.delete(k).catch(() => {})))
       }
-      ;['nt.trans', 'nt.recent'].forEach((key) => {
+      ;['nt.trans', 'nt.recent', 'nt.view', 'nt.playlists', 'nt.lyricSync'].forEach((key) => {
         try {
           localStorage.removeItem(key)
         } catch {
           /* armazenamento indisponível */
         }
       })
-      const [records, files] = await Promise.all([getAllTracks(), getAllFiles()])
-      const ids = new Set(records.map((r) => r.id))
-      await clearTracks()
-      await putTracks(records.map((r) => ({ ...r, audioBlob: undefined, coverBlob: undefined })))
-      await putTracks(files.filter((f) => ids.has(f.id)))
       const after = await estimate()
       const freed = before != null && after != null ? Math.max(0, before - after) : null
       setCacheCleanMsg(
@@ -6401,7 +6284,6 @@ setInstallEvt(null)
     setLibrary((prev) => {
       const byId = new Set(prev.map((t) => t.id))
       const fresh = tracks.filter((t) => !byId.has(t.id))
-      if (fresh.length) putTracks(fresh.map(toRecord)).catch(() => setStorageError(true))
       return fresh.length ? [...prev, ...fresh] : prev
     })
     setView('biblioteca')
@@ -6591,8 +6473,6 @@ setInstallEvt(null)
     setLibrary((prev) => [...prev, ...newTracks])
     setView('biblioteca')
 
-    putTracks(newTracks.map(toRecord)).catch(() => setStorageError(true))
-
     files.forEach((file, i) => {
       const id = newTracks[i].id
       const fallback = newTracks[i]
@@ -6699,7 +6579,6 @@ setInstallEvt(null)
           }
           added.push(fallback)
           setLibrary((prev) => [...prev, fallback])
-          await putTrack(toRecord(fallback)).catch(() => setStorageError(true))
         } catch {
           /* arquivo não lido: segue para o próximo */
         }
@@ -7267,18 +7146,6 @@ setInstallEvt(null)
           />
         )}
       </main>
-
-      {storageError && (
-        <div className="storage-warning">
-          <span>
-            Não foi possível salvar a biblioteca neste navegador (espaço insuficiente, modo
-            anônimo ou permissão bloqueada). As músicas tocam agora, mas podem sumir ao recarregar.
-          </span>
-          <button onClick={() => setStorageError(false)} aria-label="Fechar">
-            ×
-          </button>
-        </div>
-      )}
 
       {displayTrack && (
         <PlayerBar
