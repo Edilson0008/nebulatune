@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   cloudEnabled,
   getSession,
@@ -49,17 +49,19 @@ function trackSignature(t) {
     cover: Array.isArray(t?.cover) ? t.cover : null,
     coverRemote: t?.coverRemote || null,
     addedAt: t?.addedAt || 0,
+    plays: t?.plays || 0,
     playDays: JSON.stringify((t?.playDays && typeof t.playDays === 'object') ? t.playDays : {}),
   })
 }
 
-function signature({ library, settings, equalizer, lyricSync, playlists = null } = {}) {
+function signature({ library, settings, equalizer, lyricSync, playlists = null, petStats = null } = {}) {
   return JSON.stringify({
     t: (library || []).map(trackSignature).sort(),
     s: settings || null,
     e: equalizer || null,
     l: lyricSync || null,
     p: Array.isArray(playlists) ? playlists : null,
+    pet: petStats || null,
   })
 }
 
@@ -70,10 +72,11 @@ function backupSignature(backup) {
     equalizer: backup?.equalizer,
     lyricSync: backup?.lyricSync,
     playlists: backup?.playlists,
+    petStats: backup?.petStats,
   })
 }
 
-export function useCloudSync({ library, settings, equalizer, lyricSync, playlists = null, loading, applyRemote }) {
+export function useCloudSync({ library, settings, equalizer, lyricSync, playlists = null, petStats = null, loading, applyRemote }) {
   const [user, setUser] = useState(null)
   const [authReady, setAuthReady] = useState(!cloudEnabled)
   const [status, setStatus] = useState('')
@@ -87,13 +90,19 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
   const pushedSigRef = useRef('')
   const lastRemoteRef = useRef(null)
 
-  const dataRef = useRef({ library, settings, equalizer, lyricSync, playlists })
+  const dataRef = useRef({ library, settings, equalizer, lyricSync, playlists, petStats })
   const applyRef = useRef(applyRemote)
-  const dataSig = signature({ library, settings, equalizer, lyricSync, playlists })
+  // Assinatura memoizada: só recalcula quando algum dado muda de verdade.
+  // Antes era recalculada (biblioteca inteira serializada) a cada renderização
+  // do app — pesado com bibliotecas grandes e o tempo da música atualizando.
+  const dataSig = useMemo(
+    () => signature({ library, settings, equalizer, lyricSync, playlists, petStats }),
+    [library, settings, equalizer, lyricSync, playlists, petStats],
+  )
 
   useEffect(() => {
-    dataRef.current = { library, settings, equalizer, lyricSync, playlists }
-  }, [library, settings, equalizer, lyricSync, playlists])
+    dataRef.current = { library, settings, equalizer, lyricSync, playlists, petStats }
+  }, [library, settings, equalizer, lyricSync, playlists, petStats])
 
   useEffect(() => {
     applyRef.current = applyRemote
@@ -219,7 +228,17 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
         const info = await cloudInfo(userId)
         if (stopped || !info.exists) return
         if (info.updatedAt && info.updatedAt !== lastRemoteRef.current) {
+          // A nuvem mudou: puxa primeiro. O envio de pendências fica para o
+          // próximo ciclo (depois que o estado local refletir o que baixou),
+          // para nunca sobrescrever dados mais novos com dados antigos.
           await doPull(userId, info.updatedAt)
+          return
+        }
+        // Nada novo na nuvem: se sobrou algo local não enviado (ex.: o envio
+        // falhou por falta de internet ou o app foi pausado), manda agora.
+        const localSig = signature(dataRef.current)
+        if (!busyRef.current && !applyingRef.current && localSig !== pushedSigRef.current) {
+          await doPush(userId)
         }
       } catch {
         /* sem internet: tenta de novo no próximo ciclo */
@@ -237,7 +256,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
     }
-  }, [userId, loading, doPull])
+  }, [userId, loading, doPull, doPush])
 
   const signIn = useCallback(async (email, password) => {
     setMessage('')

@@ -19,6 +19,7 @@ export const SPEEDS = [1, 1.25, 1.5, 2]
 const DEFAULTS = {
   accent: 'violet',
   userName: '',
+  bio: '',
   speed: 1,
   fetchCovers: true,
   avatar: '',
@@ -59,6 +60,7 @@ export function useSettings() {
       set: (key, value) => setSettings((s) => ({ ...s, [key]: value })),
       setAccent: (value) => setSettings((s) => ({ ...s, accent: value })),
       setUserName: (value) => setSettings((s) => ({ ...s, userName: value })),
+      setBio: (value) => setSettings((s) => ({ ...s, bio: value })),
       setSpeed: (value) => setSettings((s) => ({ ...s, speed: value })),
       setFetchCovers: (value) => setSettings((s) => ({ ...s, fetchCovers: value })),
       setAvatar: (value) => setSettings((s) => ({ ...s, avatar: value })),
@@ -95,5 +97,23 @@ export function usePetStats() {
     [],
   )
 
-  return { petStats, bumpPet }
+  // Aplica pontuações vindas da nuvem sem nunca diminuir os contadores:
+  // cada aparelho contribui com os seus toques/corações e o total só cresce.
+  const applyPetStats = useMemo(
+    () => (value) => {
+      if (!value || typeof value !== 'object') return
+      setPetStats((s) => {
+        const keys = ['touches', 'hearts', 'sleeps', 'scares', 'meows']
+        const merged = { ...s }
+        for (const k of keys) {
+          const v = Number(value[k]) || 0
+          if (v > (Number(s[k]) || 0)) merged[k] = v
+        }
+        return { ...PSTAT_DEFAULTS, ...merged }
+      })
+    },
+    [],
+  )
+
+  return { petStats, bumpPet, applyPetStats }
 }

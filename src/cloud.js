@@ -259,6 +259,7 @@ export async function pullBackup(userId) {
       equalizer: index.equalizer || null,
       lyricSync: index.lyricSync || null,
       playlists: Array.isArray(index.playlists) ? index.playlists : null,
+      petStats: index.petStats || null,
     }
   }
 
@@ -329,6 +330,7 @@ export async function pushBackup(userId, backup) {
     equalizer: backup.equalizer || null,
     lyricSync: backup.lyricSync || null,
     playlists: Array.isArray(backup.playlists) ? backup.playlists : null,
+    petStats: backup.petStats || null,
     tracks: metas,
   }
   const { error } = await storage().upload(

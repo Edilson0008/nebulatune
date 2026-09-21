@@ -89,6 +89,16 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.9.3',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'App e site muito mais leves e fluidos: antes, enquanto a música tocava, o app se atualizava ~60 vezes por segundo, mesmo sem precisar, e os efeitos visuais (partículas, anéis de luz e visualizador) continuavam trabalhando com o celular de tela desligada ou em outro app — isso travava e esquentava. Agora o tempo da música atualiza de forma leve, os efeitos pausam sozinhos quando o app não está na frente e usam resolução equilibrada. Mesma aparência, muito menos esforço.' },
+      { type: 'novo', text: 'Descrição no perfil: você pode escrever uma frase sobre você, que fica ao lado da foto e é salva na sua conta.' },
+      { type: 'novo', text: 'As pontuações do gatinho agora são sincronizadas na sua conta: o carinho, a atenção e os momentos com ele ficam somados entre aparelhos (e nunca diminuem).' },
+      { type: 'correcao', text: 'Sincronização mais confiável: se sobrar algo sem enviar para a conta (ex.: sem internet), o app reenvia sozinho a cada poucos segundos e na hora que você volta para o app.' },
+    ],
+  },
+  {
     version: '1.9.1',
     date: 'Setembro de 2026',
     items: [
@@ -1088,6 +1098,15 @@ function Profile({ settings, api, library, onPlay, petStats }) {
           <span className="profile-identity-sub">
             {settings.avatar ? 'Seu perfil no NebulaTune' : 'Adicione uma foto e um nome para completar seu perfil'}
           </span>
+          <textarea
+            className="profile-bio"
+            value={settings.bio || ''}
+            onChange={(e) => api.setBio(e.target.value)}
+            placeholder="Escreva uma descrição sobre você…"
+            maxLength={160}
+            rows={2}
+            aria-label="Descrição do perfil"
+          />
         </div>
       </div>
 
@@ -2829,7 +2848,7 @@ function useMoodDetector({ playing, sig }) {
     setMood('neutral')
     if (!playing) return undefined
 
-    let raf = 0
+    let cancelled = false
     let win = {
       t0: performance.now(),
       frames: 0,
@@ -2859,7 +2878,11 @@ function useMoodDetector({ playing, sig }) {
     }
 
     const step = (t) => {
-      if (!raf) return
+      if (cancelled) return
+      if (typeof document !== 'undefined' && document.hidden) {
+        requestAnimationFrame(step)
+        return
+      }
       if (analyser) analyser.getByteFrequencyData(data)
       const n = data.length
       const loN = Math.max(1, Math.floor(n * 0.18))
@@ -2917,11 +2940,11 @@ function useMoodDetector({ playing, sig }) {
           lastOnset: t,
         }
       }
-      raf = requestAnimationFrame(step)
+      requestAnimationFrame(step)
     }
-    raf = requestAnimationFrame(step)
+    requestAnimationFrame(step)
     return () => {
-      raf = 0
+      cancelled = true
     }
   }, [playing, sig])
 
@@ -3342,14 +3365,16 @@ function usePlayer(library, speed = 1, onStart) {
 
   useEffect(() => {
     if (!playing) return undefined
-    let raf = 0
     let cancelled = false
-    const rafTick = () => {
+    // Atualiza o tempo da música 2x por segundo (antes: 60x por segundo,
+    // via requestAnimationFrame). O relógio mostra segundos, então 0,5s de
+    // passo não muda nada visualmente — mas tira um peso enorme do celular.
+    const tick = () => {
       if (cancelled) return
       if (modeRef.current === 'file') {
         const a = getAudio()
         const e = a.currentTime || 0
-        if (Math.abs(e - lastElapsedRef.current) >= 0.1) {
+        if (Math.abs(e - lastElapsedRef.current) >= 0.4) {
           lastElapsedRef.current = e
           setElapsed(e)
         }
@@ -3358,9 +3383,14 @@ function usePlayer(library, speed = 1, onStart) {
           lastDurationRef.current = d
           setDuration(d)
         }
+        if (a.ended) {
+          handleEnded()
+        } else if (a.paused && !a.ended && a.src && a.readyState >= 2) {
+          playWithRetry(a)
+        }
       } else {
         const e = engine.getElapsed()
-        if (Math.abs(e - lastElapsedRef.current) >= 0.1) {
+        if (Math.abs(e - lastElapsedRef.current) >= 0.4) {
           lastElapsedRef.current = e
           setElapsed(e)
         }
@@ -3369,28 +3399,12 @@ function usePlayer(library, speed = 1, onStart) {
           lastDurationRef.current = d
           setDuration(d)
         }
-      }
-      raf = requestAnimationFrame(rafTick)
-    }
-    const check = () => {
-      if (cancelled) return
-      if (modeRef.current === 'file') {
-        const a = getAudio()
-        if (a.ended) {
-          handleEnded()
-        } else if (a.paused && !a.ended && a.src && a.readyState >= 2) {
-          playWithRetry(a)
-        }
-      } else {
-        const d = engine.getDuration()
         if (d && engine.getElapsed() >= d - 0.05) handleEnded()
       }
     }
-    raf = requestAnimationFrame(rafTick)
-    const iv = setInterval(check, 500)
+    const iv = setInterval(tick, 500)
     return () => {
       cancelled = true
-      cancelAnimationFrame(raf)
       clearInterval(iv)
     }
   }, [playing, getAudio, handleEnded, playWithRetry])
@@ -3979,8 +3993,10 @@ function NowParticles() {
     let raf = 0
 
     const draw = () => {
+      raf = requestAnimationFrame(draw)
+      if (typeof document !== 'undefined' && document.hidden) return
       const rect = canvas.getBoundingClientRect()
-      const dpr = window.devicePixelRatio || 1
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
       const w = Math.max(1, Math.round(rect.width * dpr))
       const h = Math.max(1, Math.round(rect.height * dpr))
       if (canvas.width !== w || canvas.height !== h) {
@@ -4007,7 +4023,6 @@ function NowParticles() {
           : `hsla(${p.hue}, 85%, 78%, ${alpha.toFixed(3)})`
         c2d.fill()
       }
-      raf = requestAnimationFrame(draw)
     }
     raf = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(raf)
@@ -4040,8 +4055,10 @@ function AudioHalo({ active }) {
     let raf = 0
 
     const draw = () => {
+      raf = requestAnimationFrame(draw)
+      if (typeof document !== 'undefined' && document.hidden) return
       const rect = canvas.getBoundingClientRect()
-      const dpr = window.devicePixelRatio || 1
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
       const w = Math.max(1, Math.round(rect.width * dpr))
       const h = Math.max(1, Math.round(rect.height * dpr))
       if (canvas.width !== w || canvas.height !== h) {
@@ -4113,7 +4130,6 @@ function AudioHalo({ active }) {
         c2d.fill()
       }
       c2d.shadowBlur = 0
-      raf = requestAnimationFrame(draw)
     }
     raf = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(raf)
@@ -4228,8 +4244,10 @@ function Visualizer() {
     let raf = 0
 
     const draw = () => {
+      raf = requestAnimationFrame(draw)
+      if (typeof document !== 'undefined' && document.hidden) return
       const rect = canvas.getBoundingClientRect()
-      const dpr = window.devicePixelRatio || 1
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
       const w = Math.max(1, Math.round(rect.width * dpr))
       const h = Math.max(1, Math.round(rect.height * dpr))
       if (canvas.width !== w || canvas.height !== h) {
@@ -4254,7 +4272,6 @@ function Visualizer() {
         c2d.fillStyle = grad
         c2d.fillRect(x, h - hh, bw * 0.64, hh)
       }
-      raf = requestAnimationFrame(draw)
     }
     raf = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(raf)
@@ -5505,7 +5522,7 @@ function App() {
   const [now, setNow] = useState(() => new Date())
   const eq = useEqualizer()
   const { settings: appSettings, api: settingsApi } = useSettings()
-  const { petStats, bumpPet } = usePetStats()
+  const { petStats, bumpPet, applyPetStats } = usePetStats()
   const handlePetAction = useCallback(
     (a) => {
       const map = { touch: 'touches', heart: 'hearts', scared: 'scares', sleep: 'sleeps', meow: 'meows' }
@@ -6143,6 +6160,7 @@ function App() {
               x.artist,
               Math.round(x.duration || 0),
               x.fav === true,
+              x.plays || 0,
               JSON.stringify(x.playDays || {}),
               x.addedAt || 0,
             ])
@@ -6151,6 +6169,7 @@ function App() {
           e: d.equalizer || null,
           l: d.lyricSync || null,
           p: Array.isArray(d.playlists) ? d.playlists : null,
+          pet: d.petStats || null,
         })
       const sig = cloudMetaSig(data)
       if (sig === cloudSigRef.current) return
@@ -6193,8 +6212,11 @@ function App() {
             .map((p) => ({ ...p, trackIds: Array.isArray(p.trackIds) ? p.trackIds : [] })),
         )
       }
+      if (data.petStats && typeof data.petStats === 'object') {
+        applyPetStats(data.petStats)
+      }
     },
-    [eq, settingsApi],
+    [eq, settingsApi, applyPetStats],
   )
 
   const cloud = useCloudSync({
@@ -6203,6 +6225,7 @@ function App() {
     equalizer: eq.settings,
     lyricSync: syncOffsets,
     playlists,
+    petStats,
     loading: loadingLib,
     applyRemote: applyCloudBackup,
   })

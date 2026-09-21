@@ -44,13 +44,46 @@
   próprio app atualiza.
 
 ## Versões (importante)
-- Versão atual publicada: **1.4.0** (rodada de melhorias 2: playlists, stats,
-  tradução de letras, timer de desligar, halo, importar músicas, recentes, fila).
+- Versão atual publicada/remota: **1.9.2** (APK real na main + zip do código em
+  `public/projeto/nebulatune-src.zip`). Fonte da verdade = GitHub.
+- **ATENÇÃO (21/09):** pasta sincronizada com o GitHub via `git reset --hard
+  origin/main` (backups: `%TEMP%\opencode\nebulatune-*.patch`). NÃO trabalhar
+  sobre versão antiga.
+- **PENDENTE CRÍTICO (21/09):** usuário relatou que o app/site (1.9.x) está
+  TRAVANDO/CONGELANDO após as otimizações feitas "pelo celular". Investigar
+  performance (lista memoizada, throttle de elapsed, content-visibility,
+  animações do gatinho/partículas/planetas) e corrigir.
+  → **FEITO (21/09, ainda NÃO publicado):** os pontos pesados foram corrigidos
+  (ver "Feito em 21/09" abaixo). Falta o usuário testar e publicar.
 - Ao lançar versão nova, manter em sincronia:
   `APP_VERSION` (`src/app-config.js`), `versionName`/`versionCode`
   (`android/app/build.gradle`). O `version.json` do site é gerado sozinho a
   partir do `APP_VERSION` no deploy.
 - `versionName`/`versionCode` ainda são atualizados à mão no `build.gradle`.
+
+## Feito em 21/09 (em cima da 1.9.2, ainda NÃO publicado)
+- **DESEMPENHO — app/site travando (pedido do usuário):**
+  - O tempo da música era atualizado ~60x por segundo (requestAnimationFrame)
+    e forçava o app a redesenhar a cada tick. Agora atualiza 2x por segundo —
+    o relógio mostra segundos, ninguém nota, mas o celular deixa de trabalhar
+    à toa. Mesma lógica de fim de música e de retomar reprodução.
+  - Partículas, anéis de luz (halo) e visualizador do equalizador: desenhavam
+    em resolução máxima e continuavam trabalhando mesmo com o app em segundo
+    plano. Agora a resolução é limitada (visual igual) e o desenho pausa
+    quando a tela não está visível.
+  - Detector de humor do gatinho também pausa quando o app está em segundo
+    plano.
+  - Assinatura da sincronização (que serializa a biblioteca inteira) era
+    recalculada a cada renderização; agora é memoizada (só recalcula quando
+    algo muda de verdade).
+- Descrição ("bio") no Perfil, ao lado da foto: caixa editável até 160
+  caracteres, guardada nos ajustes e sincronizada na conta.
+- Correção de sincronização: a conferência agora inclui a pontuação (`plays`)
+  e, se sobrar algo não enviado, o app reenvia sozinho a cada 15s e ao voltar
+  para a tela.
+- **Pontuações do gatinho agora sincronizam na conta!** Antes ficavam só no
+  aparelho (`nt.petstats`). Agora vão no backup (`petStats` no `index.json`) e
+  mesclam sem nunca diminuir.
 
 ## Ação recorrente
 - De tempos em tempos, lembrar o usuário dos itens pendentes (agora: login com

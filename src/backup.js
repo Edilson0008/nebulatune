@@ -23,7 +23,7 @@ export function dataUrlToBlob(data) {
   return new Blob([bytes], { type: mime })
 }
 
-export async function buildBackup({ library = [], settings, equalizer, lyricSync, playlists = null } = {}) {
+export async function buildBackup({ library = [], settings, equalizer, lyricSync, playlists = null, petStats = null } = {}) {
   const items = []
   for (const t of library) {
     const stored = t.audioBlob || t.coverBlob ? null : await getFile(t.id).catch(() => null)
@@ -53,6 +53,7 @@ export async function buildBackup({ library = [], settings, equalizer, lyricSync
     equalizer: equalizer || null,
     lyricSync: lyricSync || null,
     playlists: Array.isArray(playlists) ? playlists : null,
+    petStats: petStats || null,
   }
 }
 

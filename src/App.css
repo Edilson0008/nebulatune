@@ -2194,6 +2194,31 @@ button {
   font-size: 13px;
 }
 
+.profile-bio {
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-h);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: none;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.profile-bio::placeholder {
+  color: var(--text-2);
+}
+
+.profile-bio:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+}
+
 .most-played {
   display: flex;
   flex-direction: column;
