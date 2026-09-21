@@ -23,15 +23,22 @@ export function dataUrlToBlob(data) {
   return new Blob([bytes], { type: mime })
 }
 
-export async function buildBackup({ library = [], settings, equalizer, lyricSync, playlists = null, petStats = null } = {}) {
+export async function buildBackup(
+  { library = [], settings, equalizer, lyricSync, playlists = null, petStats = null } = {},
+  { includeMedia = false } = {},
+) {
   const items = []
   for (const t of library) {
-    // O arquivo de áudio é o dado mais importante: procura no banco SEMPRE que
-    // faltar na memória. (Antes, ter só a capa em memória fazia o app pular a
-    // busca do áudio — e a música subia para a conta sem som.)
-    const stored =
-      !t.audioBlob || !t.coverBlob ? await getFile(t.id).catch(() => null) : null
-    items.push({
+    // Por padrão NÃO converte o áudio/capa (isso é pesado). O envio real dos
+    // bytes é feito sob demanda no pushBackup, só quando a conta ainda não tem
+    // aquele arquivo. O `includeMedia` é usado pela exportação manual (arquivo).
+    let stored = null
+    if (includeMedia && (!t.audioBlob || !t.coverBlob)) {
+      stored = await getFile(t.id).catch(() => null)
+    }
+    const audioBlob = t.audioBlob || stored?.audioBlob || null
+    const coverBlob = t.coverBlob || stored?.coverBlob || null
+    const item = {
       id: t.id,
       title: t.title,
       artist: t.artist,
@@ -42,10 +49,17 @@ export async function buildBackup({ library = [], settings, equalizer, lyricSync
       plays: t.plays || 0,
       playDays: t.playDays || {},
       addedAt: t.addedAt || Date.now(),
-      audioData: await blobToDataUrl(t.audioBlob || stored?.audioBlob || null),
-      coverData: await blobToDataUrl(t.coverBlob || stored?.coverBlob || null),
       coverRemote: t.coverRemote || null,
-    })
+      // Diz ao servidor se este aparelho TEM o arquivo (para saber se vale
+      // pedir os bytes e enviar). Não é o arquivo em si.
+      hasAudio: Boolean((audioBlob && audioBlob.size) || t.hasAudio === true),
+      hasCover: Boolean(coverBlob && coverBlob.size),
+    }
+    if (includeMedia) {
+      item.audioData = await blobToDataUrl(audioBlob)
+      item.coverData = await blobToDataUrl(coverBlob)
+    }
+    items.push(item)
   }
   return {
     app: 'NebulaTune',

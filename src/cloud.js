@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { SUPABASE_URL, SUPABASE_ANON_KEY, SITE_URL } from './app-config'
 import { blobToDataUrl } from './backup'
+import { getFile } from './storage/db'
 
 export const cloudEnabled = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
 
@@ -259,6 +260,9 @@ export async function pullBackup(userId) {
       exportedAt: index.updatedAt || new Date().toISOString(),
       count: tracks.length,
       missingAudio,
+      // Músicas excluídas na conta (em qualquer aparelho): o aparelho tira da
+      // biblioteca também, para a exclusão valer em todos os lados.
+      removed: index.removed && typeof index.removed === 'object' ? index.removed : null,
       tracks,
       settings: index.settings || null,
       equalizer: index.equalizer || null,
@@ -347,9 +351,33 @@ export async function pushBackup(userId, backup) {
   // Serve de base para MESCLAR em vez de apagar: nada que o outro aparelho
   // salvou (favoritos, plays, pontuações, músicas) é perdido por um envio.
   const prevIndex = await readIndex(userId)
+
+  // Músicas EXCLUÍDAS: a lista vem da conta (apagadas em qualquer aparelho) e
+  // deste aparelho. Sem isso a nuvem "ressuscitava" a música no envio seguinte
+  // (apagava num aparelho e ela voltava a aparecer nos outros).
+  const removedMap = {}
+  const prevRemoved =
+    prevIndex && prevIndex.removed && typeof prevIndex.removed === 'object'
+      ? prevIndex.removed
+      : {}
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
+  for (const [key, ts] of Object.entries(prevRemoved)) {
+    const clean = safeKey(key)
+    if (clean && Number(ts) >= cutoff) removedMap[clean] = Number(ts)
+  }
+  for (const id of Array.isArray(backup.removed) ? backup.removed : []) {
+    const clean = safeKey(id)
+    if (clean) removedMap[clean] = Date.now()
+  }
+  const removed = new Set(Object.keys(removedMap))
+
   const prevMetas = new Map()
   if (prevIndex && Array.isArray(prevIndex.tracks)) {
-    for (const m of prevIndex.tracks) prevMetas.set(m.id, m)
+    for (const m of prevIndex.tracks) {
+      const key = safeKey(m.id)
+      if (!key || removed.has(key)) continue
+      prevMetas.set(key, m)
+    }
   }
 
   const existing = new Set()
@@ -362,17 +390,40 @@ export async function pushBackup(userId, backup) {
   const seenIds = new Set()
   const audioFailures = []
 
+  // Lê o arquivo do aparelho só quando for realmente necessário enviar.
+  const readLocal = async (trackId) => {
+    try {
+      return await getFile(trackId)
+    } catch {
+      return null
+    }
+  }
+
   for (const t of backup.tracks || []) {
+    const id = safeKey(t.id)
+    if (!id || removed.has(id)) continue
     const meta = { ...t }
     delete meta.audioData
     delete meta.coverData
-    const id = safeKey(t.id)
+    delete meta.hasAudio
+    delete meta.hasCover
     seenIds.add(id)
     const prev = prevMetas.get(id)
 
-    if (t.audioData) {
-      const parsed = splitDataUrl(t.audioData)
-      const key = parsed ? `${TRACKS_DIR}/${id}-${t.audioData.length}.bin` : null
+    // ---- ÁUDIO --------------------------------------------------------
+    // Só converte/manda o arquivo quando a conta AINDA NÃO tem este áudio.
+    // (Antes, TODO envio convertia o áudio de TODAS as músicas para base64 —
+    // pesado e travava o app em bibliotecas grandes.)
+    let audioData = typeof t.audioData === 'string' && t.audioData ? t.audioData : null
+    const cloudAudio = prev?.audioKey && existing.has(prev.audioKey) ? prev.audioKey : null
+    if (!audioData && !cloudAudio && (t.hasAudio || t.audioBlob)) {
+      const f = await readLocal(t.id)
+      const blob = t.audioBlob || f?.audioBlob || null
+      if (blob && blob.size) audioData = await blobToDataUrl(blob)
+    }
+    if (audioData) {
+      const parsed = splitDataUrl(audioData)
+      const key = parsed ? `${TRACKS_DIR}/${id}-${audioData.length}.bin` : null
       if (key) {
         meta.audioKey = key
         if (existing.has(key)) {
@@ -410,16 +461,29 @@ export async function pushBackup(userId, backup) {
       } else {
         delete meta.audioKey
       }
+    } else if (cloudAudio) {
+      // A conta já tem este áudio: reaproveita sem reenviar.
+      meta.audioKey = cloudAudio
+      refs.add(cloudAudio)
     } else if (prev?.audioKey) {
       meta.audioKey = prev.audioKey
       refs.add(prev.audioKey)
+    } else {
+      delete meta.audioKey
     }
 
-    if (t.coverData) {
-      const parsed = splitDataUrl(t.coverData)
-      if (parsed) {
-        const key = `${COVERS_DIR}/${id}-${t.coverData.length}.bin`
-        refs.add(key)
+    // ---- CAPA ---------------------------------------------------------
+    let coverData = typeof t.coverData === 'string' && t.coverData ? t.coverData : null
+    const cloudCover = prev?.coverKey && existing.has(prev.coverKey) ? prev.coverKey : null
+    if (!coverData && !cloudCover && (t.hasCover || t.coverBlob)) {
+      const f = await readLocal(t.id)
+      const blob = t.coverBlob || f?.coverBlob || null
+      if (blob && blob.size) coverData = await blobToDataUrl(blob)
+    }
+    if (coverData) {
+      const parsed = splitDataUrl(coverData)
+      const key = parsed ? `${COVERS_DIR}/${id}-${coverData.length}.bin` : null
+      if (key) {
         meta.coverKey = key
         if (!existing.has(key)) {
           const { error } = await storage().upload(
@@ -436,12 +500,26 @@ export async function pushBackup(userId, backup) {
             } else {
               delete meta.coverKey
             }
+          } else {
+            refs.add(key)
           }
+        } else {
+          refs.add(key)
         }
+      } else if (prev?.coverKey) {
+        meta.coverKey = prev.coverKey
+        refs.add(prev.coverKey)
+      } else {
+        delete meta.coverKey
       }
+    } else if (cloudCover) {
+      meta.coverKey = cloudCover
+      refs.add(cloudCover)
     } else if (prev?.coverKey) {
       meta.coverKey = prev.coverKey
       refs.add(prev.coverKey)
+    } else {
+      delete meta.coverKey
     }
 
     // FUNDE com o que o outro aparelho havia salvo — nunca apaga:
@@ -473,15 +551,34 @@ export async function pushBackup(userId, backup) {
     metas.push(prev)
   }
 
-  // Ajustes: a mudança feita NESTE aparelho vence (senão trocar o tema, o nome
-  // ou o equalizador aqui nunca chegaria à conta). O que só existe na nuvem
-  // continua. Letra sincronizada: idem (offset pode ser negativo, então não dá
-  // para usar "o maior").
-  const settings = mergeSettings(backup.settings, prevIndex?.settings)
-  const equalizer = mergeSettings(backup.equalizer, prevIndex?.equalizer)
-  const lyricSync = { ...(prevIndex?.lyricSync || {}), ...(backup.lyricSync || {}) }
-  const playlists = mergePlaylists(backup.playlists, prevIndex?.playlists)
-  const petStats = mergePetStats(backup.petStats, prevIndex?.petStats)
+  // Ajustes: `dirty` diz o que ESTE aparelho mudou desde a última vez que
+  // recebeu a conta. Só nesse caso o valor local vence. Se o aparelho não
+  // mexeu (dirty === false), a CONTA manda — assim um aparelho não sobrescreve
+  // com ajuste velho o que o outro acabou de mudar (era a causa de "as
+  // informações continuam diferentes"). Sem `dirty`, o local vence (compatível).
+  const dirty = backup.dirty && typeof backup.dirty === 'object' ? backup.dirty : {}
+  const settings =
+    dirty.settings === false
+      ? (prevIndex?.settings ?? backup.settings ?? null)
+      : mergeSettings(backup.settings, prevIndex?.settings)
+  const equalizer =
+    dirty.equalizer === false
+      ? (prevIndex?.equalizer ?? backup.equalizer ?? null)
+      : mergeSettings(backup.equalizer, prevIndex?.equalizer)
+  const lyricSync =
+    dirty.lyricSync === false
+      ? (prevIndex?.lyricSync ?? backup.lyricSync ?? null)
+      : { ...(prevIndex?.lyricSync || {}), ...(backup.lyricSync || {}) }
+  const playlists =
+    dirty.playlists === false
+      ? Array.isArray(prevIndex?.playlists)
+        ? prevIndex.playlists
+        : (backup.playlists ?? null)
+      : mergePlaylists(backup.playlists, prevIndex?.playlists)
+  const petStats =
+    dirty.petStats === false
+      ? (prevIndex?.petStats ?? backup.petStats ?? null)
+      : mergePetStats(backup.petStats, prevIndex?.petStats)
 
   const index = {
     v: 3,
@@ -492,6 +589,7 @@ export async function pushBackup(userId, backup) {
     lyricSync,
     playlists,
     petStats,
+    removed: removedMap,
     tracks: metas,
   }
   const { error } = await storage().upload(
@@ -506,7 +604,7 @@ export async function pushBackup(userId, backup) {
   // Devolve o estado FINAL da nuvem (depois da mescla com o que o outro
   // aparelho tinha enviado) para o app mostrar a verdade: a união de tudo.
   // `audioFailures` lista músicas cujo SOM não subiu (o resto subiu normal).
-  return { updatedAt: index.updatedAt, final: index, audioFailures }
+  return { updatedAt: index.updatedAt, final: index, audioFailures, removed: removed.size }
 }
 
 async function cleanupOld(userId, keep) {

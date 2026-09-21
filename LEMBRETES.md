@@ -44,7 +44,7 @@
   próprio app atualiza.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.5 / código 31** (APK real na main +
+- Versão atual publicada/remota: **1.9.6 / código 32** (APK real na main +
   site). Fonte da verdade = GitHub.
 - **ATENÇÃO (21/09):** pasta sincronizada com o GitHub via `git reset --hard
   origin/main` (backups: `%TEMP%\opencode\nebulatune-*.patch`). NÃO trabalhar
@@ -61,6 +61,39 @@
   (`android/app/build.gradle`). O `version.json` do site é gerado sozinho a
   partir do `APP_VERSION` no deploy.
 - `versionName`/`versionCode` ainda são atualizados à mão no `build.gradle`.
+
+## Feito e PUBLICADO em 21/09 (1.9.6/32 na main — a conta manda; exclusão e envio leves)
+- **PEDIDO DO USUÁRIO (21/09):** "o áudio foi, só que sem áudio o som e as outras
+  informações continuam diferente; verifique o projeto todo para ver se está
+  salvando dados no próprio dispositivo e tire isso para ficar apenas da nuvem."
+  Auditoria feita: o aparelho guardava biblioteca (IndexedDB) e ajustes
+  (localStorage `nt.settings`, `nt.petstats`, `nt.equalizer`, `nt.playlists`,
+  `nt.lyricSync`) e podia SOBRESCREVER a conta com esses valores velhos.
+- **CAUSA RAIZ DOS AJUSTES DIFERENTES:** o `pushBackup` usava "valor local
+  sempre vence" — então, ao abrir, o aparelho reenviava a versão DELE por cima do
+  que o outro aparelho tinha acabado de mudar. Agora há o conceito de `dirty`:
+  o app compara o que tem com o que recebeu por último da conta (`baseRef` em
+  `useCloudSync.js`). Se NÃO mudou nada, a CONTA manda; se você mudou, a sua
+  mudança vence e sobe. Ajustes passam a convergir nos dois aparelhos.
+- **EXCLUSÃO DE VERDADE:** antes, apagar uma música no aparelho fazia a nuvem
+  "ressuscitar" ela no envio seguinte (o `pushBackup` re-adicionava o que estava
+  na conta). Agora existe uma lista de excluídas (`removed`) no `index.json`:
+  apagar em um aparelho tira de todos; o aparelho avisa a conta via
+  `cloud.markRemoved` (`removeTrack`/`clearLibrary` em `App.jsx`). Excluídas
+  antigas são esquecidas após 30 dias.
+- **FIM DO VAI-E-VOLTA:** quando um aparelho recebia a conta, ele reenviava na
+  hora e o outro via o envio e reenviava de volta — loop eterno (e reconvertia
+  áudios sem parar). Agora, ao receber, o app adota a assinatura recebida e NÃO
+  devolve, a menos que você tenha mudado algo (`justPulledRef`).
+- **ENVIO LEVE (anti-travamento):** o `buildBackup` não converte mais o áudio de
+  TODAS as músicas para base64 a cada envio. O `pushBackup` só lê/converte o
+  arquivo quando a conta AINDA não tem aquele som (reaproveita `audioKey`
+  existente). Bibliotecas grandes deixam de travar a sincronização.
+- **Auditoria de armazenamento no aparelho:** o que fica local é apenas CACHE/
+  necessário: áudio e capa (para tocar offline), biblioteca (cópia da conta) e
+  estados de tela (`nt.view`, `nt.recent`, `nt.trans`, sessão do login). Nada
+  disso é "dono" dos dados: a conta é a fonte da verdade.
+- Lint 0 erros (13 avisos antigos), build web OK, APK 1.9.6/32 gerado.
 
 ## Feito e PUBLICADO em 21/09 (1.9.5/31 na main — envio à prova de falhas + tudo sobe)
 - **DIAGNÓSTICO (21/09, verificado de verdade):** o servidor Supabase está OK —

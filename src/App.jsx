@@ -89,6 +89,16 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.9.6',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Agora o aparelho OBEDECE à conta nos ajustes: tema, nome, descrição, avatar, velocidade, equalizador, playlists e as pontuações do gatinho passam a ser os da sua conta. Se o aparelho não mexeu em nada, ele NÃO sobrescreve mais a conta com dados velhos — era isso que fazia "as informações continuarem diferentes" entre o site e o celular. Quando você muda algo, a sua mudança sobe na hora e vale em todos os aparelhos.' },
+      { type: 'correcao', text: 'Excluir música agora vale na conta de verdade: antes, a música apagada no aparelho voltava na próxima sincronização (a nuvem "ressuscitava" ela). Agora a exclusão é registrada e a música sai de todos os aparelhos.' },
+      { type: 'correcao', text: 'Fim do "vai-e-volta" entre aparelhos: dois aparelhos na mesma conta não ficam mais se reenviando dados um para o outro sem parar. Quando um aparelho recebe a conta, ele só devolve se você realmente mudou alguma coisa.' },
+      { type: 'correcao', text: 'Envio muito mais leve: o app não converte mais o som de TODAS as músicas a cada sincronização — agora só envia o áudio que a conta ainda não tem. Isso evita travamentos e deixa a sincronização rápida mesmo com a biblioteca cheia.' },
+    ],
+  },
+  {
     version: '1.9.5',
     date: 'Setembro de 2026',
     items: [
@@ -6118,7 +6128,13 @@ function App() {
       // recebimento. Biblioteca, favoritas, pontuações e ajustes passam a
       // refletir a conta a cada sincronização (o aparelho vira só um
       // "cliente" da nuvem, no estilo Spotify).
-      const cloudTracks = tracksFromBackup(data)
+      // Músicas excluídas na conta (em qualquer aparelho) saem daqui também.
+      const removedIds = new Set(
+        data && data.removed && typeof data.removed === 'object'
+          ? Object.keys(data.removed)
+          : [],
+      )
+      const cloudTracks = tracksFromBackup(data).filter((t) => !removedIds.has(t.id))
       const localByCloud = new Map(libraryRef.current.map((t) => [t.id, t]))
       // Mescla cada música baixada com a que já está neste aparelho, para
       // nunca perder favorito/estatísticas locais se a nuvem vier sem eles
@@ -6152,7 +6168,12 @@ function App() {
         }
       })
       const cloudIds = new Set(cloudTracks.map((t) => t.id))
-      const localOnly = libraryRef.current.filter((t) => !cloudIds.has(t.id))
+      // Só ficam no aparelho as músicas que existem na conta OU que foram
+      // adicionadas aqui e ainda não tiveram tempo de subir (pendência, que o
+      // próximo envio leva). O que foi excluído na conta sai daqui também.
+      const localOnly = libraryRef.current.filter(
+        (t) => !cloudIds.has(t.id) && !removedIds.has(t.id),
+      )
       const tracks = [...mergedTracks, ...localOnly]
       libraryRef.current.forEach((t) => {
         if (!cloudIds.has(t.id)) return
@@ -6205,6 +6226,7 @@ function App() {
     loading: loadingLib,
     applyRemote: applyCloudBackup,
   })
+  const markRemoved = cloud.markRemoved
 
   const syncOffset = trackId ? syncOffsets[trackId] || 0 : 0
   const firstLineTime = lyrics?.lines?.[0]?.time
@@ -6226,8 +6248,10 @@ function App() {
       if (t.src) URL.revokeObjectURL(t.src)
       if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl)
       deleteTrack(id).catch(() => {})
+      // Avisa a conta para apagar de verdade (senão a música voltava).
+      markRemoved(id)
     },
-    [library, stopAndReset],
+    [library, stopAndReset, markRemoved],
   )
 
   const clearLibrary = useCallback(() => {
@@ -6240,7 +6264,9 @@ function App() {
     persistedRef.current.clear()
     setLibrary([])
     clearTracks().catch(() => {})
-  }, [library, stopAndReset])
+    // Apaga tudo na conta também (a biblioteca é a mesma em todos os aparelhos).
+    markRemoved(library.map((t) => t.id))
+  }, [library, stopAndReset, markRemoved])
 
   const results = useMemo(() => {
     if (!query) return []

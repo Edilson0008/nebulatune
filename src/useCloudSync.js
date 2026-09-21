@@ -86,6 +86,63 @@ function summarizeCloud(backup) {
   }
 }
 
+// Exclusões pendentes deste aparelho (música apagada aqui que a conta ainda
+// precisa apagar). Fica guardado só até o envio dar certo.
+const REMOVED_KEY = 'nt.removed'
+
+function loadRemovedIds() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(REMOVED_KEY) || '[]')
+    return new Set(Array.isArray(raw) ? raw : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function saveRemovedIds(set) {
+  try {
+    localStorage.setItem(REMOVED_KEY, JSON.stringify([...set]))
+  } catch {
+    /* armazenamento indisponível */
+  }
+}
+
+function sameJson(a, b) {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+}
+
+// Compara o que o aparelho tem AGORA com o que ele recebeu por último da
+// conta. O que estiver diferente foi mexido NESTE aparelho.
+function sectionDirty(data, base) {
+  return {
+    settings: !sameJson(data.settings, base.settings),
+    equalizer: !sameJson(data.equalizer, base.equalizer),
+    lyricSync: !sameJson(data.lyricSync, base.lyricSync),
+    playlists: !sameJson(data.playlists, base.playlists),
+    petStats: !sameJson(data.petStats, base.petStats),
+  }
+}
+
+function anyDirty(dirty) {
+  return Boolean(
+    dirty.settings ||
+      dirty.equalizer ||
+      dirty.lyricSync ||
+      dirty.playlists ||
+      dirty.petStats,
+  )
+}
+
+function baseFrom(data) {
+  return {
+    settings: data?.settings ?? null,
+    equalizer: data?.equalizer ?? null,
+    lyricSync: data?.lyricSync ?? null,
+    playlists: data?.playlists ?? null,
+    petStats: data?.petStats ?? null,
+  }
+}
+
 export function useCloudSync({ library, settings, equalizer, lyricSync, playlists = null, petStats = null, loading, applyRemote }) {
   const [user, setUser] = useState(null)
   const [authReady, setAuthReady] = useState(!cloudEnabled)
@@ -104,6 +161,14 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
   // depois) não apague a mensagem — senão o app dizia "tudo certo" mesmo
   // quando uma música não conseguia subir.
   const pushWarnRef = useRef('')
+  // O que este aparelho recebeu/confirmou por último da conta. Serve para
+  // saber o que ele MUDOU de verdade (só isso sobe; o resto vem da conta).
+  const baseRef = useRef({ settings, equalizer, lyricSync, playlists, petStats })
+  // Exclusões pendentes (feitas neste aparelho, ainda não confirmadas na conta).
+  const removedRef = useRef(null)
+  if (removedRef.current === null) removedRef.current = loadRemovedIds()
+  // Marca que um recebimento da nuvem acabou de acontecer (evita reenvio imediato).
+  const justPulledRef = useRef(false)
 
   const dataRef = useRef({ library, settings, equalizer, lyricSync, playlists, petStats })
   const applyRef = useRef(applyRemote)
@@ -132,11 +197,26 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     busyRef.current = true
     setStatus('syncing')
     try {
-      const backup = await buildBackup(dataRef.current)
-      const res = await pushBackup(id, backup)
+      const data = dataRef.current
+      // Só o que ESTE aparelho mudou desde o último recebimento vira "dirty"
+      // (e, portanto, tem prioridade sobre a conta no envio).
+      const dirty = sectionDirty(data, baseRef.current)
+      const backup = await buildBackup(data)
+      const res = await pushBackup(id, {
+        ...backup,
+        removed: [...removedRef.current],
+        dirty,
+      })
       const finalCloud = res?.final || backup
       pushedSigRef.current = sig
+      justPulledRef.current = false
       if (res?.updatedAt) lastRemoteRef.current = res.updatedAt
+      // Já confirmado na conta: guarda como base e limpa as exclusões enviadas.
+      baseRef.current = baseFrom(finalCloud)
+      if (removedRef.current.size) {
+        removedRef.current.clear()
+        saveRemovedIds(removedRef.current)
+      }
       // Mostra o que está REALMENTE na nuvem após a mescla (a união dos dois
       // aparelhos), não apenas o que este aparelho enviou — assim os dois
       // lados exibem os mesmos números e fica fácil conferir.
@@ -176,6 +256,9 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
       applyingRef.current = true
       await applyRef.current(data)
       armedRef.current = true
+      // A conta é a base: o que este aparelho tem agora é o que ela mandou.
+      baseRef.current = baseFrom(data)
+      justPulledRef.current = true
       // ⚠️ Não marca o estado local como "já enviado" aqui: o envio é sempre
       // feito com o estado DEPOIS de aplicar a nuvem (o próximo ciclo de push
       // manda a versão mesclada de verdade). Assim um aparelho nunca envia
@@ -263,6 +346,16 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     if (!cloudEnabled || !userId || !armedRef.current || applyingRef.current || loading)
       return undefined
     if (dataSig === pushedSigRef.current) return undefined
+    // Acabou de receber da conta: adota como sincronizado e NÃO devolve na
+    // hora — senão um aparelho veria o envio do outro e mandaria de volta,
+    // num vai-e-volta eterno (que ainda reconvertia áudios sem parar).
+    if (justPulledRef.current) {
+      justPulledRef.current = false
+      if (!anyDirty(sectionDirty(dataRef.current, baseRef.current))) {
+        pushedSigRef.current = dataSig
+        return undefined
+      }
+    }
     const t = setTimeout(() => doPush(userId), 5000)
     return () => clearTimeout(t)
   }, [dataSig, userId, loading, doPush])
@@ -274,20 +367,18 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
       if (stopped || busyRef.current || applyingRef.current) return
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
       try {
+        // 1) Se este aparelho tem mudanças que ainda não subiram, sobe PRIMEIRO
+        //    (para não perdê-las ao receber algo que o outro aparelho mudou).
+        const localSig = signature(dataRef.current)
+        if (localSig !== pushedSigRef.current) {
+          await doPush(userId)
+          return
+        }
+        // 2) Nada local pendente: vê se a conta mudou (outro aparelho) e puxa.
         const info = await cloudInfo(userId)
         if (stopped || !info.exists) return
         if (info.updatedAt && info.updatedAt !== lastRemoteRef.current) {
-          // A nuvem mudou: puxa primeiro. O envio de pendências fica para o
-          // próximo ciclo (depois que o estado local refletir o que baixou),
-          // para nunca sobrescrever dados mais novos com dados antigos.
           await doPull(userId, info.updatedAt)
-          return
-        }
-        // Nada novo na nuvem: se sobrou algo local não enviado (ex.: o envio
-        // falhou por falta de internet ou o app foi pausado), manda agora.
-        const localSig = signature(dataRef.current)
-        if (!busyRef.current && !applyingRef.current && localSig !== pushedSigRef.current) {
-          await doPush(userId)
         }
       } catch {
         /* sem internet: tenta de novo no próximo ciclo */
@@ -344,6 +435,20 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     }
   }, [])
 
+  // Marca músicas apagadas NESTE aparelho para a conta apagar também
+  // (sem isso, elas voltavam na próxima sincronização).
+  const markRemoved = useCallback((ids) => {
+    const list = Array.isArray(ids) ? ids : [ids]
+    let changed = false
+    for (const id of list) {
+      const value = String(id || '')
+      if (!value || removedRef.current.has(value)) continue
+      removedRef.current.add(value)
+      changed = true
+    }
+    if (changed) saveRemovedIds(removedRef.current)
+  }, [])
+
   const signOut = useCallback(async () => {
     await signOutCloud()
     armedRef.current = false
@@ -351,6 +456,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     pushedSigRef.current = ''
     lastRemoteRef.current = null
     pushWarnRef.current = ''
+    justPulledRef.current = false
     setStatus('')
     setMessage('')
   }, [])
@@ -386,5 +492,6 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     google,
     signOut,
     syncNow,
+    markRemoved,
   }
 }
