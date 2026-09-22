@@ -88,6 +88,13 @@ function nf(n) {
 // Ao adicionar a próxima versão, REMOVER a mais antiga para entrar a nova.
 const CHANGELOG = [
   {
+    version: '1.9.19',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Backup agora é TUDO num arquivo: além das músicas (com som e capa), ele guarda e restaura também suas configurações (nome, avatar, velocidade, equalizador), o gatinho (toques e moedas), as playlists e a sincronia das letras. Leve para outro aparelho e tudo volta igual.' },
+    ],
+  },
+  {
     version: '1.9.18',
     date: 'Setembro de 2026',
     items: [
@@ -116,15 +123,6 @@ const CHANGELOG = [
       { type: 'novo', text: 'Letra escolhida manualmente é salva na sua conta: os outros aparelhos recebem a letra sem precisar procurar de novo.' },
       { type: 'melhoria', text: 'Card de conta: sumiu a mensagem "ainda não batem". Agora mostra "✅ Dados 100% sincronizados" quando tudo bate, ou "Salvando automaticamente…" nos segundos em que os últimos ajustes sobem sozinhos.' },
       { type: 'correcao', text: 'Realtime usa o mesmo SQL de sempre: rodar o supabase/setup.sql de novo habilita o canal e cria a tabela de letras (é seguro repetir).' },
-    ],
-  },
-  {
-    version: '1.9.15',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Áudio AGORA sobe de verdade para a conta: as músicas entram no banco com o arquivo de som (antes só a linha ia — a música chegava sem som em outro aparelho).' },
-      { type: 'correcao', text: 'Exclusão também apaga o arquivo de som da nuvem (antes só a linha sumia, o arquivo sobrava ocupando espaço).' },
-      { type: 'novo', text: 'Tabela de dados do usuário + gatilho automático no cadastro por e-mail/senha (SQL novo em supabase/setup.sql).' },
     ],
   },
 ]
@@ -4932,7 +4930,7 @@ function ApkDownloadButton() {
   )
 }
 
-function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onImportFolder, onImportDevice, onOpenChangelog, onClearCache, cacheCleanMsg }) {
+function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onImportFolder, onImportDevice, onOpenChangelog, onClearCache, cacheCleanMsg, petStats, playlists, lyricSync }) {
   const [storage, setStorage] = useState(null)
   const [exported, setExported] = useState(false)
   const [imported, setImported] = useState(false)
@@ -5025,6 +5023,10 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
         exportedAt: new Date().toISOString(),
         count: items.length,
         tracks: items,
+        settings: settings || null,
+        petStats: petStats || null,
+        playlists: Array.isArray(playlists) ? playlists : [],
+        lyricSync: lyricSync || null,
       }
       const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
@@ -5056,6 +5058,12 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
           return
         }
         const now = Date.now()
+        const hasConfig = !!(
+          data.settings ||
+          data.petStats ||
+          (Array.isArray(data.playlists) && data.playlists.length) ||
+          data.lyricSync
+        )
         const tracks = data.tracks
           .filter((t) => t && t.audioData)
           .map((t, i) => {
@@ -5078,11 +5086,16 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
               coverUrl: coverBlob ? URL.createObjectURL(coverBlob) : t.coverRemote || null,
             }
           })
-        if (!tracks.length) {
-          window.alert('Nenhuma música com áudio encontrada neste backup.')
+        if (!tracks.length && !hasConfig) {
+          window.alert('Este backup não tem músicas nem configurações para restaurar.')
           return
         }
-        onImport(tracks)
+        onImport(tracks, {
+          settings: data.settings || null,
+          petStats: data.petStats || null,
+          playlists: Array.isArray(data.playlists) ? data.playlists : [],
+          lyricSync: data.lyricSync || null,
+        })
         setImported(true)
         setTimeout(() => setImported(false), 3500)
         refreshStorage()
@@ -5200,24 +5213,24 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
         </div>
         <div className="settings-row">
           <div className="settings-info">
-            <span className="settings-label">Exportar biblioteca</span>
+            <span className="settings-label">Exportar backup</span>
             <span className="settings-desc">
               {library.length
-                ? `Baixa um backup com ${library.length} ${library.length === 1 ? 'música' : 'músicas'} (arquivos de áudio inclusos).`
-                : 'Nenhuma música para exportar.'}
+                ? `TUDO num arquivo só: ${library.length} ${library.length === 1 ? 'música' : 'músicas'} (com som e capa), suas configurações, o gatinho (toques e moedas), as playlists e a sincronia das letras.`
+                : 'Nenhuma música para exportar (ainda assim o backup guarda configurações, gatinho e playlists).'}
             </span>
           </div>
           <div className="settings-actions">
-            <button className="btn-ghost" onClick={exportLibrary} disabled={!library.length || exporting}>
+            <button className="btn-ghost" onClick={exportLibrary} disabled={exporting}>
               {exporting ? 'Exportando…' : exported ? 'Exportado ✓' : 'Exportar backup'}
             </button>
           </div>
         </div>
         <div className="settings-row">
           <div className="settings-info">
-            <span className="settings-label">Importar biblioteca</span>
+            <span className="settings-label">Importar backup</span>
             <span className="settings-desc">
-              Restaura um backup feito aqui. As músicas novas são adicionadas ao que já existe.
+              Restaura tudo do arquivo: músicas novas são adicionadas às que já existem, e configurações, gatinho, playlists e letras voltam a valer.
             </span>
           </div>
           <div className="settings-actions">
@@ -5426,7 +5439,7 @@ function App() {
     setPetGreet(nextPetGreet(appSettings.userName || '', library.length === 0 && !loadingLib))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, loadingLib, library.length, appSettings.userName])
-  const { petStats, bumpPet } = usePetStats()
+  const { petStats, bumpPet, restorePetStats } = usePetStats()
   const topTracks = useMemo(
     () => [...library].sort((a, b) => (b.plays || 0) - (a.plays || 0)).slice(0, 10),
     [library],
@@ -6095,14 +6108,23 @@ setInstallEvt(null)
     [playQueueItem, stopOnline],
   )
 
-  const importLibrary = useCallback((tracks) => {
-    setLibrary((prev) => {
-      const byId = new Set(prev.map((t) => t.id))
-      const fresh = tracks.filter((t) => !byId.has(t.id))
-      return fresh.length ? [...prev, ...fresh] : prev
-    })
+  const importLibrary = useCallback((tracks, extra) => {
+    if (tracks && tracks.length) {
+      setLibrary((prev) => {
+        const byId = new Set(prev.map((t) => t.id))
+        const fresh = tracks.filter((t) => !byId.has(t.id))
+        return fresh.length ? [...prev, ...fresh] : prev
+      })
+    }
+    if (extra) {
+      if (extra.settings && typeof extra.settings === 'object') settingsApi.setAll(extra.settings)
+      if (extra.petStats && typeof extra.petStats === 'object') restorePetStats(extra.petStats)
+      if (Array.isArray(extra.playlists)) setPlaylists(extra.playlists)
+      if (extra.lyricSync && typeof extra.lyricSync === 'object') setSyncOffsets(extra.lyricSync)
+      showToast('Configurações restauradas ✔')
+    }
     setView('biblioteca')
-  }, [])
+  }, [settingsApi, restorePetStats])
 
   const playById = useCallback(
     (id) => {
@@ -7004,6 +7026,9 @@ setInstallEvt(null)
             onClearCache={clearCache}
             cacheCleanMsg={cacheCleanMsg}
             onOpenChangelog={() => setChangelogOpen(true)}
+            petStats={petStats}
+            playlists={playlists}
+            lyricSync={syncOffsets}
           />
         )}
       </main>

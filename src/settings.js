@@ -96,5 +96,16 @@ export function usePetStats() {
     [],
   )
 
-  return { petStats, bumpPet, applyPetStats }
+  // Restauração EXATA (usada ao importar um backup): substitui os contadores
+  // pelos valores do arquivo, diferente do applyPetStats que só faz crescer.
+  const restorePetStats = useMemo(
+    () => (value) => {
+      if (!value || typeof value !== 'object') return
+      const next = { ...PSTAT_DEFAULTS, ...value }
+      setPetStats((s) => ({ ...s, ...next }))
+    },
+    [],
+  )
+
+  return { petStats, bumpPet, applyPetStats, restorePetStats }
 }

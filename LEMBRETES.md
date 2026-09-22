@@ -1,5 +1,14 @@
 # Lembretes
 
+## FEITO e PUBLICADO em 22/09 (1.9.19/45) — backup completo
+- **Exportar/Importar agora guarda TUDO num arquivo só:** músicas (som + capa,
+  favoritas, plays), configurações (`settings`), gatinho (`petStats` —
+  `restorePetStats` faz restauração exata, diferente do `applyPetStats` que só
+  faz crescer), playlists e sincronia das letras (`lyricSync`). Backup sem
+  música também importa (config-only); `onImport(tracks, extra)` aplica o extra
+  via `settingsApi.setAll` + `setPlaylists` + `setSyncOffsets`.
+- Lint 0 erros, build web OK, APK 1.9.19/45 gerado e copiado para o celular.
+
 ## FEITO e PUBLICADO em 22/09 (1.9.18/44) — Design 2.0 + performance + letras
 - **Visual "Design 2.0" cósmico:** tema roxo/rosa/verde/ciano, header (logo +
   badge verde + sino + avatar orbital), habitat do gatinho renovado (pílulas de
@@ -78,7 +87,7 @@
 - Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.18 / código 44** (APK real na main +
+- Versão atual publicada/remota: **1.9.19 / código 45** (APK real na main +
   site). Fonte da verdade = GitHub.
 
 ## FEITO em 22/09 (1.9.17/43) — app 100% local (removida a nuvem)
