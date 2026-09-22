@@ -18,6 +18,7 @@ import {
   canonPetStats,
   entryKey,
   EMPTY_SNAPSHOT,
+  subscribeUserTables,
 } from './cloud'
 
 const POLL_MS = 15000
@@ -135,6 +136,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
   const pushWarnRef = useRef('')
   const baseRef = useRef(null) // snapshot|null: o que a conta tem (última base recebida/gravada)
   const justPulledRef = useRef(false)
+  const checkRef = useRef(null) // lógica de "verifica a conta" — usada no poll e no Realtime
 
   const dataRef = useRef({ library, settings, equalizer, lyricSync, playlists, petStats })
   const applyRef = useRef(applyRemote)
@@ -143,6 +145,10 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     () => snapSignature(snapshotOf({ library, settings, equalizer, lyricSync, playlists, petStats })),
     [library, settings, equalizer, lyricSync, playlists, petStats],
   )
+  // Assinatura da última base recebida de / gravada na nuvem (para o usuário
+  // saber se ainda há algo pendente de subir). Baseamos em estado para a UI
+  // reagir na hora — os refs não disparam render.
+  const [baseSig, setBaseSig] = useState(null)
 
   useEffect(() => {
     dataRef.current = { library, settings, equalizer, lyricSync, playlists, petStats }
@@ -153,6 +159,14 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
   }, [applyRemote])
 
   const userId = user?.id || null
+
+  // Preenche a assinatura da base caso ela já exista sem estado (ex.: após o
+  // seed inicial) — para o card de status saber que não há nada pendente.
+  useEffect(() => {
+    if (userId && seeded && baseSig == null && baseRef.current) {
+      setBaseSig(snapSignature(baseRef.current))
+    }
+  }, [userId, seeded, baseSig])
 
   // ---- PUSH: envia as diferenças deste aparelho para a conta -----------
   const doPush = useCallback(async (id, force = false) => {
@@ -167,6 +181,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
       await pushDiffToDb(id, localSnap, diff, dataRef.current.library || [])
       // A partir de agora, o estado local É a base (o que mandamos).
       baseRef.current = localSnap
+      setBaseSig(snapSignature(localSnap))
       justPulledRef.current = false
       setCloudSummary(summarizeCloud(localSnap))
       setLastSync(new Date())
@@ -202,6 +217,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
       await applyRef.current(remote, baseRef.current)
       armedRef.current = true
       baseRef.current = remote
+      setBaseSig(snapSignature(remote))
       justPulledRef.current = true
       setCloudSummary(summarizeCloud(remote))
       setLastSync(new Date())
@@ -263,6 +279,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
         resolvedForRef.current = null
         setSeeded(false)
         baseRef.current = null
+        setBaseSig(null)
         justPulledRef.current = false
       }
     })
@@ -340,6 +357,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
         /* sem internet: tenta de novo no próximo ciclo */
       }
     }
+    checkRef.current = check
     const timer = setInterval(check, POLL_MS)
     const onVisible = () => {
       if (document.visibilityState === 'visible') check()
@@ -348,11 +366,40 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     window.addEventListener('focus', onVisible)
     return () => {
       stopped = true
+      checkRef.current = null
       clearInterval(timer)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
     }
   }, [userId, loading, doPull, doPush, seeded, initialSync])
+
+  // ---- REALTIME: outro aparelho/site gravou algo? Atualiza na hora ---------
+  // O poll (15s) continua como rede de segurança; o canal Realtime deixa o
+  // resultado aparecer em segundos, sem o usuário fazer nada.
+  useEffect(() => {
+    if (!cloudEnabled || !userId || loading) return undefined
+    let live = true
+    let t = null
+    const unsub = subscribeUserTables(userId, () => {
+      if (!live) return
+      // Evita corrida com o próprio envio: dispara um PULL curto só se estamos
+      // desocupados. Várias mudanças seguidas caem num pulso só.
+      clearTimeout(t)
+      t = setTimeout(() => {
+        if (!live) return
+        try {
+          checkRef.current?.()
+        } catch {
+          /* o próximo evento ou poll resolve */
+        }
+      }, 1200)
+    })
+    return () => {
+      live = false
+      clearTimeout(t)
+      unsub?.()
+    }
+  }, [userId, loading])
 
   // ---- AÇÕES DO USUÁRIO -------------------------------------------------
   const signIn = useCallback(async (email, password) => {
@@ -388,6 +435,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     resolvedForRef.current = null
     setSeeded(false)
     baseRef.current = null
+    setBaseSig(null)
     justPulledRef.current = false
     pushWarnRef.current = ''
     setStatus('')
@@ -426,6 +474,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
       }
       await applyRef.current(empty)
       baseRef.current = snapshotOf(dataRef.current)
+      setBaseSig(snapSignature(baseRef.current))
       setSeeded(true)
       setCloudSummary(null)
       setLastSync(new Date())
@@ -447,6 +496,11 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     message,
     lastSync,
     cloudSummary,
+    // Ainda há mudança local NÃO refletida na nuvem? (sobe sozinha em ~5s)
+    pendingChanges:
+      cloudEnabled && userId && seeded
+        ? baseSig != null && dataSig !== baseSig
+        : false,
     signIn,
     signUp,
     signOut,

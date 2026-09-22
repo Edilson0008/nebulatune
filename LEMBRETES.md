@@ -90,8 +90,32 @@
 - Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.15 / código 41** (APK real na main +
+- Versão atual publicada/remota: **1.9.16 / código 42** (APK real na main +
   site). Fonte da verdade = GitHub.
+
+## FEITO em 22/09 (1.9.16/42) — Realtime + origem da faixa + letra na nuvem
+- **Realtime:** `src/cloud.js` ganhou `subscribeUserTables(userId, cb)` (canal
+  `supabase.channel` escutando `user_settings, tracks, playlists, playlist_tracks,
+  pet_stats, lyric_sync, lyrics` filtrados por `user_id=eq.<id>`). `useCloudSync.js`
+  o usa para disparar um ciclo de verificação em ~1,2s quando QUALQUER tela/app
+  grava algo — atualização entre aparelhos em segundos (o poll de 15s continua
+  como rede de segurança). O SQL ganhou a seção 8 (publicação `supabase_realtime`
+  para as tabelas, idempotente).
+- **Origem da faixa:** "Tocando agora" mostra a pill `☁️ Nuvem` (a música está na
+  conta) ou `📁 Meus Arquivos` (só existe neste aparelho) — CSS `.np-source`.
+- **Letra manual na nuvem:** `applyManualLyrics` chama `saveLyric(userId, trackId,
+  {synced,lines,source,instrumental})` (upsert imediato na tabela `lyrics`). Outros
+  aparelhos recebem via Realtime/poll e o `applyCloudBackup` semeia a letra no
+  cache (`lyricsByTrack`) sem refazer a busca.
+- **Card de conta:** sumiu o "⚠️ ainda não batem". Agora: `status=ok` +
+  `pendingChanges=false` → "✅ Dados 100% sincronizados 🎉"; `pendingChanges=true`
+  → "🚀 Salvando automaticamente…". `pendingChanges` vem do novo estado `baseSig`
+  (assinatura da última base) × `dataSig` (estado local) exposto pelo hook.
+- **PENDENTE (usuário):** rodar o `supabase/setup.sql` NOVO no SQL Editor do
+  Supabase (cria a tabela `lyrics`, RLS e habilita o Realtime). É seguro repetir.
+  Depois disso, verificação automática dos canais pode ser refeita.
+
+## Versões — histórico de publicações
 - **ATENÇÃO (21/09):** pasta sincronizada com o GitHub via `git reset --hard
   origin/main` (backups: `%TEMP%\opencode\nebulatune-*.patch`). NÃO trabalhar
   sobre versão antiga.

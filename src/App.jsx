@@ -23,7 +23,7 @@ import {
   requestNotificationsPermission,
   wasUpdatePrompted,
 } from './updater'
-import { fetchCloudBlob } from './cloud'
+import { fetchCloudBlob, saveLyric } from './cloud'
 import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
 import { updateNowPlaying, hideNowPlaying, onMediaAction } from './mediaNotification'
 
@@ -85,6 +85,17 @@ function nf(n) {
 }
 
 const CHANGELOG = [
+  {
+    version: '1.9.16',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Aparelhos sincronizam na hora: o app agora escuta a nuvem em tempo real (Realtime). O que um aparelho grava aparece no outro em segundos, sem aperta-desaperta nada.' },
+      { type: 'novo', text: '"Tocando agora" mostra a origem da faixa: ☁️ Nuvem (enviada pelo site/conta) ou 📁 Meus Arquivos (só deste aparelho).' },
+      { type: 'novo', text: 'Letra escolhida manualmente é salva na sua conta: os outros aparelhos recebem a letra sem precisar procurar de novo.' },
+      { type: 'melhoria', text: 'Card de conta: sumiu a mensagem "ainda não batem". Agora mostra "✅ Dados 100% sincronizados" quando tudo bate, ou "Salvando automaticamente…" nos segundos em que os últimos ajustes sobem sozinhos.' },
+      { type: 'correcao', text: 'Realtime usa o mesmo SQL de sempre: rodar o supabase/setup.sql de novo habilita o canal e cria a tabela de letras (é seguro repetir).' },
+    ],
+  },
   {
     version: '1.9.15',
     date: 'Setembro de 2026',
@@ -2411,6 +2422,11 @@ function NowPlaying({
           <h2 className="np-title">{track.title}</h2>
           <p className="np-artist">{track.artist}</p>
           {track.album && <p className="np-album">{track.album}</p>}
+          {!isOnline && (
+            <p className="np-source">
+              {track.cloudAudioKey ? '☁️ Nuvem' : '📁 Meus Arquivos'}
+            </p>
+          )}
         </div>
 
         <div className="np-timeline">
@@ -5134,9 +5150,20 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
                 </div>
               </div>
 
-              {cloud.status === 'ok' && (
+              {cloud.status === 'syncing' && (
+                <p className="settings-note">🔄 Sincronizando com a nuvem…</p>
+              )}
+
+              {cloud.status === 'ok' && !cloud.pendingChanges && (
                 <p className="settings-note">
-                  Tudo o que você adicionar aqui aparece também em outros aparelhos, sozinho.
+                  ✅ Dados 100% sincronizados 🎉 Tudo o que você fizer aqui aparece sozinho no site
+                  e em outros aparelhos.
+                </p>
+              )}
+
+              {cloud.status === 'ok' && cloud.pendingChanges && (
+                <p className="settings-note">
+                  🚀 Salvando automaticamente… os últimos ajustes sobem sozinhos em alguns segundos.
                 </p>
               )}
 
@@ -5158,9 +5185,6 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
                   {library.filter((t) => t.fav === true).length} favoritadas
                   {library.filter((t) => t.audioMissing).length > 0
                     ? ` · ${library.filter((t) => t.audioMissing).length} ainda baixando o som`
-                    : ''}
-                  {cloud.cloudSummary.tracks !== library.length
-                    ? ' · ⚠️ ainda não batem — aperte "Sincronizar agora"'
                     : ''}
                 </p>
               )}
@@ -6070,8 +6094,22 @@ function App() {
     (candidate) => {
       if (!trackId) return
       const built = buildLyrics(candidate)
+      const value = built ? { status: 'done', ...built } : { status: 'notfound' }
       loadedLyricsRef.current.add(trackId)
-      storeLyrics(trackId, built ? { status: 'done', ...built } : { status: 'notfound' })
+      storeLyrics(trackId, value)
+      // Salva NA NUVEM imediatamente: os outros aparelhos não precisam
+      // procurar a letra de novo (chega na hora pelo Realtime).
+      const uid = uidRef.current
+      if (uid) {
+        saveLyric(uid, trackId, {
+          synced: value.synced === true,
+          lines: value.lines || [],
+          source: value.source || null,
+          instrumental: value.instrumental === true,
+        }).catch(() => {
+          /* o próximo ciclo de push não cobre letras; mantém local */
+        })
+      }
     },
     [trackId, storeLyrics],
   )
@@ -6152,6 +6190,24 @@ function App() {
         for (const row of data.lyricSync.values()) next[row.trackId] = row.offset
         setSyncOffsets(next)
       }
+      // Letras salvas manualmente em outro aparelho: aproveita aqui também,
+      // sem precisar buscar de novo — desde que este aparelho ainda não tenha
+      // uma letra aberta para a mesma música.
+      if (data.lyrics && data.lyrics instanceof Map) {
+        for (const [trackId, ly] of data.lyrics) {
+          if (!ly) continue
+          if (loadedLyricsRef.current.has(String(trackId))) continue
+          loadedLyricsRef.current.add(String(trackId))
+          storeLyrics(
+            String(trackId),
+            ly.synced && Array.isArray(ly.lines) && ly.lines.length
+              ? { status: 'done', synced: true, lines: ly.lines, source: ly.source || null, instrumental: ly.instrumental === true }
+              : Array.isArray(ly.lines) && ly.lines.length
+                ? { status: 'done', synced: false, lines: ly.lines, source: ly.source || null, instrumental: ly.instrumental === true }
+                : { status: 'notfound' },
+          )
+        }
+      }
       if (data.playlists instanceof Map) {
         const entries = data.playlistEntries instanceof Map ? data.playlistEntries : new Map()
         setPlaylists(
@@ -6172,7 +6228,7 @@ function App() {
         applyPetStats(data.petStats)
       }
     },
-    [eq, settingsApi, applyPetStats],
+    [eq, settingsApi, applyPetStats, storeLyrics],
   )
 
   const cloud = useCloudSync({

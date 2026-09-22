@@ -77,6 +77,16 @@ create table if not exists public.lyric_sync (
   primary key (user_id, track_id)
 );
 
+-- Letras salvas MANUALMENTE (busca manual do usuário). Guarda o resultado para
+-- que os OUTROS aparelhos não precisem buscar a letra de novo.
+create table if not exists public.lyrics (
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  track_id   text not null,
+  data       jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, track_id)
+);
+
 -- 3) SEGURANÇA (RLS): cada usuário só vê/altera as SUAS linhas -------------
 
 alter table public.user_settings enable row level security;
@@ -85,11 +95,12 @@ alter table public.playlists enable row level security;
 alter table public.playlist_tracks enable row level security;
 alter table public.pet_stats enable row level security;
 alter table public.lyric_sync enable row level security;
+alter table public.lyrics enable row level security;
 
 do $$
 declare t text;
 begin
-  foreach t in array array['user_settings','tracks','playlists','playlist_tracks','pet_stats','lyric_sync'] loop
+  foreach t in array array['user_settings','tracks','playlists','playlist_tracks','pet_stats','lyric_sync','lyrics'] loop
     execute format('drop policy if exists "%s_select_own" on public.%s', t, t);
     execute format('drop policy if exists "%s_insert_own" on public.%s', t, t);
     execute format('drop policy if exists "%s_update_own" on public.%s', t, t);
@@ -174,4 +185,25 @@ begin
   execute format('create policy "user_data_insert_own" on public.user_data for insert to authenticated with check (user_id = auth.uid())');
   execute format('create policy "user_data_update_own" on public.user_data for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid())');
   execute format('create policy "user_data_delete_own" on public.user_data for delete to authenticated using (user_id = auth.uid())');
+end $$;
+
+-- 8) REALTIME: habilita o canal em tempo real para as tabelas do usuário ------
+-- Com isso, o app atualiza NA HORA (sem esperar os 15s do ciclo) quando outra
+-- tela/aparelho grava dados. Seguro rodar de novo: ignora tabelas já incluídas
+-- e não quebra se o Realtime estiver desativado no projeto.
+do $$
+declare t text; pub_exists boolean;
+begin
+  select exists (select 1 from pg_publication where pubname = 'supabase_realtime') into pub_exists;
+  if not pub_exists then
+    raise notice 'Realtime nao ativo no projeto; pule esta etapa (sem erro).';
+    return;
+  end if;
+  foreach t in array array['user_settings','tracks','playlists','playlist_tracks','pet_stats','lyric_sync','lyrics','user_data'] loop
+    begin
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    exception
+      when duplicate_object then null;
+    end;
+  end loop;
 end $$;

@@ -100,6 +100,7 @@ export const EMPTY_SNAPSHOT = {
   playlistEntries: new Map(),
   petStats: null,
   lyricSync: new Map(),
+  lyrics: new Map(),
 }
 
 // Linhas com formato fixo (mesma ordem de chaves) para o JSON ser comparável.
@@ -193,6 +194,7 @@ export async function pullFromDb(userId) {
     supabase.from('playlist_tracks').select('*').eq('user_id', userId),
     supabase.from('pet_stats').select('*').eq('user_id', userId).maybeSingle(),
     supabase.from('lyric_sync').select('*').eq('user_id', userId),
+    supabase.from('lyrics').select('*').eq('user_id', userId),
   ]
   const results = await Promise.all(queries)
   const error = results.find((r) => r.error)
@@ -200,7 +202,7 @@ export async function pullFromDb(userId) {
     if (isTablesMissingError(error.error)) error.error.isTablesMissing = true
     throw error.error
   }
-  const [settingsRes, tracksRes, playlistsRes, entriesRes, petRes, lyricRes] = results
+  const [settingsRes, tracksRes, playlistsRes, entriesRes, petRes, lyricRes, lyricsRes] = results
 
   const snapshot = {
     settings: settingsRes.data?.settings ?? null,
@@ -217,6 +219,7 @@ export async function pullFromDb(userId) {
     lyricSync: new Map(
       (lyricRes.data || []).map((r) => [String(r.track_id), canonLyricRow(r.track_id, r.offset)]),
     ),
+    lyrics: new Map((lyricsRes.data || []).map((r) => [String(r.track_id), r.data || null])),
   }
   for (const e of entriesRes.data || []) {
     snapshot.playlistEntries.set(entryKey(e.playlist_id, e.track_id), canonEntryRow(e.playlist_id, e.track_id, e.position))
@@ -524,6 +527,57 @@ export async function fetchCloudBlob(userId, key) {
   return data
 }
 
+// Grava IMEDIATAMENTE uma letra escolhida manualmente (busca manual) na nuvem.
+// Os outros aparelhos recebem no próximo ciclo (ou na hora, via Realtime) e
+// não precisam procurar a letra de novo.
+export async function saveLyric(userId, trackId, value) {
+  if (!supabase || !userId || !trackId) return
+  const { error } = await supabase.from('lyrics').upsert(
+    {
+      user_id: userId,
+      track_id: String(trackId),
+      data: value && typeof value === 'object' ? value : null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id,track_id' },
+  )
+  if (error) throw error
+}
+
+const USER_TABLES = [
+  'user_settings',
+  'tracks',
+  'playlists',
+  'playlist_tracks',
+  'pet_stats',
+  'lyric_sync',
+  'lyrics',
+]
+
+// Escuta mudanças nas tabelas do usuário em TEMPO REAL (Supabase Realtime).
+// Chama `onAnyChange` quando qualquer linha do usuário muda no banco — isto é,
+// quando outro aparelho ou o site gravou algo. Devolve uma função para parar.
+export function subscribeUserTables(userId, onAnyChange) {
+  if (!supabase || !userId || !supabase.channel) return () => {}
+  const channel = supabase
+    .channel(`nebulatune-sync-${userId}`)
+  for (const table of USER_TABLES) {
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table, filter: `user_id=eq.${userId}` },
+      () => onAnyChange?.(table),
+    )
+  }
+  channel.subscribe()
+  return () => {
+    try {
+      supabase.removeChannel(channel)
+    } catch {
+      /* já removido */
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Ajudantes de manutenção de arquivos antigos (legados do sistema em arquivos)
 // ---------------------------------------------------------------------------
@@ -676,6 +730,7 @@ export async function purgeUserData(userId) {
     supabase.from('playlist_tracks').delete().eq('user_id', userId),
     supabase.from('pet_stats').delete().eq('user_id', userId),
     supabase.from('lyric_sync').delete().eq('user_id', userId),
+    supabase.from('lyrics').delete().eq('user_id', userId),
   ])
   await removeLegacyFiles(userId)
   const failed = results.some((r) => r.status === 'rejected' || (r.value && r.value.error))
