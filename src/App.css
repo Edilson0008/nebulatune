@@ -6876,7 +6876,7 @@ button.pet-pill {
 @media (max-width: 900px) {
   .player {
     max-width: 560px;
-    margin: 0 auto 58px;
+    margin: 0 auto 40px;
     left: 0;
     right: 0;
     bottom: 8px;
@@ -6884,7 +6884,7 @@ button.pet-pill {
     padding: 12px 14px;
   }
   .app-native .player {
-    bottom: calc(66px + 10px + env(safe-area-inset-bottom));
+    bottom: calc(66px + 4px + env(safe-area-inset-bottom));
   }
 }
 .player-controls {

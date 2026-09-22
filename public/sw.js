@@ -1,4 +1,4 @@
-const VERSION = '1.9.19'
+const VERSION = '1.9.20'
 const PREFIX = `nebulatune-${VERSION}`
 const CACHE_SHELL = `${PREFIX}-shell`
 const CACHE_ASSETS = `${PREFIX}-assets`

@@ -88,6 +88,13 @@ function nf(n) {
 // Ao adicionar a próxima versão, REMOVER a mais antiga para entrar a nova.
 const CHANGELOG = [
   {
+    version: '1.9.20',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'melhoria', text: 'Mini player mais esperto: ele agora aparece SÓ na tela inicial e só quando você seleciona ou toca uma música — e ficou um pouco mais baixo, perto do canto.' },
+    ],
+  },
+  {
     version: '1.9.19',
     date: 'Setembro de 2026',
     items: [
@@ -112,17 +119,6 @@ const CHANGELOG = [
       { type: 'novo', text: 'NebulaTune voltou a ser 100% local: sem login, sem conta e sem nuvem. O app abre direto na música e tudo (músicas, favoritos, playlists, estatísticas, ajustes e seu gatinho) fica guardado SÓ no seu aparelho.' },
       { type: 'melhoria', text: 'Tudo fica salvo de verdade entre uma abertura e outra: agora o aplicativo lembra sua biblioteca, o equalizador, o gatinho e os ajustes mesmo depois de fechar.' },
       { type: 'melhoria', text: 'Sumiu o card de boas-vindas e a área de "Conta e sincronização" das configurações — nada mais de "Sincronizar agora" nem mensagens de nuvem.' },
-    ],
-  },
-  {
-    version: '1.9.16',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'Aparelhos sincronizam na hora: o app agora escuta a nuvem em tempo real (Realtime). O que um aparelho grava aparece no outro em segundos, sem aperta-desaperta nada.' },
-      { type: 'novo', text: '"Tocando agora" mostra a origem da faixa: ☁️ Nuvem (enviada pelo site/conta) ou 📁 Meus Arquivos (só deste aparelho).' },
-      { type: 'novo', text: 'Letra escolhida manualmente é salva na sua conta: os outros aparelhos recebem a letra sem precisar procurar de novo.' },
-      { type: 'melhoria', text: 'Card de conta: sumiu a mensagem "ainda não batem". Agora mostra "✅ Dados 100% sincronizados" quando tudo bate, ou "Salvando automaticamente…" nos segundos em que os últimos ajustes sobem sozinhos.' },
-      { type: 'correcao', text: 'Realtime usa o mesmo SQL de sempre: rodar o supabase/setup.sql de novo habilita o canal e cria a tabela de letras (é seguro repetir).' },
     ],
   },
 ]
@@ -7033,7 +7029,7 @@ setInstallEvt(null)
         )}
       </main>
 
-      {displayTrack && (
+      {view === 'inicio' && displayTrack && (
         <PlayerBar
           track={displayTrack}
           playing={displayPlaying}
