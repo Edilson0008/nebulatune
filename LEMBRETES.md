@@ -35,9 +35,9 @@
   reset de fábrica one-shot do `main.jsx` e a pill "☁️ Nuvem" (a origem é
   sempre "📁 Meus Arquivos"). Exportar/Importar backup (`backup-completo`)
   continua funcionando 100% local.
-- **PENDENTE (usuário):** apagar o projeto do Supabase no painel
-  (`omusoirnpyduuyeirreo`) — já não é mais usado. O `supabase/setup.sql` fica
-  no repositório só como registro.
+- **FEITO (22/09):** o usuário apagou o projeto do Supabase no painel
+  (`omusoirnpyduuyeirreo`) — confirmado pelo próprio usuário. O
+  `supabase/setup.sql` fica no repositório só como registro.
 
 ## Site publicado (feito)
 - Site oficial no ar: https://edilson0008.github.io/nebulatune/
@@ -235,10 +235,9 @@
   "enviado" antes de aplicar a nuvem (evita reenvio de dados velhos).
 
 ## Ação recorrente
-- De tempos em tempos, lembrar o usuário dos itens pendentes (agora: apagar o
-  projeto Supabase `omusoirnpyduuyeirreo` no painel — o app não usa mais a
-  nuvem — e importar no aparelho o backup exportado do site, caso queira
-  recuperar as músicas da conta antiga).
+- **Pendente agora (usuário):** se quiser recuperar as músicas da conta antiga,
+  exportar o backup no site e importar no aparelho. O projeto Supabase já foi
+  apagado (22/09) — nada mais de nuvem para lembrar.
 
 ## Rodada de melhorias 2 (feito)
 - Fundo da tela "Tocando agora" usa as cores da capa + um brilho (aura) ao redor
