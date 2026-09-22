@@ -88,6 +88,15 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.9.9',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Tela de login galáctica: fundo de estrelas animadas com nebulosas, botão do Google colorido e visual de capricho no navegador E no app.' },
+      { type: 'novo', text: 'Card de boas-vindas na 1ª vez usando o app — mostrado uma única vez e guardado NA SUA CONTA (não repete em outro aparelho).' },
+      { type: 'correcao', text: 'VERSÃO HONESTA: esta versão realmente muda o número que o celular lê (1.9.9/35) — o app antigo não era instalado porque o site ainda dizia versão velha; agora o número sobe de verdade em TODOS os lugares (site + app + tela "Informações").' },
+    ],
+  },
+  {
     version: '1.9.6',
     date: 'Setembro de 2026',
     items: [

@@ -28,3 +28,40 @@ body {
 .welcome-card-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;position:relative}
 .welcome-card-actions .btn-primary{padding:12px 24px}
 .welcome-card-skip{background:none;border:none;color:rgba(255,255,255,.55);font-size:13px;cursor:pointer;padding:6px}
+
+/* ========== Fundo galáctico + botões lindos do login (v1.9.8) ========== */
+.welcome-hero{background:radial-gradient(120% 90% at 50% 0%,rgba(139,92,246,.28),transparent 55%),radial-gradient(90% 70% at 85% 100%,rgba(192,132,252,.18),transparent 55%),radial-gradient(80% 60% at 5% 30%,rgba(56,189,248,.12),transparent 55%),#0b0718}
+.welcome-hero::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(1.4px 1.4px at 12% 18%,#fff,transparent),radial-gradient(1.1px 1.1px at 72% 8%,#fff,transparent),radial-gradient(1.7px 1.7px at 88% 62%,#e2d8ff,transparent),radial-gradient(1.2px 1.2px at 33% 78%,#c4b5fd,transparent),radial-gradient(1.5px 1.5px at 55% 42%,#fff,transparent),radial-gradient(1px 1px at 92% 30%,#fff,transparent),radial-gradient(1.4px 1.4px at 18% 55%,#c4b5fd,transparent),radial-gradient(1.2px 1.2px at 65% 90%,#fff,transparent);background-size:340px 340px;animation:galaxy-twinkle 7s ease-in-out infinite alternate}
+@keyframes galaxy-twinkle{from{opacity:.55}to{opacity:1}}
+.welcome-hero .welcome-logo{background:linear-gradient(135deg,var(--accent,#8b5cf6),var(--accent-2,#c084fc));box-shadow:0 18px 50px rgba(139,92,246,.55),0 0 0 1px rgba(255,255,255,.12),inset 0 1px 0 rgba(255,255,255,.25)}
+.welcome-hero .welcome-google{position:relative;overflow:hidden;transition:transform .18s ease,box-shadow .18s ease;background:linear-gradient(135deg,#fff,#f3efff)}
+.welcome-hero .welcome-google:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(139,92,246,.4)}
+.welcome-hero .welcome-google:active{transform:translateY(0) scale(.98)}
+.welcome-hero .welcome-submit{position:relative;overflow:hidden;transition:transform .18s ease,box-shadow .18s ease;box-shadow:0 14px 34px rgba(139,92,246,.45)}
+.welcome-hero .welcome-submit:hover{transform:translateY(-2px);box-shadow:0 18px 44px rgba(139,92,246,.55)}
+.welcome-hero .welcome-submit:disabled{opacity:.55;transform:none;cursor:not-allowed}
+.welcome-hero .welcome-box{position:relative;border:1px solid rgba(255,255,255,.12);border-radius:22px;background:linear-gradient(160deg,rgba(139,92,246,.12),rgba(255,255,255,.03));backdrop-filter:blur(14px);padding:24px;width:100%;max-width:380px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.welcome-hero .welcome-input{background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.14);border-radius:13px;transition:border-color .18s ease,box-shadow .18s ease}
+.welcome-hero .welcome-input:focus{outline:none;border-color:var(--accent,#8b5cf6);box-shadow:0 0 0 3px rgba(139,92,246,.22)}
+.welcome-hero .welcome-title{font-size:40px}
+.welcome-hero .welcome-tabs{display:flex;gap:6px;background:rgba(0,0,0,.25);padding:4px;border-radius:12px}
+.welcome-hero .welcome-tab.on{background:linear-gradient(135deg,var(--accent,#8b5cf6),var(--accent-2,#c084fc))}
+.welcome-hero .welcome-divider span{background:transparent;padding:0 12px}
+
+/* ==== POLIDO glatico: tela login CERTINHA no celular + botões com brilho (1.9.8) ==== */
+.welcome-hero{min-height:100svh!important;height:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px 20px;gap:18px;position:relative;overflow-y:auto;overflow-x:hidden}
+.welcome-hero::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(1.5px 1.5px at 8% 30%,#fff,transparent 55%),radial-gradient(1px 1px at 25% 75%,#e9d5ff,transparent 55%),radial-gradient(1.8px 1.8px at 42% 12%,#fff,transparent 55%),radial-gradient(1px 1px at 60% 70%,#c4b5fd,transparent 55%),radial-gradient(1.4px 1.4px at 75% 25%,#fff,transparent 55%),radial-gradient(1px 1px at 90% 85%,#e9d5ff,transparent 55%),radial-gradient(1.2px 1.2px at 15% 88%,#fff,transparent 55%),radial-gradient(1px 1px at 80% 55%,#c4b5fd,transparent 55%);background-size:420px 420px;animation:galaxy-twinkle 9s ease-in-out infinite alternate;opacity:.9}
+.welcome-hero .welcome-logo{width:112px;height:112px;border-radius:30px;background:linear-gradient(135deg,var(--accent,#8b5cf6),var(--accent-2,#c084fc));display:flex;align-items:center;justify-content:center;box-shadow:0 18px 50px rgba(139,92,246,.45);font-size:54px;animation:welcome-pop .6s cubic-bezier(.2,.8,.2,1)}
+.welcome-hero .welcome-title{font-size:34px;background:linear-gradient(90deg,var(--accent,#8b5cf6),var(--accent-2,#c084fc));-webkit-background-clip:text;background-clip:text;color:transparent;margin:4px 0 0}
+.welcome-hero .welcome-tag{opacity:.78;max-width:330px;margin:0;font-size:15px}
+.welcome-hero .welcome-facts{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-top:2px}
+.welcome-hero .welcome-tabs{display:flex;gap:5px;background:rgba(255,255,255,.07);padding:4px;border-radius:12px}
+.welcome-hero .welcome-tab{border:none;background:transparent;color:rgba(255,255,255,.7);padding:9px 18px;border-radius:9px;font-size:13px;cursor:pointer}
+.welcome-hero .welcome-tab.on{background:#fff;color:#111;font-weight:700}
+.welcome-hero .welcome-box{position:relative;border:1px solid rgba(255,255,255,.12);border-radius:22px;background:linear-gradient(160deg,rgba(139,92,246,.14),rgba(0,0,0,.32));padding:24px;width:100%;max-width:360px;box-shadow:0 30px 80px rgba(0,0,0,.5);z-index:1}
+.welcome-hero .welcome-input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;font-size:15px;margin-bottom:0}
+.welcome-hero .auth-input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;font-size:15px}
+.welcome-hero .welcome-google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;max-width:340px;padding:13px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:#fff;color:#111;font-weight:600;font-size:15px;cursor:pointer;position:relative;z-index:1}
+.welcome-hero .welcome-submit{width:100%;max-width:360px;padding:14px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--accent,#8b5cf6),var(--accent-2,#c084fc));color:#fff;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 14px 34px rgba(139,92,246,.4);position:relative;z-index:1}
+.welcome-hero .welcome-err{color:#fb7185;font-size:13px;margin:6px 0 0}
+.welcome-hero .welcome-foot{position:absolute;bottom:12px;font-size:11px;opacity:.4;z-index:1}
