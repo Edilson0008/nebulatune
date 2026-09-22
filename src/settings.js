@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { readLocal, writeLocal } from './localstore'
 
-const PSTAT_DEFAULTS = { touches: 0, hearts: 0, sleeps: 0, scares: 0, meows: 0 }
+const PSTAT_DEFAULTS = { touches: 0, hearts: 0, sleeps: 0, scares: 0, meows: 0, coins: 0 }
 
 export const ACCENTS = {
   violet: { name: 'Violeta', accent: '#8b5cf6', accent2: '#c084fc' },
@@ -74,7 +74,7 @@ export function usePetStats() {
   }, [petStats])
 
   const bumpPet = useMemo(
-    () => (key) => setPetStats((s) => ({ ...s, [key]: (s[key] || 0) + 1 })),
+    () => (key, amount = 1) => setPetStats((s) => ({ ...s, [key]: (s[key] || 0) + amount })),
     [],
   )
 
@@ -84,7 +84,7 @@ export function usePetStats() {
     () => (value) => {
       if (!value || typeof value !== 'object') return
       setPetStats((s) => {
-        const keys = ['touches', 'hearts', 'sleeps', 'scares', 'meows']
+        const keys = ['touches', 'hearts', 'sleeps', 'scares', 'meows', 'coins']
         const merged = { ...s }
         for (const k of keys) {
           const v = Number(value[k]) || 0

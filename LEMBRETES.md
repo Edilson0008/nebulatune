@@ -1,5 +1,26 @@
 # Lembretes
 
+## FEITO e PUBLICADO em 22/09 (1.9.18/44) — Design 2.0 + performance + letras
+- **Visual "Design 2.0" cósmico:** tema roxo/rosa/verde/ciano, header (logo +
+  badge verde + sino + avatar orbital), habitat do gatinho renovado (pílulas de
+  humor, orbs, barra 🔔 Toques / 🪙 Moedas / 👻 Sustos), grid "Destaques recentes",
+  player flutuante com shuffle/repeat/cast, capas com play verde, progresso
+  ciano→rosa. A pedido do usuário, a ilha com cristais em baixo do gatinho foi
+  REMOVIDA (o gatinho agora flutua com orbs/glow).
+- **Moedas:** +2 por toque no gatinho e +1 por música iniciada (`countPlay`),
+  gravadas em `nt.petstats`. Sem gasto ainda.
+- **Letras:** busca agora consulta LRCLIB (sincronizada) + lyrics.ovh (fallback
+  simples, aviso "não é sincronizada"); aceite mais flexível + busca manual
+  estruturada.
+- **Performance:** progresso via `ProgressProvider`/`useProgress` (`src/progress.jsx`)
+  — só PlayerBar/NowPlaying/QueueSheet/OnlineView re-renderizam por segundo; App
+  deixou de ter `displayElapsed/duration/progress`; `useMediaSession` virou
+  `MediaSessionBridge`. `PlayerBar`, `NowPlaying`, `MusicRow`, `QuickTrackGrid`
+  memoizados; blur 12px só no habitat/player; `will-change` no canvas/estrelas.
+- **Changelog interno: MÁXIMO 4 versões** (a mais nova no topo). Ao lançar nova
+  versão, REMOVER a mais antiga para entrar a próxima. (Regra do usuário.)
+- Lint 0 erros, build web OK, APK 1.9.18/44 gerado e copiado para o celular.
+
 ## Nuvem / login — REMOVIDO (1.9.17/43, 22/09) → app 100% local
 - **A PEDIDO do usuário:** o NebulaTune não tem mais conta, login, sincronização
   nem servidor. O app abre direto na música e TODOS os dados ficam só no aparelho:
@@ -57,7 +78,7 @@
 - Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.17 / código 43** (APK real na main +
+- Versão atual publicada/remota: **1.9.18 / código 44** (APK real na main +
   site). Fonte da verdade = GitHub.
 
 ## FEITO em 22/09 (1.9.17/43) — app 100% local (removida a nuvem)

@@ -1,5 +1,7 @@
-const CACHE_SHELL = 'nebulatune-shell-v1'
-const CACHE_ASSETS = 'nebulatune-assets-v1'
+const VERSION = '1.9.18'
+const PREFIX = `nebulatune-${VERSION}`
+const CACHE_SHELL = `${PREFIX}-shell`
+const CACHE_ASSETS = `${PREFIX}-assets`
 const SHELL_URLS = ['./', './index.html', './manifest.webmanifest', './nebula.svg', './favicon.svg']
 
 self.addEventListener('install', (event) => {
@@ -18,7 +20,7 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((k) => k !== CACHE_SHELL && k !== CACHE_ASSETS)
+            .filter((k) => !k.startsWith(PREFIX))
             .map((k) => caches.delete(k)),
         ),
       )

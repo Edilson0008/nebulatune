@@ -23,6 +23,7 @@ import {
   wasUpdatePrompted,
 } from './updater'
 import { readLocal, writeLocal, saveMediaBlobs, loadMediaBlobs, deleteMediaBlobs } from './localstore'
+import { ProgressProvider, useProgress } from './progress'
 import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
 import { updateNowPlaying, hideNowPlaying, onMediaAction } from './mediaNotification'
 
@@ -83,7 +84,20 @@ function nf(n) {
   return new Intl.NumberFormat('pt-BR').format(n || 0)
 }
 
+// CHANGELOG: manter no MÁXIMO 4 versões (a mais recente no topo).
+// Ao adicionar a próxima versão, REMOVER a mais antiga para entrar a nova.
 const CHANGELOG = [
+  {
+    version: '1.9.18',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Visual "Design 2.0" cósmico: tema em roxo, rosa, verde e ciano, com o gatinho num habitat novo (pílulas de humor, ilha brilhante e moedas).' },
+      { type: 'novo', text: 'Moedas! Você ganha 🪙 ao tocar no seu gatinho e ao ouvir músicas.' },
+      { type: 'novo', text: '"Destaques recentes" e o player flutuante com botões de repetir e embaralhar; tocar numa música agora carimba play verde nas capas.' },
+      { type: 'melhoria', text: 'Letras com muito mais cobertura: a busca agora consulta dois serviços diferentes e indica quando a letra simples não é sincronizada.' },
+      { type: 'melhoria', text: 'App muito mais leve: o relógio da música não obriga mais a tela inteira a se redesenhar a cada segundo, e o fundo cósmico ficou mais barato para o processador.' },
+    ],
+  },
   {
     version: '1.9.17',
     date: 'Setembro de 2026',
@@ -111,278 +125,6 @@ const CHANGELOG = [
       { type: 'correcao', text: 'Áudio AGORA sobe de verdade para a conta: as músicas entram no banco com o arquivo de som (antes só a linha ia — a música chegava sem som em outro aparelho).' },
       { type: 'correcao', text: 'Exclusão também apaga o arquivo de som da nuvem (antes só a linha sumia, o arquivo sobrava ocupando espaço).' },
       { type: 'novo', text: 'Tabela de dados do usuário + gatilho automático no cadastro por e-mail/senha (SQL novo em supabase/setup.sql).' },
-    ],
-  },
-  {
-    version: '1.9.14',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'Login simplificado: agora é só com e-mail e senha. O "Entrar com Google" saiu para o app ter um único jeito de entrar — e seus dados sempre chegam igual em qualquer aparelho.' },
-    ],
-  },
-  {
-    version: '1.9.12',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Exclusão funciona PRA VALER entre aparelhos: música que você apaga (ou "apagar tudo") no notebook/celular SOME de todos os aparelhos na mesma conta e NÃO volta mais sozinha.' },
-      { type: 'correcao', text: 'Corrigido o "vai-e-vem" da sincronização: o que cada aparelho deleta agora é respeitado na nuvem, em vez de ser "guardado pra reenviar" e ressuscitar.' },
-      { type: 'novo', text: 'APK agora é publicado de VERDADE junto com o site (antes o arquivo do aplicativo não subia, então o app no celular SEMPRE baixava uma versão velha — por isso as correções não chegavam).' },
-    ],
-  },
-  {
-    version: '1.9.11',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Tela de login NÃO fica mais torta pra esquerda (nada mais desalinhado): logo, textos, campos e botões agora são FORÇADOS ao centro, em qualquer altura de celular — curtiu, né? 💜' },
-      { type: 'novo', text: 'Rodapé "Seus dados ficam guardados" foi recolocado no lugar certo: agora ele fica bem embaixo, SEM sobrepor o botão "Entrar com Google".' },
-      { type: 'novo', text: 'Versão de verdade subindo em todo lugar: site, app e changelog internos todos na 1.9.11/37.' },
-    ],
-  },
-  {
-    version: '1.9.10',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Tela de login consertada pra valer: o rodapé "Seus dados ficam guardados" não sobe MAIS em cima do botão do Google (nada mais se sobrepõe) e o logo nunca mais some pra cima em celular baixinho — o conteúdo rola suave e continua centralizado.' },
-      { type: 'novo', text: 'Visual profissional: botões "Continue" e "Entrar com Google" viraram pílulas bem arredondadas com brilho ao pressionar, e os campos ganham realce suave quando você toca neles.' },
-      { type: 'correcao', text: 'Respeita o "recorte" do celular (notch): o conteúdo nunca mais fica espremido nem atrás da câmera/barra de navegação (safe-area).' },
-    ],
-  },
-  {
-    version: '1.9.9',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'Tela de login galáctica: fundo de estrelas animadas com nebulosas, botão do Google colorido e visual de capricho no navegador E no app.' },
-      { type: 'novo', text: 'Card de boas-vindas na 1ª vez usando o app — mostrado uma única vez e guardado NA SUA CONTA (não repete em outro aparelho).' },
-      { type: 'correcao', text: 'VERSÃO HONESTA: esta versão realmente muda o número que o celular lê (1.9.9/35) — o app antigo não era instalado porque o site ainda dizia versão velha; agora o número sobe de verdade em TODOS os lugares (site + app + tela "Informações").' },
-    ],
-  },
-  {
-    version: '1.9.6',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Agora o aparelho OBEDECE à conta nos ajustes: tema, nome, descrição, avatar, velocidade, equalizador, playlists e as pontuações do gatinho passam a ser os da sua conta. Se o aparelho não mexeu em nada, ele NÃO sobrescreve mais a conta com dados velhos — era isso que fazia "as informações continuarem diferentes" entre o site e o celular. Quando você muda algo, a sua mudança sobe na hora e vale em todos os aparelhos.' },
-      { type: 'correcao', text: 'Excluir música agora vale na conta de verdade: antes, a música apagada no aparelho voltava na próxima sincronização (a nuvem "ressuscitava" ela). Agora a exclusão é registrada e a música sai de todos os aparelhos.' },
-      { type: 'correcao', text: 'Fim do "vai-e-volta" entre aparelhos: dois aparelhos na mesma conta não ficam mais se reenviando dados um para o outro sem parar. Quando um aparelho recebe a conta, ele só devolve se você realmente mudou alguma coisa.' },
-      { type: 'correcao', text: 'Envio muito mais leve: o app não converte mais o som de TODAS as músicas a cada sincronização — agora só envia o áudio que a conta ainda não tem. Isso evita travamentos e deixa a sincronização rápida mesmo com a biblioteca cheia.' },
-    ],
-  },
-  {
-    version: '1.9.5',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Músicas que estão na sua conta mas cujo arquivo de som ainda não desceu NÃO somem mais da biblioteca. Antes, uma música vinda sem o som era jogada fora na hora de aplicar — era isso que fazia o aparelho nunca chegar ao mesmo número de músicas da nuvem (ex.: conta com 28, aparelho teimando em 27). Agora ela aparece normalmente, marcada como "sem áudio", e o som baixa na próxima sincronização.' },
-      { type: 'correcao', text: 'Mudanças de ajustes agora SOBEM de verdade: trocar o tema, o nome, a descrição, o avatar, a velocidade ou o equalizador em um aparelho passa a valer na conta (antes a versão antiga da nuvem vencia e a sua mudança era ignorada).' },
-      { type: 'correcao', text: 'O envio do áudio ficou mais garantido: o app agora procura o arquivo de som sempre que ele não estiver carregado, mesmo quando a música já tem capa — antes, ter a capa podia fazer a música subir sem som.' },
-      { type: 'correcao', text: 'Se um arquivo de som falhar ao baixar, o resto da sincronização continua normalmente (antes, um arquivo com problema podia travar o recebimento inteiro).' },
-    ],
-  },
-  {
-    version: '1.9.4',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Sincronização no estilo Spotify: agora todo aparelho APLICA de verdade o que vem da conta — antes, quando você sincronizava, o app podia mostrar "tudo certo" mas não atualizar a biblioteca nem o gatinho com o que veio da nuvem. Agora o aparelho é só um "cliente" da conta: ao sincronizar, ele sobe o que tem (somando com a nuvem) e baixa e aplica a conta completa.' },
-      { type: 'novo', text: 'Para você conferir, as Configurações agora mostram lado a lado: "Na nuvem agora" (o que está guardado na sua conta) e "Neste aparelho" (o que o aparelho tem). Se estiverem diferentes, o app avisa que ainda não bateu — e o "Sincronizar agora" resolve.' },
-      { type: 'correcao', text: 'O recebimento da nuvem nunca mais é "pulado": antes, se o aparelho achasse que já tinha visto aquele conteúdo, ele não aplicava — fazendo a biblioteca e o gatinho ficarem velhos mesmo com a conta atualizada.' },
-    ],
-  },
-  {
-    version: '1.9.3',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'App e site muito mais leves e fluidos: antes, enquanto a música tocava, o app se atualizava ~60 vezes por segundo, mesmo sem precisar, e os efeitos visuais (partículas, anéis de luz e visualizador) continuavam trabalhando com o celular de tela desligada ou em outro app — isso travava e esquentava. Agora o tempo da música atualiza de forma leve, os efeitos pausam sozinhos quando o app não está na frente e usam resolução equilibrada. Mesma aparência, muito menos esforço.' },
-      { type: 'novo', text: 'Descrição no perfil: você pode escrever uma frase sobre você, que fica ao lado da foto e é salva na sua conta.' },
-      { type: 'novo', text: 'As pontuações do gatinho agora são sincronizadas na sua conta: o carinho, a atenção e os momentos com ele ficam somados entre aparelhos (e nunca diminuem).' },
-      { type: 'correcao', text: 'Sincronização mais confiável: se sobrar algo sem enviar para a conta (ex.: sem internet), o app reenvia sozinho a cada poucos segundos e na hora que você volta para o app.' },
-      { type: 'correcao', text: 'Sincronização NUNCA mais apaga dados: antes, quando dois aparelhos usavam a mesma conta, um aparelho podia enviar por cima e apagar favoritos, contagens do gatinho e músicas do outro. Agora a nuvem MESCLA: favoritos se juntam (se qualquer aparelho favoritou, fica favoritado), pontuações do gatinho somam, músicas e playlists não somem — cada aparelho guarda as suas músicas e tudo fica consistente.' },
-      { type: 'correcao', text: 'O botão "Sincronizar agora" agora faz uma sincronização completa e garantida: baixa tudo da conta, junta com o que está no aparelho e envia tudo de volta — nenhum favorito ou pontuação se perde durante o caminho.' },
-    ],
-  },
-  {
-    version: '1.9.1',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'O app agora só redesenha a lista de músicas quando ela muda de verdade: antes, a cada passada do timer (para atualizar o tempo tocando), o app redesenha centenas de linhas da biblioteca sem precisar — agora ele deixa tudo parado e só mexe no que mudou. Listas enormes (700+ músicas) ficam ainda mais leves, sem nenhum trabalho desperdiçado.' },
-    ],
-  },
-  {
-    version: '1.9.0',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'O gatinho agora sente o clima da música de verdade: em música lenta ou triste ele fica triste e desanimado (em vez de insistir em dançar), em música calma ele relaxa, em música alegre ele sorri, em música dançante ele empolga e em música agitada ele vai à loucura. Ele só deixa de ficar triste quando a música realmente melhora — para não ficar oscilando sem parar.' },
-      { type: 'novo', text: 'O humor dele reseta a cada música: quando troca a faixa, o gatinho começa de novo de um humor neutro e vai reagindo ao que está tocando.' },
-      { type: 'correcao', text: 'App mais fluido: o tempo da música na interface é atualizado de forma mais controlada e as listas usam um truque do navegador para rolar com muito menos trabalho — menos travamentos e queda de quadros.' },
-    ],
-  },
-  {
-    version: '1.8.9',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'O balão de fala do gatinho voltou para cima da cabeça dele na tela inicial — antes ele tinha descido para baixo em todas as telas; agora ele só desce na tela "Tocando agora", como sempre foi.' },
-    ],
-  },
-  {
-    version: '1.8.8',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'O balão de fala do gatinho não corta mais na borda da tela nem fica escondido atrás da barra de cima.' },
-    ],
-  },
-  {
-    version: '1.8.7',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'O gatinho reage ao clima da música: triste, calmo, alegre, dançante ou agitado — e com por enquanto o app não precisava mais daquela validação.' },
-      { type: 'correcao', text: 'Corrigido um problema ao tocar uma música dentro de uma playlist pelo "Tocando agora".' },
-    ],
-  },
-  {
-    version: '1.8.6',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Playlists de verdade: agora, ao tocar uma música dentro de uma playlist, as próximas, as anteriores e o aleatório ficam limitados às músicas daquela playlist — antes o app seguia tocando o resto da biblioteca depois da playlist.' },
-    ],
-  },
-  {
-    version: '1.8.5',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'O gatinho agora faz companhia também na tela "Tocando agora": ele fica pertinho da capa da música, com as mesmas reações, carinhos, miados e até a reação ao equalizador.' },
-      { type: 'correcao', text: 'Barra de música da notificação: o tempo gravado já não fica mais parado no final depois de desligar e ligar a tela — o app atualiza a posição da música de tempos em tempos e de novo na hora que a tela volta.' },
-    ],
-  },
-  {
-    version: '1.8.4',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Nome de usuário aparece por inteiro na tela inicial no celular: antes ficava cortado com "…" quando o nome era comprido — agora o cabeçalho organiza em duas linhas (saudação em cima, gatinho e botão embaixo).' },
-    ],
-  },
-  {
-    version: '1.8.3',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'Gatinho virtual no Início: ele anda pela tela, salta, gira, espreguiça, dança e canta junto com a música (e rebola quando o equalizador está com muito grave), fica curioso explorando os botões do app e dorme com zZz.' },
-      { type: 'novo', text: 'Ele reage a você e fala em balõezinhos: toque faz carinho e miado ("adoro!"), dois toques fazem ele girar ("sorte!"), três toques dão um susto ("que susto!"), segurar deixa ele bravo ("grr...") — e ele volta correndo te receber quando você volta ao app.' },
-      { type: 'novo', text: 'Ele também comenta seus gostos: reconhece a música mais tocada ("essa é a tua preferida!"), comemora de 10 em 10 reproduções e favoritas, e reclama quando você fica um tempo sem mexer no app ("que tédio...").' },
-      { type: 'novo', text: 'Nova página "Seu gatinho" no Perfil: mostra quantos toques, corações, sonecas, miados e sustos ele já viveu com você, a frase de humor dele e as capas das suas músicas favoritas.' },
-      { type: 'novo', text: 'Novo ajuste "Som do gatinho" em Configurações → Aparência: liga ou desliga o miado dele.' },
-      { type: 'correcao', text: 'Layout do Perfil arrumado: a caixa de "Nome" agora fica logo abaixo da foto, e o cartão "Seu gatinho" usa as cores do tema (legível no modo escuro).' },
-    ],
-  },
-  {
-    version: '1.8.2',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Corrigido o aviso "Não foi possível salvar a biblioteca": o app não trava mais o banco de dados quando o espaço está curto — se faltar espaço, ele guarda só as informações das músicas (as capas/áudios extras são os primeiros a sair) e a biblioteca nunca mais sumiu.' },
-      { type: 'novo', text: 'Site e app mais fluidos: listas com muitas músicas rolam com muito menos trabalho para o aparelho.' },
-    ],
-  },
-  {
-    version: '1.8.1',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: '"Tocando agora" com visual novo: aquele brilho oval no meio da tela saiu — agora ficam pequenas partículas de luz subindo pela tela e o halo ao redor da capa ganhou "planetas" orbitando em neon suave, confortável para os olhos.' },
-      { type: 'correcao', text: 'Timer de desligar (sleep timer) agora funciona de verdade: usa um alarme exato do celular, então a música para mesmo se o app estiver em segundo plano ou a tela apagada.' },
-      { type: 'correcao', text: 'Fila de reprodução: agora dá para arrastar a música para cima ou para baixo e soltar — a nova ordem fica salva (antes só movia enquanto segurava).' },
-      { type: 'correcao', text: 'Aviso de atualização mais rápido: o app checa versão nova a cada hora em segundo plano e também assim que você abre o app, notificando na hora.' },
-    ],
-  },
-  {
-    version: '1.8.0',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Letra no "Tocando agora": a tela não sobe mais junto com a letra — agora só a letra desliza, acompanhando a música.' },
-      { type: 'novo', text: 'Botão "Limpar cache" nas Configurações: apaga arquivos temporários e sobras de atualizações para liberar espaço (suas músicas não são apagadas).' },
-      { type: 'correcao', text: 'App bem mais leve e fluido: as músicas não são mais reescritas no armazenamento a cada toque (era isso que fazia o espaço crescer sem parar) — e o áudio só é carregado na hora de tocar.' },
-    ],
-  },
-  {
-    version: '1.7.3',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'Novidades e correções agora com destaque: as novidades aparecem em cartões coloridos para ficarem mais fáceis de ver.' },
-    ],
-  },
-  {
-    version: '1.7.2',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'Login com Google funcionando de verdade dentro do app: o navegador abre para você escolher a conta e o app volta logado sozinho.' },
-      { type: 'novo', text: 'Aviso de atualização ponta a ponta: o app mostra a mensagem para atualizar e envia notificação de versão nova direto na barra de notificações.' },
-      { type: 'novo', text: 'Tela "Tocando agora" com visual novo: cores da capa no fundo com brilho animado e anéis de áudio dançando ao redor da capa.' },
-      { type: 'correcao', text: 'Capa da música aparecendo certinha na barra de notificação do celular.' },
-      { type: 'correcao', text: 'Layout de "Importar do aparelho" na Biblioteca sem texto sobreposto.' },
-    ],
-  },
-  {
-    version: '1.4.6',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Música de cortar agora, na troca de faixa, em segundo plano: o serviço de mídia fica SEMPRE ativo enquanto toca (raw de CPU + processo prioritário), então o app não perde desempenho exatamente na hora de carregar a próxima música.' },
-      { type: 'novo', text: 'O Android não deixa mais o player "dormir" entre uma faixa e outra: o serviço de reprodução em segundo plano agora é contínuo (foregroundService), garantindo um embalo sem picotar nem travar.' },
-    ],
-  },
-  {
-
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'A tela "Informações do app" do celular agora mostra a versão certa: o app passou a carimbar a versão real no próprio apk (antes ficava presa em 1.4.0, gravada fixa — por isso a tela nunca mudava).' },
-      { type: 'correcao', text: 'O Android agora reconhece a atualização de verdade (o código interno subiu), então o app para de insistir que "já está na última" quando na real foi instalada uma cópia antiga.' },
-      { type: 'novo', text: 'Verificação reforçada: se a permissão de notificação tiver ficado esquecida ao instalar, o app reavisa em alguns segundos ao abrir — para a barra de mídia nunca mais sumir.' },
-    ],
-  },
-  {
-
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Música deixou de picotar/perder fluidez quando você minimiza o app: agora o app sobe uma barra de mídia nativa (controles da música na barra de notificação), o que garante que o áudio continue suave em segundo plano.' },
-      { type: 'correcao', text: 'Barra de mídia (com capa, título, artista e botões anterior/play-próxima/pular) voltou a aparecer na notificação sempre que você minimiza o app com música tocando.' },
-      { type: 'novo', text: 'A barra de notificação agora responde aos seus toques: play/pause, próxima/anterior, avançar/voltar 10s e arrastar o progresso funcionam direto pela barrinha de mídia.' },
-      { type: 'novo', text: 'O app pede permissão de notificação logo na primeira abertura em celulares novos (Android 13+), para a barra de mídia aparecer sem depender de buscar atualização.' },
-    ],
-  },
-  {
-    version: '1.4.2',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'Primeira publicação ponta-a-ponta do aviso nativo de atualização: ao instalar esta versão, o app passa a te avisar sozinho, pela notificação do sistema, sempre que houver uma versão nova no site.' },
-      { type: 'correcao', text: 'Confirmado o fluxo completo site → aparelho: a versão que o celular tem é a mesma que o site serve (sem divergência entre os dois).' },
-    ],
-  },
-  {
-    version: '1.4.1',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'Som de estúdio profissional: EQ de 10 bandas + presence (clareza) + compressor + limiter — tudo nativo do aparelho, sem enrolação.' },
-      { type: 'correcao', text: 'Música não corta mais quando você volta do segundo plano: o app destrava e dá play na hora.' },
-      { type: 'novo', text: 'A partir de agora, cada atualização troca a versão — e o app avisa sozinho quando tem uma nova pronta para instalar.' },
-      { type: 'correcao', text: 'Layout do "Importar do aparelho" sem sobreposição de texto na Biblioteca.' },
-    ],
-  },
-  {
-    version: '1.4.0',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'Timer de desligar: 10, 20, 30, 60 minutos ou ao fim da música.' },
-      { type: 'novo', text: 'Fundo da tela "Tocando agora" ganha as cores da capa, com brilho animado.' },
-      { type: 'novo', text: 'Visualizador de áudio: anéis que dançam ao redor da capa.' },
-      { type: 'novo', text: 'Arraste as músicas na fila para reordenar.' },
-      { type: 'novo', text: 'Playlists: criar, renomear, apagar e adicionar músicas.' },
-      { type: 'novo', text: 'Estatísticas de reprodução no Perfil (semana, mês, ano e tudo).' },
-      { type: 'novo', text: 'Buscas recentes em um toque.' },
-      { type: 'novo', text: 'Tradução da letra para português dentro do app.' },
-      { type: 'novo', text: 'Controles de mídia do aparelho/teclas multimídia.' },
-      { type: 'novo', text: 'Importar uma pasta (computador) ou as músicas do aparelho (Android).' },
-      { type: 'correcao', text: 'Corrigida a tela preta que impedia o app de abrir.' },
-      { type: 'correcao', text: 'A música agora passa sozinha para a próxima mesmo com a tela desligada ou em segundo plano.' },
-    ],
-  },
-  {
-    version: '1.3.0',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'Login com Google dentro do app.' },
-      { type: 'correcao', text: 'Melhorias na sincronização automática com a conta.' },
     ],
   },
 ]
@@ -429,6 +171,21 @@ function Cover({ colors, image, size = 40, radius = 8 }) {
 
 const random = (a, b) => a + Math.random() * (b - a)
 
+const PET_GREETINGS = [
+  () => 'Sua biblioteca está vazia! Adicione algumas músicas para começarmos. ✨',
+  (n) => (n ? `Olá, ${n}! ✨` : 'Olá! ✨'),
+  (n) => (n ? `Oi, ${n}! Tudo bem? 🐾` : 'Oi! Tudo bem? 🐾'),
+  (n) => (n ? `Opa, ${n}! Que bom te ver! 💜` : 'Opa! Que bom te ver! 💜'),
+  (n) => (n ? `${n}, bora ouvir um som? 🎶` : 'Bora ouvir um som? 🎶'),
+  (n) => (n ? `E aí, ${n}! Pronto pra curtir? ✨` : 'E aí! Pronto pra curtir? ✨'),
+  (n) => (n ? `${n}, você chegou! 🥰` : 'Você chegou! 🥰'),
+  () => 'Tava te esperando! 😻',
+  () => 'Me dá um toque pra eu ronronar. 🐱',
+  () => 'Bora cantar junto? 🎤',
+  () => 'Hoje o clima tá perfeito pra uma música boa! 🌙',
+  () => 'Que tal explorar aquele equalizador? 🎛️',
+]
+
 function PetFriend({
   size = 46,
   playing = false,
@@ -444,6 +201,8 @@ function PetFriend({
   onPetAction = null,
   idleSinceRef = null,
   mood = 'neutral',
+  greetOnMount = null,
+  greetOnMountMs = 4800,
 }) {
   const [anim, setAnim] = useState(null)
   const [burst, setBurst] = useState('')
@@ -470,6 +229,15 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
   const boredTellRef = useRef(0)
   const moodSeenRef = useRef('neutral')
   onActionRef.current = onPetAction
+
+  const greetedRef = useRef(null)
+  useEffect(() => {
+    if (greetOnMount && greetedRef.current !== greetOnMount) {
+      greetedRef.current = greetOnMount
+      say(greetOnMount, greetOnMountMs)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [greetOnMount, greetOnMountMs])
 
   const heavy =
     eqEnabled && ['bass', 'hiphop', 'funk', 'eletro', 'dance', 'rock', 'loudness'].includes(eqPreset)
@@ -1005,6 +773,118 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
   )
 }
 
+function PetHabitatCard({ greeting, greetMs = 4800, stats, onShowProfile = null, ...pet }) {
+  const fmtNum = (n) => {
+    const v = n || 0
+    if (v >= 100000) return `${(v / 1000).toFixed(0)}k`
+    if (v >= 10000) return `${(v / 1000).toFixed(1).replace('.0', '')}k`
+    return String(v)
+  }
+
+  const MOOD_TAGS = {
+    neutral: '😺 Calmo',
+    sing: '🎵 Cantando',
+    hype: '🤩 Empolgado',
+    dancante: '💃 Dançando',
+    alegre: '😻 Alegre',
+    calmo: '😌 Tranquilo',
+    triste: '😿 Triste',
+  }
+  const moodTag = MOOD_TAGS[pet.mood] || '😺 Calmo'
+
+  const bar = [
+    { emoji: '🔔', label: 'Toques', value: stats.touches || 0 },
+    { emoji: '🪙', label: 'Moedas', value: stats.coins || 0 },
+    { emoji: '👻', label: 'Sustos', value: stats.scares || 0 },
+  ]
+
+  return (
+    <div className="pet-habitat">
+      <div className="pet-habitat-glow" />
+      <div className="pet-habitat-head">
+        <span className="pet-habitat-title">✦ Pet Habitat</span>
+        <div className="pet-habitat-pills">
+          <span className="pet-pill">
+            <span className="pill-glyph">⸗</span>
+            {fmtNum(stats.touches || 0)} Toques
+          </span>
+          <button className="pet-pill pet-pill-mood" onClick={onShowProfile} title="Abrir o perfil do gatinho">
+            {moodTag}
+          </button>
+        </div>
+      </div>
+      <div className="pet-habitat-stage">
+        <span className="pet-habitat-orb pet-habitat-orb-1" />
+        <span className="pet-habitat-orb pet-habitat-orb-2" />
+        <PetFriend {...pet} size={148} greetOnMount={greeting} greetOnMountMs={greetMs} />
+      </div>
+      <div className="pet-stats-bar">
+        {bar.map((c) => (
+          <span className="pet-stat-pill" key={c.label} title={`${c.label}: ${c.value}`}>
+            <span className="pet-stat-emoji">{c.emoji}</span>
+            <span className="pet-stat-label">{c.label}</span>
+            <b>{fmtNum(c.value)}</b>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MusicRow({ title, tracks, onPlay }) {
+  if (!tracks || tracks.length === 0) return null
+  return (
+    <div className="music-row">
+      <h2 className="section-title">{title}</h2>
+      <div className="music-row-track">
+        {tracks.map((t) => (
+          <button className="music-card" key={t.id} onClick={() => onPlay(t.id)} tabIndex={0}>
+            <span className="music-card-cover">
+              <Cover colors={t.cover} image={t.coverUrl} size={112} radius={16} />
+              <span className="music-card-play">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </span>
+            </span>
+            <span className="music-card-title">{t.title}</span>
+            <span className="music-card-artist">{t.artist || '—'}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+MusicRow = reactMemo(MusicRow)
+
+function QuickTrackGrid({ tracks, onPlay }) {
+  if (!tracks || tracks.length === 0) return null
+  return (
+    <div className="quick-section">
+      <h2 className="section-title">Destaques recentes</h2>
+      <div className="quick-grid">
+        {tracks.map((t) => (
+          <button className="quick-card" key={t.id} onClick={() => onPlay(t.id)} tabIndex={0}>
+            <span className="quick-cover">
+              <Cover colors={t.cover} image={t.coverUrl} size={48} radius={12} />
+            </span>
+            <span className="quick-meta">
+              <span className="quick-title">{t.title}</span>
+              <span className="quick-artist">{t.artist || '—'}</span>
+            </span>
+            <span className="quick-play">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+QuickTrackGrid = reactMemo(QuickTrackGrid)
+
 function Sidebar({ view, setView, onPickFiles }) {
   return (
     <aside className="sidebar">
@@ -1103,6 +983,79 @@ const BG_STARS = Array.from({ length: 130 }, (_, i) => {
   return { x, y, size, delay: (i * 0.19) % 5.5, dur: 2.2 + (i % 4) * 1.4 }
 })
 
+function SpaceParticles({ count = 26 }) {
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const cv = ref.current
+    if (!cv) return undefined
+    const ctx = cv.getContext('2d')
+    if (!ctx) return undefined
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const parts = Array.from({ length: count }, () => ({
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      r: 0.5 + Math.random() * 1.1,
+      vy: -(0.03 + Math.random() * 0.12),
+      ph: Math.random() * Math.PI * 2,
+      sp: 0.4 + Math.random() * 0.9,
+    }))
+    let raf = 0
+    let running = true
+
+    const resize = () => {
+      cv.width = Math.max(1, Math.round(cv.clientWidth * dpr))
+      cv.height = Math.max(1, Math.round(cv.clientHeight * dpr))
+    }
+
+    const draw = (t) => {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.clearRect(0, 0, cv.clientWidth, cv.clientHeight)
+      const w = cv.clientWidth
+      const h = cv.clientHeight
+      for (const p of parts) {
+        p.y += p.vy
+        if (p.y < -2) {
+          p.y = 102
+          p.x = Math.random() * 100
+        }
+        ctx.globalAlpha = 0.22 + 0.55 * (0.5 + 0.5 * Math.sin(t * 0.001 * p.sp + p.ph))
+        ctx.fillStyle = '#bcd8f2'
+        ctx.beginPath()
+        ctx.arc((p.x / 100) * w, (p.y / 100) * h, p.r, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      ctx.globalAlpha = 1
+      if (running && !reduce) raf = requestAnimationFrame(draw)
+    }
+
+    resize()
+    window.addEventListener('resize', resize)
+    if (reduce) {
+      draw(0)
+    } else {
+      raf = requestAnimationFrame(draw)
+    }
+    const onVis = () => {
+      running = !document.hidden
+      if (running && !reduce && !raf) raf = requestAnimationFrame(draw)
+      else if (!running && raf) {
+        cancelAnimationFrame(raf)
+        raf = 0
+      }
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', resize)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [count])
+
+  return <canvas ref={ref} className="bg-canvas" aria-hidden="true" />
+}
+
 function BackgroundFX({ bgAnimated, cosmosAnimated }) {
   if (!bgAnimated) return null
   const stars = IS_NATIVE ? BG_STARS.slice(0, 42) : BG_STARS
@@ -1116,6 +1069,7 @@ function BackgroundFX({ bgAnimated, cosmosAnimated }) {
           <div className="bg-galaxy" />
         </>
       )}
+      <SpaceParticles count={IS_NATIVE ? 14 : 26} />
       <div className="bg-stars">
         {stars.map((s, i) => (
           <div
@@ -1229,32 +1183,6 @@ function Profile({ settings, api, library, onPlay, petStats }) {
       {petStats && (
         <div className="settings-card">
           <h2 className="section-title">Seu gatinho 🐾</h2>
-          <div className="pet-stats-grid">
-            <div className="pet-stat-chip">
-              <b>{petStats.touches || 0}</b>
-              <span>Toques</span>
-            </div>
-            <div className="pet-stat-chip">
-              <b>{petStats.hearts || 0}</b>
-              <span>Corações</span>
-            </div>
-            <div className="pet-stat-chip">
-              <b>{petStats.sleeps || 0}</b>
-              <span>Sonecas</span>
-            </div>
-            <div className="pet-stat-chip">
-              <b>{petStats.meows || 0}</b>
-              <span>Miados</span>
-            </div>
-            <div className="pet-stat-chip">
-              <b>{petStats.scares || 0}</b>
-              <span>Sustos</span>
-            </div>
-            <div className="pet-stat-chip">
-              <b>{library.filter((t) => t.fav).length}</b>
-              <span>Favoritas</span>
-            </div>
-          </div>
           <div className="pet-mood-line">
             {petStats.touches > 15 && petStats.hearts > 4
               ? 'Muito mimado — vive no carinho!'
@@ -1409,7 +1337,17 @@ const TrackList = reactMemo(function TrackList({
           className={`track-row ${t.id === currentId ? 'active' : ''}`}
           onDoubleClick={() => onSelect(t.id)}
         >
-          <span className="track-num">{t.id === currentId ? '♪' : i + 1}</span>
+          <span className="track-num">
+              {t.id === currentId ? (
+                <span className="track-eq" aria-label="Tocando agora">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              ) : (
+                i + 1
+              )}
+            </span>
           <Cover colors={t.cover} image={t.coverUrl} size={40} />
           <div className="track-main">
             <span className="track-title">{t.title}</span>
@@ -1903,7 +1841,9 @@ function DeviceImport({ tracks, selection, onToggle, onSelectAll, importing, onI
   )
 }
 
-function PlayerBar({ track, playing, onToggle, onNext, onPrev, progress, elapsed, duration, onSeek, onOpen, fav = false, onToggleFavorite, onOpenQueue, isOnline = false, sleepMode = null, sleepRemaining = null, onCancelSleep }) {
+function PlayerBar({ track, playing, onToggle, onNext, onPrev, onSeek, onOpen, fav = false, onToggleFavorite, onOpenQueue, isOnline = false, sleepMode = null, sleepRemaining = null, onCancelSleep, shuffle = false, repeat = 0, onToggleShuffle = null, onCycleRepeat = null }) {
+  const { elapsed, duration } = useProgress()
+  const progress = duration ? elapsed / duration : 0
   const pct = Math.round((progress || 0) * 100)
   const barRef = useRef(null)
   const draggingRef = useRef(false)
@@ -1941,6 +1881,14 @@ function PlayerBar({ track, playing, onToggle, onNext, onPrev, progress, elapsed
           <svg className="player-open-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="m18 15-6-6-6 6" />
           </svg>
+          <button className="icon-btn player-cast" aria-label="Transmitir" title="Transmitir para outro aparelho" hidden={isOnline}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M2 16.1A5 5 0 0 1 5.9 20" />
+              <path d="M2 12.05A9 9 0 0 1 9.95 20" />
+              <path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" />
+              <circle cx="2" cy="20" r="1" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
         </button>
         <button
           className={`icon-btn ${fav ? 'fav-on' : ''}`}
@@ -1964,7 +1912,13 @@ function PlayerBar({ track, playing, onToggle, onNext, onPrev, progress, elapsed
       <div className="player-controls">
         <div className="controls-row">
           {!isOnline && (
-            <button className="icon-btn" aria-label="Aleatório">
+            <button
+              className={`icon-btn ${shuffle ? 'ctl-on' : ''}`}
+              aria-label="Aleatório"
+              title="Modo aleatório"
+              aria-pressed={shuffle}
+              onClick={onToggleShuffle}
+            >
               <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" /></svg>
             </button>
           )}
@@ -1982,8 +1936,15 @@ function PlayerBar({ track, playing, onToggle, onNext, onPrev, progress, elapsed
             <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2-8.86L12.03 12 8 14.86V9.14zM16 6h2v12h-2z" /></svg>
           </button>
           {!isOnline && (
-            <button className="icon-btn" aria-label="Repetir">
+            <button
+              className={`icon-btn ${repeat > 0 ? 'ctl-on' : ''}`}
+              aria-label="Repetir"
+              title={`Repetir: ${repeat === 1 ? 'uma música' : repeat === 2 ? 'tudo' : 'desligado'}`}
+              aria-pressed={repeat > 0}
+              onClick={onCycleRepeat}
+            >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></svg>
+              {repeat === 1 && <span className="rep-one-dot" />}
             </button>
           )}
         </div>
@@ -2032,6 +1993,7 @@ function PlayerBar({ track, playing, onToggle, onNext, onPrev, progress, elapsed
     </footer>
   )
 }
+PlayerBar = reactMemo(PlayerBar)
 
 function NowPlaying({
   track,
@@ -2039,9 +2001,6 @@ function NowPlaying({
   onToggle,
   onNext,
   onPrev,
-  progress,
-  elapsed,
-  duration,
   onSeek,
   onClose,
   repeat,
@@ -2118,6 +2077,8 @@ function NowPlaying({
 
   const lines = lyrics?.status === 'done' ? lyrics.lines : []
   const synced = !!lyrics?.synced
+  const { elapsed, duration } = useProgress()
+  const progress = duration ? elapsed / duration : 0
   const lyricTrans = useLyricsTranslation(lines)
   const lyricTime = elapsed - syncOffset
   let activeIndex = -1
@@ -2720,8 +2681,10 @@ function NowPlaying({
     </div>
   )
 }
+NowPlaying = reactMemo(NowPlaying)
 
-function useMediaSession({ track, playing, elapsed, duration, speed, onToggle, onNext, onPrev, onSeek }) {
+function useMediaSession({ track, playing, speed, onToggle, onNext, onPrev, onSeek }) {
+  const { elapsed, duration } = useProgress()
   const actionsRef = useRef({ onToggle, onNext, onPrev, onSeek })
   const stateRef = useRef({ elapsed, duration, speed })
 
@@ -2920,6 +2883,11 @@ try {
   }, [track])
 }
 
+function MediaSessionBridge({ track, playing, speed, onToggle, onNext, onPrev, onSeek }) {
+  useMediaSession({ track, playing, speed, onToggle, onNext, onPrev, onSeek })
+  return null
+}
+
 const MOOD_WINDOW_MS = 3600
 const MOOD_MIN_AUDIBLE_RATIO = 0.2
 const MOOD_UPBEAT = new Set(['alegre', 'dancante', 'hype'])
@@ -3058,13 +3026,11 @@ function useMoodDetector({ playing, sig }) {
   return mood
 }
 
-function usePlayer(library, speed = 1, onStart) {
+function usePlayer(library, speed = 1, onStart, sink = null) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [elapsed, setElapsed] = useState(0)
-  const [duration, setDuration] = useState(0)
   const lastElapsedRef = useRef(-1)
-  const lastDurationRef = useRef(-1)
+  const lastDurationRef = useRef(0)
   const audioRef = useRef(null)
   const modeRef = useRef('synth')
   const indexRef = useRef(0)
@@ -3078,6 +3044,13 @@ function usePlayer(library, speed = 1, onStart) {
   const [repeat, setRepeat] = useState(0)
   const [shuffle, setShuffle] = useState(false)
   const repeatRef = useRef(0)
+
+  const emitProgress = useCallback(
+    (elapsed, duration) => {
+      sink?.current?.({ elapsed, duration })
+    },
+    [sink],
+  )
   const shuffleRef = useRef(false)
   const [queue, setQueue] = useState([])
   const queueRef = useRef([])
@@ -3166,7 +3139,6 @@ function usePlayer(library, speed = 1, onStart) {
     setCurrentIndex(i)
 
     const finish = () => {
-      setElapsed(0)
       setPlaying(true)
       onStartRef.current?.(i)
     }
@@ -3175,7 +3147,7 @@ function usePlayer(library, speed = 1, onStart) {
       if (audioRef.current) audioRef.current.pause()
       graph.getContext()
       engine.startTrack(i + 1)
-      setDuration(engine.getDuration())
+      emitProgress(0, engine.getDuration())
       finish()
     }
     const startFile = (src, dur) => {
@@ -3185,7 +3157,7 @@ function usePlayer(library, speed = 1, onStart) {
       a.currentTime = 0
       graph.resumeContext()
       playWithRetry(a)
-      setDuration(dur || 0)
+      emitProgress(0, dur || 0)
       finish()
     }
 
@@ -3447,11 +3419,12 @@ function usePlayer(library, speed = 1, onStart) {
     if (modeRef.current === 'file') {
       const a = getAudio()
       if (a.duration) a.currentTime = a.duration * r
+      emitProgress(a.currentTime || 0, a.duration || 0)
     } else if (engine.hasTrack()) {
       engine.seek(engine.getDuration() * r)
-      setElapsed(engine.getElapsed())
+      emitProgress(engine.getElapsed(), engine.getDuration())
     }
-  }, [getAudio])
+  }, [getAudio, emitProgress])
 
   useEffect(() => {
     onEndedRef.current = handleEnded
@@ -3472,14 +3445,11 @@ function usePlayer(library, speed = 1, onStart) {
       if (modeRef.current === 'file') {
         const a = getAudio()
         const e = a.currentTime || 0
-        if (Math.abs(e - lastElapsedRef.current) >= 0.4) {
-          lastElapsedRef.current = e
-          setElapsed(e)
-        }
         const d = a.duration || libRef.current[indexRef.current]?.duration || 0
-        if (d !== lastDurationRef.current) {
+        if (Math.abs(e - lastElapsedRef.current) >= 0.4 || d !== lastDurationRef.current) {
+          lastElapsedRef.current = e
           lastDurationRef.current = d
-          setDuration(d)
+          emitProgress(e, d)
         }
         if (a.ended) {
           handleEnded()
@@ -3488,14 +3458,11 @@ function usePlayer(library, speed = 1, onStart) {
         }
       } else {
         const e = engine.getElapsed()
-        if (Math.abs(e - lastElapsedRef.current) >= 0.4) {
-          lastElapsedRef.current = e
-          setElapsed(e)
-        }
         const d = engine.getDuration() || 0
-        if (d !== lastDurationRef.current) {
+        if (Math.abs(e - lastElapsedRef.current) >= 0.4 || d !== lastDurationRef.current) {
+          lastElapsedRef.current = e
           lastDurationRef.current = d
-          setDuration(d)
+          emitProgress(e, d)
         }
         if (d && engine.getElapsed() >= d - 0.05) handleEnded()
       }
@@ -3539,17 +3506,12 @@ function usePlayer(library, speed = 1, onStart) {
     indexRef.current = 0
     setCurrentIndex(0)
     setPlaying(false)
-    setElapsed(0)
-    setDuration(0)
-  }, [getAudio])
+    emitProgress(0, 0)
+  }, [getAudio, emitProgress])
 
-const progress = duration ? elapsed / duration : 0
   return {
     currentIndex,
     playing,
-    progress,
-    elapsed,
-    duration,
     toggle,
     pausePlayback,
     select,
@@ -3573,11 +3535,9 @@ const progress = duration ? elapsed / duration : 0
   }
 }
 
-function useOnlinePlayer(rate = 1) {
+function useOnlinePlayer(rate = 1, sink = null) {
   const [track, setTrack] = useState(null)
   const [playing, setPlaying] = useState(false)
-  const [elapsed, setElapsed] = useState(0)
-  const [duration, setDuration] = useState(0)
   const [mode, setMode] = useState('full')
   const elRef = useRef(null)
   const trackRef = useRef(null)
@@ -3595,12 +3555,33 @@ function useOnlinePlayer(rate = 1) {
       el.preload = 'auto'
       el.playbackRate = rateRef.current
       el.addEventListener('ended', () => setPlaying(false))
-      el.addEventListener('loadedmetadata', () => setDuration(el.duration || 0))
-      el.addEventListener('durationchange', () => setDuration(el.duration || 0))
+      el.addEventListener('loadedmetadata', () => emitPlayhead())
+      el.addEventListener('durationchange', () => emitPlayhead())
       elRef.current = el
     }
     return elRef.current
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const shownDur = useCallback((elDur) => {
+    const base = elDur || trackRef.current?.duration || trackRef.current?.playDuration || 0
+    return modeRef.current === 'preview' ? Math.min(30, base || 30) : base
+  }, [])
+
+  const emitPlayhead = useCallback(() => {
+    if (!sink) return
+    const el = elRef.current
+    if (!el) return
+    const dur = shownDur(el.duration)
+    sink.current?.({ elapsed: el.currentTime || 0, duration: dur })
+  }, [sink, shownDur])
+
+  const emitAt = useCallback(
+    (elapsed, duration) => {
+      sink?.current?.({ elapsed, duration })
+    },
+    [sink],
+  )
 
   useEffect(
     () => () => {
@@ -3619,16 +3600,15 @@ function useOnlinePlayer(rate = 1) {
     const id = setInterval(() => {
       const el = elRef.current
       const time = el ? el.currentTime || 0 : 0
-      setElapsed(time)
+      emitPlayhead()
       if (modeRef.current === 'preview' && time >= 30) {
         el.pause()
         el.currentTime = 30
-        setElapsed(30)
         setPlaying(false)
       }
     }, 250)
     return () => clearInterval(id)
-  }, [playing])
+  }, [playing, emitPlayhead])
 
   const stop = useCallback(() => {
     const el = getEl()
@@ -3637,11 +3617,10 @@ function useOnlinePlayer(rate = 1) {
     trackRef.current = null
     setTrack(null)
     setPlaying(false)
-    setElapsed(0)
-    setDuration(0)
+    emitAt(0, 0)
     modeRef.current = 'full'
     setMode('full')
-  }, [getEl])
+  }, [getEl, emitAt])
 
   const toggle = useCallback(() => {
     const el = getEl()
@@ -3670,17 +3649,13 @@ function useOnlinePlayer(rate = 1) {
       modeRef.current = nextMode
       setMode(nextMode)
       setTrack(item)
-      setElapsed(0)
-      setDuration(item.duration || item.playDuration || 0)
+      emitAt(0, shownDur(item.duration || item.playDuration || 0))
       el.src = src
       el.load()
       el.play().then(() => setPlaying(true)).catch(() => {})
     },
-    [getEl, toggle],
+    [getEl, toggle, emitAt, shownDur],
   )
-
-  const baseDuration = duration || track?.duration || track?.playDuration || 0
-  const shownDuration = mode === 'preview' ? Math.min(30, baseDuration || 30) : baseDuration
 
   const seek = useCallback(
     (ratio) => {
@@ -3689,18 +3664,15 @@ function useOnlinePlayer(rate = 1) {
       if (!full || !Number.isFinite(full)) return
       const limit = modeRef.current === 'preview' ? Math.min(30, full) : full
       el.currentTime = Math.max(0, Math.min(limit - 0.05, ratio * limit))
-      setElapsed(el.currentTime)
+      emitAt(el.currentTime, shownDur(full))
     },
-    [getEl],
+    [getEl, emitAt, shownDur],
   )
 
   return {
     track,
     playing,
     mode,
-    elapsed,
-    duration: shownDuration,
-    progress: shownDuration ? Math.min(1, elapsed / shownDuration) : 0,
     play,
     toggle,
     seek,
@@ -3764,7 +3736,8 @@ const NOISE_RE =
 
 function cleanTitle(raw) {
   return raw
-    .replace(/[([]\s*[^)\]]*[)\]]/g, (group) => (NOISE_RE.test(group) ? ' ' : group))
+    .replace(/[(（[]\s*[^)\）\]]*[)）\]]/g, (group) => (NOISE_RE.test(group) ? ' ' : group))
+    .replace(/\s*\b(feat\.?|ft\.?|with)\b[^)\]]*/gi, '')
     .replace(/\s*[-–—]\s*topic$/i, '')
     .replace(/\s{2,}/g, ' ')
     .trim()
@@ -3852,16 +3825,54 @@ function buildLyrics(data) {
 async function searchLyrics(query) {
   const q = (query || '').trim()
   if (!q) return []
-  try {
-    const res = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`, {
-      headers: { Accept: 'application/json' },
-    })
-    if (!res.ok) return []
-    const arr = await res.json()
-    return Array.isArray(arr) ? arr : []
-  } catch {
-    return []
+  const get = async (url) => {
+    try {
+      const res = await fetch(url, { headers: { Accept: 'application/json' } })
+      if (!res.ok) return []
+      const arr = await res.json()
+      return Array.isArray(arr) ? arr : []
+    } catch {
+      return []
+    }
   }
+  const results = []
+  const seen = new Set()
+  const push = (arr) => {
+    if (!Array.isArray(arr)) return
+    arr.forEach((c) => {
+      if (c && !seen.has(c.id)) {
+        seen.add(c.id)
+        results.push(c)
+      }
+    })
+  }
+
+  const qUrl = (params) =>
+    `https://lrclib.net/api/search?${Object.entries(params)
+      .filter(([, v]) => v)
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join('&')}`
+
+  push(await get(qUrl({ q })))
+
+  if (!results.length) {
+    const dash = q.split(/\s*[-–—:]\s*/)
+    if (dash.length > 1) {
+      const guessArtist = dash[0]
+      const guessTitle = dash[dash.length - 1]
+      push(
+        await get(
+          qUrl({
+            artist_name: guessArtist.length > 2 ? guessArtist : '',
+            track_name: guessTitle,
+          }),
+        ),
+      )
+    }
+    push(await get(qUrl({ track_name: q })))
+  }
+
+  return results
 }
 
 function titleVariants(raw) {
@@ -3876,7 +3887,16 @@ function titleVariants(raw) {
   ;[' - ', ' | ', ' – '].forEach((sep) => {
     if (base.includes(sep)) out.add(base.split(sep)[0].trim())
   })
-  return [...out].filter(Boolean).slice(0, 3)
+  const withoutParen = base
+    .replace(/[(（][^)）]*[)）]/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  if (withoutParen && withoutParen !== base) out.add(withoutParen)
+  const love = base.replace(/\b(featuring|featuring\.)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  if (love && love !== base) out.add(love)
+  return [...out].filter(Boolean).slice(0, 4)
 }
 
 const normText = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
@@ -3978,8 +3998,52 @@ async function fetchLyrics(title, artist, duration) {
     artistNorms.some((n) => bestArtist === n || bestArtist.includes(n) || n.includes(bestArtist))
   const durationOk =
     !!duration && !!best.duration && Math.abs(best.duration - duration) <= 8
-  if ((hasArtist || duration) && !artistOk && !durationOk) return null
-  return buildLyrics(best)
+  const bestTrackN = normText(best.trackName)
+  const exactTitle = variants.some((v) => normText(v) === bestTrackN)
+  const fuzzyTitle =
+    exactTitle ||
+    (bestTrackN &&
+      (bestTrackN.includes(normText(variants[0])) || normText(variants[0]).includes(bestTrackN)))
+  const synced = !!best.syncedLyrics
+  const accept =
+    (artistOk && durationOk) ||
+    (artistOk && fuzzyTitle) ||
+    (durationOk && fuzzyTitle) ||
+    (synced && exactTitle && !best.instrumental)
+  if (!accept) return null
+  const built = buildLyrics(best)
+  if (built) return built
+  return fetchPlainLyrics(a, variants[0])
+}
+
+/* Letras simples (sem sincronização) — fallback para músicas que
+   não existem no LRCLIB (boa cobertura em português/outros idiomas). */
+async function fetchPlainLyrics(artist, title) {
+  const candidates = []
+  candidates.push({ a: artist, t: title })
+  if (artist) candidates.push({ a: '', t: title })
+  for (const { a, t } of candidates) {
+    if (!a || !t) continue
+    try {
+      const res = await fetch(
+        `https://api.lyrics.ovh/v1/${encodeURIComponent(a)}/${encodeURIComponent(t)}`,
+        { headers: { Accept: 'application/json' } },
+      )
+      if (!res.ok) continue
+      const data = await res.json()
+      const text = data && typeof data.lyrics === 'string' ? data.lyrics : ''
+      if (!text.trim()) continue
+      return {
+        synced: false,
+        lines: text.split('\n').map((l) => ({ time: null, text: l })),
+        source: { provider: 'lyrics.ovh', artistName: a || undefined, trackName: t },
+        fallback: true,
+      }
+    } catch {
+      /* tenta a próxima variação */
+    }
+  }
+  return null
 }
 
 function VSlider({ value, onChange, min = -12, max = 12, step = 1, label, suffix }) {
@@ -4319,7 +4383,9 @@ function Equalizer({ eq }) {
   )
 }
 
-function QueueSheet({ track, progress, elapsed, duration, queue, onPlayItem, onRemoveItem, onMoveItem, onClear, onReorder, onClose }) {
+function QueueSheet({ track, queue, onPlayItem, onRemoveItem, onMoveItem, onClear, onReorder, onClose }) {
+  const { elapsed, duration } = useProgress()
+  const progress = duration ? elapsed / duration : 0
   const listRef = useRef(null)
   const [dragSession, setDragSession] = useState(null)
 
@@ -4477,7 +4543,11 @@ function hashStr(str) {
 
 const ONLINE_GENRES = ['Pop', 'Rock', 'Sertanejo', 'MPB', 'Funk', 'Rap', 'Pagode', 'Eletrônica', 'Bossa Nova', 'Forró']
 
-function OnlineView({ onlineTrack, onlinePlaying, onlineMode, onlineProgress, onlineElapsed, onlineDuration, onPlay, onToggle, onStop, pendingQuery, onConsumedQuery }) {
+function OnlineView({ onlineTrack, onlinePlaying, onlineMode, onPlay, onToggle, onStop, pendingQuery, onConsumedQuery }) {
+  const { elapsed, duration } = useProgress()
+  const onlineProgress = duration ? elapsed / duration : 0
+  const onlineElapsed = elapsed
+  const onlineDuration = duration
   const [q, setQ] = useState(() => pendingQuery || '')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -5334,12 +5404,41 @@ function App() {
   const [now, setNow] = useState(() => new Date())
   const eq = useEqualizer()
   const { settings: appSettings, api: settingsApi } = useSettings()
+  const greetIdxRef = useRef(0)
+  const nextPetGreet = useCallback((name, empty) => {
+    greetIdxRef.current = (greetIdxRef.current + 1) % PET_GREETINGS.length
+    const tpl = PET_GREETINGS[greetIdxRef.current]
+    return empty ? PET_GREETINGS[0]() : tpl(name || '')
+  }, [])
+  const [petGreet, setPetGreet] = useState(null)
+  const [notifOpen, setNotifOpen] = useState(false)
+  const notifRef = useRef(null)
+  useEffect(() => {
+    if (!notifOpen) return undefined
+    const onDown = (e) => {
+      if (!notifRef.current?.contains(e.target)) setNotifOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [notifOpen])
+  useEffect(() => {
+    if (view !== 'inicio') return undefined
+    setPetGreet(nextPetGreet(appSettings.userName || '', library.length === 0 && !loadingLib))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, loadingLib, library.length, appSettings.userName])
   const { petStats, bumpPet } = usePetStats()
+  const topTracks = useMemo(
+    () => [...library].sort((a, b) => (b.plays || 0) - (a.plays || 0)).slice(0, 10),
+    [library],
+  )
   const handlePetAction = useCallback(
     (a) => {
       const map = { touch: 'touches', heart: 'hearts', scared: 'scares', sleep: 'sleeps', meow: 'meows' }
       const k = map[a]
-      if (k) bumpPet(k)
+      if (k) {
+        bumpPet(k)
+        if (k === 'touches') bumpPet('coins', 2)
+      }
     },
     [bumpPet],
   )
@@ -5500,6 +5599,7 @@ function App() {
 
   const countPlay = useCallback((i) => {
     const key = todayKey()
+    if (bumpPet) bumpPet('coins', 1)
     setLibrary((prev) => {
       const t = prev[i]
       if (!t) return prev
@@ -5508,9 +5608,9 @@ function App() {
         x.id === t.id
           ? { ...x, plays: (x.plays || 0) + 1, playDays: { ...days, [key]: (days[key] || 0) + 1 } }
           : x,
-      )
+)
     })
-  }, [])
+  }, [bumpPet])
 
   const [playlists, setPlaylists] = useState(() => readLocal('nt.playlists') || [])
 
@@ -5602,12 +5702,11 @@ function App() {
   const [deviceImporting, setDeviceImporting] = useState(false)
   const [deviceSelection, setDeviceSelection] = useState({})
 
+  const progressSink = useRef(null)
+
   const {
     currentIndex,
     playing,
-    progress,
-    elapsed,
-    duration,
     toggle,
     select,
     playByList: playerPlayByList,
@@ -5628,16 +5727,13 @@ function App() {
     playQueueItem,
     queueAdd,
     queueNext,
-  } = usePlayer(library, appSettings.speed, countPlay)
+  } = usePlayer(library, appSettings.speed, countPlay, progressSink)
 
-  const onlinePlayer = useOnlinePlayer(appSettings.speed)
+  const onlinePlayer = useOnlinePlayer(appSettings.speed, progressSink)
   const {
     track: onlineTrack,
     playing: onlinePlaying,
     mode: onlineMode,
-    elapsed: onlineElapsed,
-    duration: onlineDuration,
-    progress: onlineProgress,
     play: playOnline,
     toggle: toggleOnline,
     seek: seekOnline,
@@ -5656,14 +5752,12 @@ function App() {
   )
   const mood = useMoodDetector({ playing: !!playing, sig: track?.id })
   const displayPlaying = onlineActive ? onlinePlaying : playing
-  const displayProgress = onlineActive ? onlineProgress : progress
-  const displayElapsed = onlineActive ? onlineElapsed : elapsed
-  const displayDuration = onlineActive ? onlineDuration : duration
   const displayToggle = onlineActive ? toggleOnline : toggle
   const displaySeek = onlineActive ? seekOnline : seek
-  const recent = library.slice(0, 8)
-  const favoriteTracks = library.filter((t) => t.fav)
-  const queueTracks = queue.map((id) => library.find((t) => t.id === id)).filter(Boolean)
+  const recent = useMemo(() => library.slice(0, 8), [library])
+  const recentRow = useMemo(() => recent.slice(0, 10), [recent])
+  const favoriteTracks = useMemo(() => library.filter((t) => t.fav), [library])
+  const queueTracks = useMemo(() => queue.map((id) => library.find((t) => t.id === id)).filter(Boolean), [queue, library])
   const [showQueue, setShowQueue] = useState(false)
   const [pendingOnlineQuery, setPendingOnlineQuery] = useState('')
   const [editingTrack, setEditingTrack] = useState(null)
@@ -5702,10 +5796,11 @@ function App() {
   const [sleepEndsAt, setSleepEndsAt] = useState(null)
   const [sleepRemaining, setSleepRemaining] = useState(null)
   const sleepTrackRef = useRef(null)
-  const liveRef = useRef({ playing, onlineActive, displayElapsed, displayDuration })
+  const liveRef = useRef({ playing: false, onlineActive: false })
+  const liveProgressRef = useRef({ elapsed: 0, duration: 0 })
 
   useEffect(() => {
-    liveRef.current = { playing, onlineActive, displayElapsed, displayDuration }
+    liveRef.current = { playing, onlineActive }
   })
 
   const stopSleepTimer = useCallback(() => {
@@ -5727,8 +5822,8 @@ function App() {
         sleepTrackRef.current = displayTrackRef.current?.id || null
         setSleepEndsAt(null)
         setSleepRemaining(null)
-        const live = liveRef.current
-        const remMs = (live.displayDuration - live.displayElapsed) * 1000
+        const p = liveProgressRef.current
+        const remMs = (p.duration - p.elapsed) * 1000
         sleepNativeStart(Date.now() + Math.max(3000, remMs + 1500))
         showToast('Vou parar no fim desta música')
         return
@@ -5759,8 +5854,8 @@ function App() {
         sleepTrackRef.current = currentId
         return
       }
-      const live = liveRef.current
-      if (live.displayDuration > 0 && live.displayElapsed >= live.displayDuration - 0.6) {
+      const live = liveProgressRef.current
+      if (live.duration > 0 && live.elapsed >= live.duration - 0.6) {
         stopSleepTimer()
       }
     }, 500)
@@ -5861,8 +5956,8 @@ function App() {
 
   const alignLyrics = useCallback(() => {
     if (!trackId || !hasTimestamp) return
-    adjustSync(trackId, Math.round((displayElapsed - firstLineTime - syncOffset) * 10) / 10)
-  }, [trackId, hasTimestamp, firstLineTime, displayElapsed, syncOffset, adjustSync])
+    adjustSync(trackId, Math.round((liveProgressRef.current.elapsed - firstLineTime - syncOffset) * 10) / 10)
+  }, [trackId, hasTimestamp, firstLineTime, syncOffset, adjustSync])
 
   const removeTrack = useCallback(
     (id) => {
@@ -5928,18 +6023,6 @@ function App() {
   useEffect(() => {
     graph.setDepth(audioDepth)
   }, [audioDepth])
-
-  useMediaSession({
-    track: displayTrack,
-    playing: displayPlaying,
-    elapsed: displayElapsed,
-    duration: displayDuration,
-    speed: appSettings.speed,
-    onToggle: displayToggle,
-    onNext: nextLocal,
-    onPrev: prevLocal,
-    onSeek: displaySeek,
-  })
 
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
@@ -6366,7 +6449,17 @@ setInstallEvt(null)
 
   // App 100% local: abre direto na tela principal, sem login.
   return (
-    <div
+    <ProgressProvider sinkRef={progressSink} onProgressRef={liveProgressRef}>
+      <MediaSessionBridge
+        track={displayTrack}
+        playing={displayPlaying}
+        speed={appSettings.speed}
+        onToggle={displayToggle}
+        onNext={nextLocal}
+        onPrev={prevLocal}
+        onSeek={displaySeek}
+      />
+      <div
       className={`app ${IS_NATIVE ? 'app-native' : ''}`}
       id="top"
       onDrop={onDrop}
@@ -6406,28 +6499,43 @@ setInstallEvt(null)
       )}
 
       <main className="main">
-        <header className={`topbar ${IS_NATIVE ? 'app-topbar' : ''}`}>
-          {IS_NATIVE ? (
+        <header className={`topbar ${IS_NATIVE || view === 'inicio' ? 'app-topbar' : ''}`}>
+          {IS_NATIVE || view === 'inicio' ? (
             <>
               <div className="app-brand">
                 <span className="app-brand-logo">✦</span>
                 <span>NebulaTune</span>
                 <span className="app-version-chip">v{APP_VERSION}</span>
               </div>
-              <button
-                className="user-btn app-user"
-                onClick={() => setView('perfil')}
-                title={appSettings.userName || 'Perfil'}
-                aria-label="Abrir perfil"
-              >
-                {appSettings.avatar ? (
-                  <img className="user-btn-avatar" src={appSettings.avatar} alt="" />
-                ) : (
-                  appSettings.userName
-                    ? appSettings.userName.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'NT'
-                    : 'NT'
-                )}
-              </button>
+              <span className="topbar-actions">
+                <button
+                  className={`notification-btn ${notifOpen ? 'on' : ''}`}
+                  onClick={() => setNotifOpen((v) => !v)}
+                  aria-label="Notificações"
+                  aria-haspopup="true"
+                  aria-expanded={notifOpen}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+                  </svg>
+                  <span className="notification-dot" />
+                </button>
+                <button
+                  className="user-btn app-user"
+                  onClick={() => setView('perfil')}
+                  title={appSettings.userName || 'Perfil'}
+                  aria-label="Abrir perfil"
+                >
+                  {appSettings.avatar ? (
+                    <img className="user-btn-avatar" src={appSettings.avatar} alt="" />
+                  ) : (
+                    appSettings.userName
+                      ? appSettings.userName.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'NT'
+                      : 'NT'
+                  )}
+                </button>
+              </span>
             </>
           ) : (
             <>
@@ -6457,16 +6565,48 @@ setInstallEvt(null)
                 />
               </div>
               <span className="app-version-chip">v{APP_VERSION}</span>
-              <button className="user-btn" onClick={() => setView('perfil')} title={appSettings.userName || 'Perfil'} aria-label="Abrir perfil">
-                {appSettings.avatar ? (
-                  <img className="user-btn-avatar" src={appSettings.avatar} alt="" />
-                ) : (
-                  appSettings.userName
-                    ? appSettings.userName.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'NT'
-                    : 'NT'
-                )}
-              </button>
+              <span className="topbar-actions">
+                <button
+                  className={`notification-btn ${notifOpen ? 'on' : ''}`}
+                  onClick={() => setNotifOpen((v) => !v)}
+                  aria-label="Notificações"
+                  aria-haspopup="true"
+                  aria-expanded={notifOpen}
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+                  </svg>
+                  <span className="notification-dot" />
+                </button>
+                <button className="user-btn" onClick={() => setView('perfil')} title={appSettings.userName || 'Perfil'} aria-label="Abrir perfil">
+                  {appSettings.avatar ? (
+                    <img className="user-btn-avatar" src={appSettings.avatar} alt="" />
+                  ) : (
+                    appSettings.userName
+                      ? appSettings.userName.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'NT'
+                      : 'NT'
+                  )}
+                </button>
+              </span>
             </>
+          )}
+          {notifOpen && (
+            <div className="notif-panel" ref={notifRef}>
+              <span className="notif-panel-title">Notificações</span>
+              <div className="notif-item">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 8v4l3 2" /><circle cx="12" cy="12" r="9" /></svg>
+                <span>App na versão mais recente: <b>v{APP_VERSION}</b>.</span>
+              </div>
+              <div className="notif-item">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M10 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM18 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM10 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM18 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" /></svg>
+                <span>Toque no gatinho para fazer carinho e ouvir suas reações.</span>
+              </div>
+              <div className="notif-item">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2 3 14h8l-1 8 11-14h-8z" /></svg>
+                <span>Novo visual: Pet Habitat, mini player flutuante e espaço animado.</span>
+              </div>
+            </div>
           )}
         </header>
 
@@ -6500,27 +6640,31 @@ setInstallEvt(null)
                   : `${greetingForHour(now.getHours())} ✦`}
               </h1>
               <span className="lib-head-right">
-                <PetFriend
-                  size={46}
-                  playing={!!playing}
-                  eqEnabled={eq.settings.enabled}
-                  eqPreset={eq.settings.preset}
-                  favPing={favPing}
-                  shuffle={shuffle}
-                  trackId={track?.id || null}
-                  sleepMode={sleepMode}
-                  sleepRemaining={sleepRemaining}
-                  soundOn={appSettings.petSound !== false}
-                  cheer={cheer}
-                  idleSinceRef={idleSinceRef}
-                  onPetAction={handlePetAction}
-                  mood={mood}
-                />
                 <button className="btn-primary" onClick={() => fileInputRef.current?.click()}>
                   + Adicionar músicas
                 </button>
               </span>
             </div>
+
+            <PetHabitatCard
+              greeting={petGreet}
+              greetMs={!loadingLib && library.length === 0 ? 0 : 4800}
+              stats={petStats}
+              onShowProfile={() => setView('perfil')}
+              playing={!!playing}
+              eqEnabled={eq.settings.enabled}
+              eqPreset={eq.settings.preset}
+              favPing={favPing}
+              shuffle={shuffle}
+              trackId={track?.id || null}
+              sleepMode={sleepMode}
+              sleepRemaining={sleepRemaining}
+              soundOn={appSettings.petSound !== false}
+              cheer={cheer}
+              idleSinceRef={idleSinceRef}
+              onPetAction={handlePetAction}
+              mood={mood}
+            />
 
             {loadingLib ? (
               <div className="empty-state">
@@ -6550,17 +6694,10 @@ setInstallEvt(null)
               </div>
             ) : (
               <>
-                <div className="quick-tile-area">
-                  {recent.slice(0, 6).map((t) => (
-                    <button className="quick-tile" key={t.id} onClick={() => playById(t.id)}>
-                      <Cover colors={t.cover} image={t.coverUrl} size={48} radius={6} />
-                      <span>{t.title}</span>
-                      <span className="tile-play">
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                {topTracks.length > 0 && <MusicRow title="Mais tocadas" tracks={topTracks} onPlay={playById} />}
+                {recentRow.length > 0 && <MusicRow title="Recentes" tracks={recentRow} onPlay={playById} />}
+
+                <QuickTrackGrid tracks={library.slice(0, 2)} onPlay={playById} />
 
                 <div className="section">
                   <h2 className="section-title">Todas as músicas</h2>
@@ -6837,9 +6974,6 @@ setInstallEvt(null)
             onlineTrack={onlineTrack}
             onlinePlaying={onlinePlaying}
             onlineMode={onlineMode}
-            onlineProgress={onlineProgress}
-            onlineElapsed={onlineElapsed}
-            onlineDuration={onlineDuration}
             onPlay={startOnline}
             onToggle={toggleOnline}
             onStop={stopOnline}
@@ -6881,9 +7015,6 @@ setInstallEvt(null)
           onToggle={displayToggle}
           onNext={nextLocal}
           onPrev={prevLocal}
-          progress={displayProgress}
-          elapsed={displayElapsed}
-          duration={displayDuration}
           onSeek={displaySeek}
           onOpen={() => setShowNowPlaying(true)}
           fav={displayTrack.fav}
@@ -6893,6 +7024,10 @@ setInstallEvt(null)
           sleepMode={sleepMode}
           sleepRemaining={sleepRemaining}
           onCancelSleep={stopSleepTimer}
+          shuffle={shuffle}
+          repeat={repeat}
+          onToggleShuffle={toggleShuffle}
+          onCycleRepeat={cycleRepeat}
         />
       )}
 
@@ -6904,9 +7039,6 @@ setInstallEvt(null)
           onToggle={displayToggle}
           onNext={nextLocal}
           onPrev={prevLocal}
-          progress={displayProgress}
-          elapsed={displayElapsed}
-          duration={displayDuration}
           onSeek={displaySeek}
           onClose={() => setShowNowPlaying(false)}
           repeat={repeat}
@@ -6950,9 +7082,6 @@ setInstallEvt(null)
       {showQueue && track && (
         <QueueSheet
           track={track}
-          progress={progress}
-          elapsed={elapsed}
-          duration={duration}
           queue={queueTracks}
           onPlayItem={queueItemLocal}
           onRemoveItem={removeFromQueue}
@@ -7074,6 +7203,7 @@ setInstallEvt(null)
         </div>
       )}
     </div>
+    </ProgressProvider>
   )
 }
 
