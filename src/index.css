@@ -80,3 +80,11 @@ body {
 .welcome-hero .welcome-input:focus,.welcome-hero .auth-input:focus{background:rgba(255,255,255,.09)}
 .welcome-hero .welcome-google svg{width:20px;height:20px}
 .welcome-hero .welcome-tabs{width:100%;max-width:360px}
+
+/* ==== v1.9.11: selo ANTI-TORTA — nada pode nascer deslocado (text-align + margin 0 auto em tudo) ==== */
+.welcome-hero{text-align:center}
+.welcome-hero>*{text-align:center}
+.welcome-hero .welcome-brand{margin-left:auto;margin-right:auto;align-items:center}
+.welcome-hero .welcome-box,.welcome-hero .welcome-tabs,.welcome-hero .welcome-tab,.welcome-hero .welcome-submit,.welcome-hero .welcome-google,.welcome-hero .welcome-divider,.welcome-hero .welcome-facts,.welcome-hero .welcome-alt{margin-left:auto;margin-right:auto}
+.welcome-hero .welcome-title,.welcome-hero h1,.welcome-hero p,.welcome-hero .welcome-tag,.welcome-hero .welcome-tagline{text-align:center;margin-left:auto;margin-right:auto}
+.welcome-hero .welcome-logo{transform:none;rotate:none}
