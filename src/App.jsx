@@ -86,6 +86,15 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.9.15',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Áudio AGORA sobe de verdade para a conta: as músicas entram no banco com o arquivo de som (antes só a linha ia — a música chegava sem som em outro aparelho).' },
+      { type: 'correcao', text: 'Exclusão também apaga o arquivo de som da nuvem (antes só a linha sumia, o arquivo sobrava ocupando espaço).' },
+      { type: 'novo', text: 'Tabela de dados do usuário + gatilho automático no cadastro por e-mail/senha (SQL novo em supabase/setup.sql).' },
+    ],
+  },
+  {
     version: '1.9.14',
     date: 'Setembro de 2026',
     items: [

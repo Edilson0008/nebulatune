@@ -18,8 +18,31 @@
   sozinha em ~5s. O app também confere novidades a cada 15s e ao voltar para a
   tela. Nada de botão manual no dia a dia (existe "Sincronizar agora" só por
   garantia).
+- **FEITO EM 22/09 (1.9.15/41, commit 803903f):** o áudio AGORA sobe de verdade
+  para a conta. Antes, `pushDiffToDb` gravava só a LINHA (`has_audio=true`,
+  `audio_key=null`) e os BYTES do som nunca iam ao bucket — a música chegava em
+  outro aparelho sem som (o `fetchCloudBlob` baixava um arquivo inexistente) e o
+  arquivo nunca era removido na exclusão. Correção: `pushDiffToDb` recebe a
+  biblioteca real (`dataRef.current.library`) em `doPush` (src/useCloudSync.js)
+  e envia o áudio/capa via `uploadTrackMedia` (src/cloud.js), gravando a chave
+  `tracks/<id>-<tamanho>.bin` na linha. As chaves de áudio/capa NÃO passam mais
+  por sanitização (eram corrompidas: `tracks/x.bin` virava `tracks_x_bin` e o
+  arquivo nunca era achado). Exclusão também apaga o arquivo do bucket.
+  Testado ponta a ponta: push com áudio → bucket tem o arquivo → pull → download
+  OK (5 bytes) → apagar tudo → linha E arquivo somem → refresh não ressuscita.
+- **Passo 1/SQL (22/09):** `supabase/setup.sql` ganhou a seção 5–7: tabela
+  `public.user_data` (user_id uuid PK → auth.users), função+trigger
+  `handle_new_user`/`on_auth_user_created` (cria linha inicial em `user_data` e
+  `user_settings` no signUp), RLS ativo e políticas select/insert/update/delete
+  por `user_id = auth.uid()`. FALTA o usuário colar o SQL novo no painel do
+  Supabase (SQL Editor → RUN) para a trigger passar a valer nos novos cadastros.
+- Passo 2 (app): já estava pronto — `signUpEmail`/`signInEmail`
+  (supabase.auth.signUp/signInWithPassword), pull por `.eq('user_id', userId)`
+  em `pullFromDb`, upsert com user_id em `pushDiffToDb`, sessão persistida.
 - Conta de teste usada nas verificações: `bot-teste-nebulatune@example.com`
-  (senha `teste123456`). Pode apagar quando quiser; não afeta a conta do usuário.
+  (senha `teste123456`). Conta de teste atual p/ sincronização:
+  `nbl-teste2-1790089781209@example.com` / `senha123456` (descarte quando quiser;
+  não afeta a conta real). Pode apagar quando quiser; não afeta a conta do usuário.
 - VALIDAÇÃO MANUAL FEITA POR MIM (18/09): login na nuvem de produção com a
   conta-teste → **HTTP 200 / acesso: sim** (endpoint Supabase real do app).
   Conclusão: autenticação+chave+endereço funcionam; o "Failed to fetch" que o
@@ -67,7 +90,7 @@
 - Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.14 / código 40** (APK real na main +
+- Versão atual publicada/remota: **1.9.15 / código 41** (APK real na main +
   site). Fonte da verdade = GitHub.
 - **ATENÇÃO (21/09):** pasta sincronizada com o GitHub via `git reset --hard
   origin/main` (backups: `%TEMP%\opencode\nebulatune-*.patch`). NÃO trabalhar
