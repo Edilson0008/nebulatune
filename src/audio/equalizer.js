@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { readLocal, writeLocal } from '../localstore'
 import { applySettings, BAND_COUNT } from './graph'
 
 export const PRESETS = {
@@ -33,9 +34,17 @@ export function defaultSettings() {
 }
 
 function loadSettings() {
-  // Nada fica gravado no aparelho: cada sessão começa do perfil padrão e o
-  // equalizador que você salvar na conta volta de lá, automático.
-  return defaultSettings()
+  const raw = readLocal('nt.equalizer')
+  const base = defaultSettings()
+  if (!raw || typeof raw !== 'object') return base
+  return {
+    ...base,
+    ...raw,
+    bands:
+      Array.isArray(raw.bands) && raw.bands.length === BAND_COUNT
+        ? raw.bands
+        : base.bands,
+  }
 }
 
 export function useEqualizer() {
@@ -43,6 +52,10 @@ export function useEqualizer() {
 
   useEffect(() => {
     applySettings(settings)
+  }, [settings])
+
+  useEffect(() => {
+    writeLocal('nt.equalizer', settings)
   }, [settings])
 
   return {

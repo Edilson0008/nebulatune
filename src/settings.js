@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { readLocal, writeLocal } from './localstore'
 
 const PSTAT_DEFAULTS = { touches: 0, hearts: 0, sleeps: 0, scares: 0, meows: 0 }
 
@@ -30,13 +31,17 @@ function merge(raw) {
 }
 
 export function useSettings() {
-  const [settings, setSettings] = useState(() => ({ ...DEFAULTS }))
+  const [settings, setSettings] = useState(() => merge(readLocal('nt.settings')))
 
   useEffect(() => {
     const a = ACCENTS[settings.accent] || ACCENTS.violet
     document.documentElement.style.setProperty('--accent', a.accent)
     document.documentElement.style.setProperty('--accent-2', a.accent2)
   }, [settings.accent])
+
+  useEffect(() => {
+    writeLocal('nt.settings', settings)
+  }, [settings])
 
   const api = useMemo(
     () => ({
@@ -59,7 +64,14 @@ export function useSettings() {
 }
 
 export function usePetStats() {
-  const [petStats, setPetStats] = useState(() => ({ ...PSTAT_DEFAULTS }))
+  const [petStats, setPetStats] = useState(() => ({
+    ...PSTAT_DEFAULTS,
+    ...(readLocal('nt.petstats') || {}),
+  }))
+
+  useEffect(() => {
+    writeLocal('nt.petstats', petStats)
+  }, [petStats])
 
   const bumpPet = useMemo(
     () => (key) => setPetStats((s) => ({ ...s, [key]: (s[key] || 0) + 1 })),

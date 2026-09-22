@@ -1,5 +1,23 @@
 # Lembretes
 
+## Nuvem / login — REMOVIDO (1.9.17/43, 22/09) → app 100% local
+- **A PEDIDO do usuário:** o NebulaTune não tem mais conta, login, sincronização
+  nem servidor. O app abre direto na música e TODOS os dados ficam só no aparelho:
+  biblioteca (metadados em `localStorage` `nt.library` + áudio/capa no IndexedDB
+  `nebulatune-media`), favoritos/estatísticas (vão junto na biblioteca), playlists
+  (`nt.playlists`), sincronia de letras (`nt.lyricSync`), ajustes (`nt.settings`),
+  equalizador (`nt.equalizer`) e gatinho (`nt.petstats`).
+- **Removido:** dependência `@supabase/supabase-js`, `src/cloud.js`,
+  `src/useCloudSync.js`, chaves `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` do
+  `src/app-config.js`, tela de login/cadastro, card de boas-vindas, card
+  "Conta e sincronização" (incl. "Sincronizar agora" e "Apagar tudo"),
+  reset de fábrica one-shot do `main.jsx` e a pill "☁️ Nuvem" (a origem é
+  sempre "📁 Meus Arquivos"). Exportar/Importar backup (`backup-completo`)
+  continua funcionando 100% local.
+- **PENDENTE (usuário):** apagar o projeto do Supabase no painel
+  (`omusoirnpyduuyeirreo`) — já não é mais usado. O `supabase/setup.sql` fica
+  no repositório só como registro.
+
 ## Site publicado (feito)
 - Site oficial no ar: https://edilson0008.github.io/nebulatune/
 - `SITE_URL` em `src/app-config.js` já aponta para esse endereço.
@@ -9,62 +27,11 @@
 - Para atualizar o site, basta enviar as mudanças para o `main`. (O token do
   GitHub precisa do escopo `workflow`.)
 
-## Login e sincronização (feito)
-- Servidor: Supabase (projeto `omusoirnpyduuyeirreo`). Chaves em `src/app-config.js`
-  (`SUPABASE_URL` + `SUPABASE_PUBLISHABLE_KEY`, publicável).
-- Ativo: login por e-mail/senha e sincronização automática nos dois sentidos.
-  Ao entrar, o app baixa tudo sozinho (biblioteca com áudio, favoritos, ajustes,
-  equalizador, sincronia de letras); qualquer mudança feita no aparelho sobe
-  sozinha em ~5s. O app também confere novidades a cada 15s e ao voltar para a
-  tela. Nada de botão manual no dia a dia (existe "Sincronizar agora" só por
-  garantia).
-- **FEITO EM 22/09 (1.9.15/41, commit 803903f):** o áudio AGORA sobe de verdade
-  para a conta. Antes, `pushDiffToDb` gravava só a LINHA (`has_audio=true`,
-  `audio_key=null`) e os BYTES do som nunca iam ao bucket — a música chegava em
-  outro aparelho sem som (o `fetchCloudBlob` baixava um arquivo inexistente) e o
-  arquivo nunca era removido na exclusão. Correção: `pushDiffToDb` recebe a
-  biblioteca real (`dataRef.current.library`) em `doPush` (src/useCloudSync.js)
-  e envia o áudio/capa via `uploadTrackMedia` (src/cloud.js), gravando a chave
-  `tracks/<id>-<tamanho>.bin` na linha. As chaves de áudio/capa NÃO passam mais
-  por sanitização (eram corrompidas: `tracks/x.bin` virava `tracks_x_bin` e o
-  arquivo nunca era achado). Exclusão também apaga o arquivo do bucket.
-  Testado ponta a ponta: push com áudio → bucket tem o arquivo → pull → download
-  OK (5 bytes) → apagar tudo → linha E arquivo somem → refresh não ressuscita.
-- **Passo 1/SQL (22/09):** `supabase/setup.sql` ganhou a seção 5–7: tabela
-  `public.user_data` (user_id uuid PK → auth.users), função+trigger
-  `handle_new_user`/`on_auth_user_created` (cria linha inicial em `user_data` e
-  `user_settings` no signUp), RLS ativo e políticas select/insert/update/delete
-  por `user_id = auth.uid()`. FALTA o usuário colar o SQL novo no painel do
-  Supabase (SQL Editor → RUN) para a trigger passar a valer nos novos cadastros.
-- Passo 2 (app): já estava pronto — `signUpEmail`/`signInEmail`
-  (supabase.auth.signUp/signInWithPassword), pull por `.eq('user_id', userId)`
-  em `pullFromDb`, upsert com user_id em `pushDiffToDb`, sessão persistida.
-- Conta de teste usada nas verificações: `bot-teste-nebulatune@example.com`
-  (senha `teste123456`). Conta de teste atual p/ sincronização:
-  `nbl-teste2-1790089781209@example.com` / `senha123456` (descarte quando quiser;
-  não afeta a conta real). Pode apagar quando quiser; não afeta a conta do usuário.
-- VALIDAÇÃO MANUAL FEITA POR MIM (18/09): login na nuvem de produção com a
-  conta-teste → **HTTP 200 / acesso: sim** (endpoint Supabase real do app).
-  Conclusão: autenticação+chave+endereço funcionam; o "Failed to fetch" que o
-  usuário viu era a mensagem crua de rede — já traduzida para texto amigável
-  no 1.4.0 (publicado no site + GitHub).
-- Backups: bucket privado `backups`, por usuário. Cada música é enviada como
-  arquivo separado (`tracks/`, `covers/`) e só o que mudou é reenviado; o
-  `index.json` guarda os metadados. Isso evita o limite de arquivo de 50MB do
-  plano grátis. SQL em `supabase/setup.sql`.
-- Google OAuth configurado e funcionando (web + app). No app, o login usa o
-  endereço `br.com.nebulatune://callback` (Deep Link declarado no manifesto).
-- **REMOVIDO o login por Google (1.9.14/40, 22/09):** usuário escolheu usar SÓ
-  e-mail/senha (as contas "e-mail" e "Google" com o mesmo e-mail viram contas
-  separadas no Supabase e os dados não se sincronizavam). Código do Google
-  (botões, `signInGoogle`, `exchangeOAuthCode`, deep link `br.com.nebulatune://callback`)
-  foi retirado de `src/cloud.js`, `src/App.jsx` e `src/useCloudSync.js`. O
-  `SupabaseSettingsView`/welcome só têm e-mail+senha agora.
-- **PENDENTE (usuário):** apagar no painel do Supabase a conta duplicada vazia
-  criada pelo login com Google (os dados dele estão na conta de e-mail/senha).
-  Auth → Users → excluir a conta com provider Google do mesmo e-mail.
-- PENDENTE: ligar de volta a confirmação de e-mail no Supabase quando quiser
-  mais segurança (hoje está desligada para facilitar os testes).
+## Login e sincronização (HISTÓRICO — superado pelo 1.9.17)
+- Toda a era da nuvem (Supabase, login por e-mail/senha, sincronização em dois
+  sentidos, Realtime, conta de teste `nbl-teste2-1790089781209@example.com`,
+  Google OAuth) foi REMOVIDA em 22/09 na 1.9.17/43. Ver "Nuvem / login — REMOVIDO"
+  no topo. O usuário pode apagar o projeto Supabase sem medo.
 
 ## Atualização do app (feito)
 - Botão "Atualizar" em Configurações → Aplicativo: verifica a versão no site
@@ -90,30 +57,24 @@
 - Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.16 / código 42** (APK real na main +
+- Versão atual publicada/remota: **1.9.17 / código 43** (APK real na main +
   site). Fonte da verdade = GitHub.
 
+## FEITO em 22/09 (1.9.17/43) — app 100% local (removida a nuvem)
+- Áudio e capa da biblioteca agora são guardados DE VERDADE no aparelho:
+  `src/localstore.js` (localStorage `nt.library` + IndexedDB `nebulatune-media`).
+  Bibliotecas antigas da era nuvem não migram sozinhas — quem usava conta e
+  quiser o que tinha, precisa exportar o backup no site e importar no aparelho.
+- Persistência restaurada: `nt.settings`, `nt.equalizer`, `nt.petstats`,
+  `nt.playlists`, `nt.lyricSync`.
+- O "Limpar cache" das Configurações NÃO apaga mais playlists nem letras (só
+  transições/buscas/view). Músicas e seus blobs também ficam intactos.
+- Lint: sem erros. Build web OK. APK 1.9.17/43.
+
 ## FEITO em 22/09 (1.9.16/42) — Realtime + origem da faixa + letra na nuvem
-- **Realtime:** `src/cloud.js` ganhou `subscribeUserTables(userId, cb)` (canal
-  `supabase.channel` escutando `user_settings, tracks, playlists, playlist_tracks,
-  pet_stats, lyric_sync, lyrics` filtrados por `user_id=eq.<id>`). `useCloudSync.js`
-  o usa para disparar um ciclo de verificação em ~1,2s quando QUALQUER tela/app
-  grava algo — atualização entre aparelhos em segundos (o poll de 15s continua
-  como rede de segurança). O SQL ganhou a seção 8 (publicação `supabase_realtime`
-  para as tabelas, idempotente).
-- **Origem da faixa:** "Tocando agora" mostra a pill `☁️ Nuvem` (a música está na
-  conta) ou `📁 Meus Arquivos` (só existe neste aparelho) — CSS `.np-source`.
-- **Letra manual na nuvem:** `applyManualLyrics` chama `saveLyric(userId, trackId,
-  {synced,lines,source,instrumental})` (upsert imediato na tabela `lyrics`). Outros
-  aparelhos recebem via Realtime/poll e o `applyCloudBackup` semeia a letra no
-  cache (`lyricsByTrack`) sem refazer a busca.
-- **Card de conta:** sumiu o "⚠️ ainda não batem". Agora: `status=ok` +
-  `pendingChanges=false` → "✅ Dados 100% sincronizados 🎉"; `pendingChanges=true`
-  → "🚀 Salvando automaticamente…". `pendingChanges` vem do novo estado `baseSig`
-  (assinatura da última base) × `dataSig` (estado local) exposto pelo hook.
-- **PENDENTE (usuário):** rodar o `supabase/setup.sql` NOVO no SQL Editor do
-  Supabase (cria a tabela `lyrics`, RLS e habilita o Realtime). É seguro repetir.
-  Depois disso, verificação automática dos canais pode ser refeita.
+- **Histórico (superado pela 1.9.17):** Realtime (`subscribeUserTables`),
+  pill de origem `☁️ Nuvem`, letra manual na nuvem (`saveLyric`) e o card de
+  conta com "✅ Dados 100% sincronizados". Tudo isso foi REMOVIDO na 1.9.17.
 
 ## Versões — histórico de publicações
 - **ATENÇÃO (21/09):** pasta sincronizada com o GitHub via `git reset --hard
@@ -253,9 +214,10 @@
   "enviado" antes de aplicar a nuvem (evita reenvio de dados velhos).
 
 ## Ação recorrente
-- De tempos em tempos, lembrar o usuário dos itens pendentes (agora: apagar a
-  conta Google duplicada no painel do Supabase e, se quiser, religar a
-  confirmação de e-mail).
+- De tempos em tempos, lembrar o usuário dos itens pendentes (agora: apagar o
+  projeto Supabase `omusoirnpyduuyeirreo` no painel — o app não usa mais a
+  nuvem — e importar no aparelho o backup exportado do site, caso queira
+  recuperar as músicas da conta antiga).
 
 ## Rodada de melhorias 2 (feito)
 - Fundo da tela "Tocando agora" usa as cores da capa + um brilho (aura) ao redor

@@ -12,7 +12,6 @@ import { Share as CapShare } from '@capacitor/share'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { resolveAudiusStream, searchAudiusTracks, topTracks } from './online'
 import { blobToDataUrl, dataUrlToBlob } from './backup'
-import { useCloudSync } from './useCloudSync'
 import {
   APK_URL,
   fetchLatestVersion,
@@ -23,7 +22,7 @@ import {
   requestNotificationsPermission,
   wasUpdatePrompted,
 } from './updater'
-import { fetchCloudBlob, saveLyric } from './cloud'
+import { readLocal, writeLocal, saveMediaBlobs, loadMediaBlobs, deleteMediaBlobs } from './localstore'
 import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
 import { updateNowPlaying, hideNowPlaying, onMediaAction } from './mediaNotification'
 
@@ -85,6 +84,15 @@ function nf(n) {
 }
 
 const CHANGELOG = [
+  {
+    version: '1.9.17',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'NebulaTune voltou a ser 100% local: sem login, sem conta e sem nuvem. O app abre direto na música e tudo (músicas, favoritos, playlists, estatísticas, ajustes e seu gatinho) fica guardado SÓ no seu aparelho.' },
+      { type: 'melhoria', text: 'Tudo fica salvo de verdade entre uma abertura e outra: agora o aplicativo lembra sua biblioteca, o equalizador, o gatinho e os ajustes mesmo depois de fechar.' },
+      { type: 'melhoria', text: 'Sumiu o card de boas-vindas e a área de "Conta e sincronização" das configurações — nada mais de "Sincronizar agora" nem mensagens de nuvem.' },
+    ],
+  },
   {
     version: '1.9.16',
     date: 'Setembro de 2026',
@@ -2422,11 +2430,7 @@ function NowPlaying({
           <h2 className="np-title">{track.title}</h2>
           <p className="np-artist">{track.artist}</p>
           {track.album && <p className="np-album">{track.album}</p>}
-          {!isOnline && (
-            <p className="np-source">
-              {track.cloudAudioKey ? '☁️ Nuvem' : '📁 Meus Arquivos'}
-            </p>
-          )}
+          {!isOnline && <p className="np-source">📁 Meus Arquivos</p>}
         </div>
 
         <div className="np-timeline">
@@ -3054,7 +3058,7 @@ function useMoodDetector({ playing, sig }) {
   return mood
 }
 
-function usePlayer(library, speed = 1, onStart, uidRef) {
+function usePlayer(library, speed = 1, onStart) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [elapsed, setElapsed] = useState(0)
@@ -3070,7 +3074,6 @@ function usePlayer(library, speed = 1, onStart, uidRef) {
   const onErrorRef = useRef(() => {})
   const errorCountRef = useRef(0)
   const playingRef = useRef(false)
-  const startTokenRef = useRef(0)
   const currentAudioUrlRef = useRef(null)
   const [repeat, setRepeat] = useState(0)
   const [shuffle, setShuffle] = useState(false)
@@ -3145,22 +3148,9 @@ function usePlayer(library, speed = 1, onStart, uidRef) {
 
   const startIndex = useCallback((i) => {
     const libAll = libRef.current
-    // Se a música escolhida está na conta mas o som ainda não desceu para este
-    // aparelho, procura a próxima que tenha som — assim não toca um som de
-    // demonstração no lugar da música de verdade.
-    const soundable = (c) => c && (c.src || c.audioBlob || c.cloudAudioKey || !c.audioMissing)
-    const nextWithSound = () => {
-      const n = libAll.length
-      for (let step = 1; step < n; step += 1) {
-        const j = (i + step) % n
-        if (soundable(libAll[j])) {
-          startIndex(j)
-          return
-        }
-      }
-      // Nenhuma outra com som: último recurso é o som de demonstração.
-      synthFallback()
-    }
+    // Se a música está marcada sem som, procura a próxima que tenha som — assim
+    // não toca um som de demonstração no lugar da música de verdade.
+    const soundable = (c) => c && (c.src || c.audioBlob || !c.audioMissing)
     if (libAll[i]?.audioMissing && !soundable(libAll[i])) {
       for (let step = 1; step < libAll.length; step += 1) {
         const j = (i + step) % libAll.length
@@ -3212,36 +3202,8 @@ function usePlayer(library, speed = 1, onStart, uidRef) {
       startFile(src, t.duration)
       return
     }
-    if (t.cloudAudioKey && uidRef && uidRef.current) {
-      const token = ++startTokenRef.current
-      // Baixa o som da conta só na hora de tocar (nada fica gravado no
-      // aparelho; tocar precisa de internet).
-      fetchCloudBlob(uidRef.current, t.cloudAudioKey)
-        .then((blob) => {
-          if (startTokenRef.current !== token) return
-          if (blob && ((blob.size ?? 0) > 0 || blob.type)) {
-            const src = URL.createObjectURL(blob)
-            const prevUrl = currentAudioUrlRef.current
-            currentAudioUrlRef.current = src
-            const up = { ...t, audioBlob: blob, src, audioMissing: false }
-            libRef.current[i] = up
-            setLibrary((prev) => prev.map((x) => (x.id === t.id ? up : x)))
-            startFile(src, t.duration)
-            if (prevUrl && prevUrl !== src) setTimeout(() => URL.revokeObjectURL(prevUrl), 8000)
-          } else {
-            nextWithSound()
-          }
-        })
-        .catch(() => {
-          if (startTokenRef.current !== token) return
-          // Sem internet (ou problema na conta): não toca som de demonstração
-          // no lugar da música de verdade — pula para a próxima com som.
-          nextWithSound()
-        })
-      return
-    }
     synthFallback()
-  }, [getAudio, playWithRetry, uidRef])
+  }, [getAudio, playWithRetry])
 
   const randomIndex = useCallback(() => {
     const lib = libRef.current
@@ -4900,40 +4862,18 @@ function ApkDownloadButton() {
   )
 }
 
-function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onImportFolder, onImportDevice, onOpenChangelog, cloud, cloudRedirect, onClearCache, cacheCleanMsg }) {
+function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onImportFolder, onImportDevice, onOpenChangelog, onClearCache, cacheCleanMsg }) {
   const [storage, setStorage] = useState(null)
   const [exported, setExported] = useState(false)
   const [imported, setImported] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [checking, setChecking] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [latestVersion, setLatestVersion] = useState('')
   const [updateMsg, setUpdateMsg] = useState('')
   const [updateError, setUpdateError] = useState(false)
   const importInputRef = useRef(null)
-
-  const clearAllData = useCallback(() => {
-    if (!cloud.user) return
-    const first =
-      'Apagar TODOS os seus dados? Isso apaga de verdade a biblioteca, favoritos, playlist, gatinho, ajustes e letras sincronizadas da SUA conta na nuvem e deste aparelho. Outros usuários não são afetados.'
-    const second =
-      'Tem certeza? Não dá para desfazer — depois de apagar, você começa do zero (vira "de fábrica" só para a sua conta).'
-    if (!window.confirm(first)) return
-    if (!window.confirm(second)) return
-    cloud
-      .purgeAll()
-      .catch(() => window.alert('Não consegui apagar tudo agora. Tenta de novo em instantes.'))
-  }, [cloud])
-
-  const submitAuth = (mode) => (e) => {
-    e.preventDefault()
-    if (!email || !password) return
-    if (mode === 'signup') cloud.signUp(email, password, cloudRedirect)
-    else cloud.signIn(email, password)
-  }
 
   const updateHost = SITE_URL ? (() => {
     try {
@@ -5089,167 +5029,9 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
     reader.readAsText(file)
   }
 
-  const syncLabel =
-    cloud.status === 'syncing'
-      ? 'Sincronizando…'
-      : cloud.status === 'ok'
-        ? 'Tudo sincronizado'
-        : cloud.status === 'error'
-          ? 'Falha na sincronização'
-          : ''
-
   return (
     <section className="view">
       <h1 className="greeting">Configurações</h1>
-
-      {cloud.cloudEnabled && (
-        <div className="settings-card">
-          <h2 className="section-title">Conta e sincronização</h2>
-
-          {!cloud.authReady ? (
-            <div className="settings-row">
-              <div className="settings-info">
-                <span className="settings-desc">Carregando…</span>
-              </div>
-            </div>
-          ) : cloud.user ? (
-            <>
-              <div className="settings-row">
-                <div className="settings-info">
-                  <span className="settings-label">{cloud.user.email}</span>
-                  <span className="settings-desc">
-                    {syncLabel || 'Seus dados são salvos na nuvem automaticamente.'}
-                  </span>
-                </div>
-                <div className="settings-actions">
-                  <button
-                    className="btn-ghost"
-                    onClick={cloud.syncNow}
-                    disabled={cloud.status === 'syncing'}
-                  >
-                    Sincronizar agora
-                  </button>
-                  <button className="btn-ghost btn-ghost-danger" onClick={cloud.signOut}>
-                    Sair
-                  </button>
-                </div>
-              </div>
-
-              <div className="settings-row">
-                <div className="settings-info">
-                  <span className="settings-label">Apagar todos os meus dados</span>
-                  <span className="settings-desc">
-                    Apaga de verdade a sua biblioteca, favoritos, playlists, o gatinho e os ajustes
-                    na nuvem e neste aparelho, vira "de fábrica". Não dá para desfazer.
-                  </span>
-                </div>
-                <div className="settings-actions">
-                  <button className="btn-ghost btn-ghost-danger" onClick={clearAllData}>
-                    Apagar tudo
-                  </button>
-                </div>
-              </div>
-
-              {cloud.status === 'syncing' && (
-                <p className="settings-note">🔄 Sincronizando com a nuvem…</p>
-              )}
-
-              {cloud.status === 'ok' && !cloud.pendingChanges && (
-                <p className="settings-note">
-                  ✅ Dados 100% sincronizados 🎉 Tudo o que você fizer aqui aparece sozinho no site
-                  e em outros aparelhos.
-                </p>
-              )}
-
-              {cloud.status === 'ok' && cloud.pendingChanges && (
-                <p className="settings-note">
-                  🚀 Salvando automaticamente… os últimos ajustes sobem sozinhos em alguns segundos.
-                </p>
-              )}
-
-              {cloud.cloudSummary && (
-                <p className="settings-note sync-proof">
-                  ✅ <strong>Na nuvem agora:</strong> {cloud.cloudSummary.tracks} músicas,{' '}
-                  {cloud.cloudSummary.favs} favoritadas
-                  {cloud.lastSync
-                    ? ` · último envio às ${new Date(cloud.lastSync).toLocaleTimeString('pt-BR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}`
-                    : ''}
-                  {cloud.cloudSummary.pet
-                    ? ` · gatinho: ${cloud.cloudSummary.pet.touches} toques, ${cloud.cloudSummary.pet.hearts} corações, ${cloud.cloudSummary.pet.sleeps} dormidas, ${cloud.cloudSummary.pet.scares} sustos, ${cloud.cloudSummary.pet.meows} miados`
-                    : ''}
-                  <br />
-                  📱 <strong>Neste aparelho:</strong> {library.length} músicas,{' '}
-                  {library.filter((t) => t.fav === true).length} favoritadas
-                  {library.filter((t) => t.audioMissing).length > 0
-                    ? ` · ${library.filter((t) => t.audioMissing).length} ainda baixando o som`
-                    : ''}
-                </p>
-              )}
-
-              {cloud.status === 'error' && cloud.message && (
-                <p className="settings-note settings-note-error">{cloud.message}</p>
-              )}
-            </>
-          ) : (
-            <form onSubmit={submitAuth('signin')}>
-              <div className="settings-row">
-                <div className="settings-info">
-                  <span className="settings-label">Entrar ou criar conta</span>
-                  <span className="settings-desc">
-                    Sua biblioteca, favoritos e ajustes ficam salvos e aparecem em qualquer
-                    aparelho.
-                  </span>
-                </div>
-              </div>
-              <div className="auth-fields">
-                <input
-                  type="email"
-                  className="auth-input"
-                  placeholder="E-mail"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                <input
-                  type="password"
-                  className="auth-input"
-                  placeholder="Senha (mínimo 6 caracteres)"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <div className="auth-actions">
-                  <button
-                    type="submit"
-                    className="btn-primary"
-                    disabled={cloud.status === 'syncing'}
-                  >
-                    Entrar
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    disabled={cloud.status === 'syncing'}
-                    onClick={() => email && password && cloud.signUp(email, password, cloudRedirect)}
-                  >
-                    Criar conta
-                  </button>
-                </div>
-              </div>
-              {cloud.message && (
-                <p
-                  className={`settings-note ${cloud.status === 'error' ? 'settings-note-error' : ''}`}
-                >
-                  {cloud.message}
-                </p>
-              )}
-            </form>
-          )}
-        </div>
-      )}
 
       <div className="settings-card">
         <h2 className="section-title">Aparência</h2>
@@ -5516,119 +5298,6 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
    Tela bonita de boas-vindas / login (1ª vez,
    sem conta, ou depois de sair da conta)
    ───────────────────────────────────────────── */
-function WelcomeScreen({ cloud, cloudRedirect }) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [mode, setMode] = useState('signup') // 'signup' | 'signin'
-  const [err, setErr] = useState('')
-  const [sending, setSending] = useState(false)
-
-  const submitAuth = (e) => {
-    e.preventDefault()
-    if (!email || !password || sending) return
-    setErr('')
-    setSending(true)
-    const p = mode === 'signup'
-      ? cloud.signUp(email, password, cloudRedirect)
-      : cloud.signIn(email, password)
-    Promise.resolve(p)
-      .catch((er) => setErr(er?.message || 'Não deu certo. Confere e tenta de novo.'))
-      .finally(() => setSending(false))
-  }
-
-  return (
-    <div className="welcome-hero" id="top">
-      <div className="welcome-brand">
-        <div className="welcome-logo">
-          <svg viewBox="0 0 24 24" width="58" height="58" fill="none" stroke="currentColor" strokeWidth="1.4">
-            <path d="M13 2 4.5 12.5H11L9.5 22 19 10.5h-6.5L13 2z" strokeLinejoin="round" strokeLinecap="round" />
-          </svg>
-        </div>
-        <h1 className="welcome-title">NebulaTune</h1>
-        <p className="welcome-tag">Sua música, seu pet e suas descobertas — tudo na sua conta.</p>
-      </div>
-
-      <form className="welcome-box" onSubmit={submitAuth}>
-        <div className="welcome-box-head">
-          <button type="button" className={mode === 'signup' ? 'welcome-tab on' : 'welcome-tab'} onClick={() => { setMode('signup'); setErr('') }}>
-            Criar conta
-          </button>
-          <button type="button" className={mode === 'signin' ? 'welcome-tab on' : 'welcome-tab'} onClick={() => { setMode('signin'); setErr('') }}>
-            Entrar
-          </button>
-        </div>
-
-        <input
-          className="welcome-input"
-          type="email"
-          placeholder="Seu e-mail"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
-        />
-        <input
-          className="welcome-input"
-          type="password"
-          placeholder="Sua senha"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-        />
-
-        {err && <p className="welcome-err">{err}</p>}
-
-        <button className="welcome-submit" type="submit" disabled={sending || !email || !password}>
-          {sending
-            ? 'Um instante…'
-            : mode === 'signup'
-              ? 'Criar minha conta ✦'
-              : 'Entrar no app ✦'}
-        </button>
-      </form>
-
-      <p className="welcome-foot">
-        Seus dados ficam guardados na sua conta. Nada fica do aparelho.
-      </p>
-    </div>
-  )
-}
-
-/* Card de boas-vindas — só na 1ª vez, guardado NA CONTA */
-function WelcomeCard({ onDone }) {
-  const perks = [
-    { icon: 'M12 3v10M12 13a4 4 0 1 0 4 4', label: 'Pet que reage às suas músicas' },
-    { icon: 'M5 12h14M12 5v14', label: 'Igualador para deixar do seu jeito' },
-    { icon: 'M12 3l7 4v10l-7 4-7-4V7l7-4z', label: 'Biblioteca sincronizada na nuvem' },
-    { icon: 'M5 5l14 14M19 5L5 19', label: 'Colabore e descubra no seu ritmo' },
-  ]
-  return (
-    <div className="welcome-card">
-      <div className="welcome-card-glow" />
-      <div className="welcome-card-head">
-        <span className="welcome-card-badge">✦ Bem-vindo(a) ao NebulaTune!</span>
-        <h2>Seu universo musical está pronto</h2>
-        <p>Conheça o que já pode fazer por aqui:</p>
-      </div>
-      <div className="welcome-card-grid">
-        {perks.map((p) => (
-          <span className="welcome-card-fact" key={p.label}>
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d={p.icon} />
-            </svg>
-            <span>{p.label}</span>
-          </span>
-        ))}
-      </div>
-      <button className="welcome-card-btn" onClick={onDone}>
-        Começar ✦
-      </button>
-      <button className="welcome-card-skip" onClick={onDone}>
-        Ver depois
-      </button>
-    </div>
-  )
-}
-
 function sleepNativeStart(timestampMs) {
   try {
     if (IS_NATIVE && window.Capacitor?.Plugins?.SleepTimer) {
@@ -5665,7 +5334,7 @@ function App() {
   const [now, setNow] = useState(() => new Date())
   const eq = useEqualizer()
   const { settings: appSettings, api: settingsApi } = useSettings()
-  const { petStats, bumpPet, applyPetStats } = usePetStats()
+  const { petStats, bumpPet } = usePetStats()
   const handlePetAction = useCallback(
     (a) => {
       const map = { touch: 'touches', heart: 'hearts', scared: 'scares', sleep: 'sleeps', meow: 'meows' }
@@ -5684,14 +5353,82 @@ function App() {
   const dragCounter = useRef(0)
   const fileInputRef = useRef(null)
   const folderInputRef = useRef(null)
-  const uidRef = useRef('')
   const libraryRef = useRef([])
+  const savedBlobsRef = useRef({})
   const [updatePrompt, setUpdatePrompt] = useState(null)
   const [updateInstalling, setUpdateInstalling] = useState(false)
   const [updateInstallMsg, setUpdateInstallMsg] = useState('')
 
   useEffect(() => {
     libraryRef.current = library
+  }, [library])
+
+  // Hidrata a biblioteca 100% local: metadados do localStorage + áudio/capa do
+  // IndexedDB. O app abre direto na tela principal, sem login.
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      const rows = readLocal('nt.library')
+      if (!alive || !Array.isArray(rows)) return
+      setLoadingLib(true)
+      const hydrated = []
+      for (const row of rows) {
+        const media = await loadMediaBlobs(row.id)
+        if (!alive) return
+        const audioBlob = media.audio || null
+        const coverBlob = media.cover || null
+        const prevCover =
+          row.coverUrl && row.coverUrl.startsWith('blob:') ? null : row.coverUrl || null
+        hydrated.push({
+          ...row,
+          audioBlob,
+          src: audioBlob ? URL.createObjectURL(audioBlob) : null,
+          coverBlob,
+          coverUrl: coverBlob ? URL.createObjectURL(coverBlob) : prevCover,
+          audioMissing: row.audioMissing === true && !audioBlob,
+        })
+      }
+      if (!alive) return
+      setLibrary(hydrated)
+      requestAnimationFrame(() => setLoadingLib(false))
+    })()
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // Salva a biblioteca localmente (debounce): metadados + blobs novos.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const rows = library
+        .filter((x) => x && x.id)
+        .map((x) => ({
+          id: x.id,
+          title: x.title || '',
+          artist: x.artist || '',
+          album: x.album || '',
+          duration: x.duration || 0,
+          cover: Array.isArray(x.cover) ? x.cover : null,
+          coverRemote: x.coverRemote || null,
+          addedAt: x.addedAt || Date.now(),
+          fav: x.fav === true,
+          plays: x.plays || 0,
+          playDays: x.playDays || {},
+          audioMissing: x.audioMissing === true,
+        }))
+      writeLocal('nt.library', rows)
+      library.forEach((x) => {
+        if (!x || !x.id) return
+        const sig = `${x.audioBlob ? String(x.audioBlob.size) + ':' + String(x.audioBlob.type) : ''}|${x.coverBlob ? String(x.coverBlob.size) + ':' + String(x.coverBlob.type) : ''}`
+        if (savedBlobsRef.current[x.id] === sig) return
+        savedBlobsRef.current[x.id] = sig
+        const blobs = {}
+        if (x.audioBlob && (x.audioBlob.size || x.audioBlob.type)) blobs.audio = x.audioBlob
+        if (x.coverBlob && x.coverBlob.size) blobs.cover = x.coverBlob
+        saveMediaBlobs(x.id, blobs)
+      })
+    }, 600)
+    return () => clearTimeout(t)
   }, [library])
 
   useEffect(() => {
@@ -5775,7 +5512,11 @@ function App() {
     })
   }, [])
 
-  const [playlists, setPlaylists] = useState([])
+  const [playlists, setPlaylists] = useState(() => readLocal('nt.playlists') || [])
+
+  useEffect(() => {
+    writeLocal('nt.playlists', playlists)
+  }, [playlists])
 
   const [activePlaylist, setActivePlaylist] = useState(null)
   const [playlistPickerTrack, setPlaylistPickerTrack] = useState(null)
@@ -5887,7 +5628,7 @@ function App() {
     playQueueItem,
     queueAdd,
     queueNext,
-  } = usePlayer(library, appSettings.speed, countPlay, uidRef)
+  } = usePlayer(library, appSettings.speed, countPlay)
 
   const onlinePlayer = useOnlinePlayer(appSettings.speed)
   const {
@@ -6097,24 +5838,15 @@ function App() {
       const value = built ? { status: 'done', ...built } : { status: 'notfound' }
       loadedLyricsRef.current.add(trackId)
       storeLyrics(trackId, value)
-      // Salva NA NUVEM imediatamente: os outros aparelhos não precisam
-      // procurar a letra de novo (chega na hora pelo Realtime).
-      const uid = uidRef.current
-      if (uid) {
-        saveLyric(uid, trackId, {
-          synced: value.synced === true,
-          lines: value.lines || [],
-          source: value.source || null,
-          instrumental: value.instrumental === true,
-        }).catch(() => {
-          /* o próximo ciclo de push não cobre letras; mantém local */
-        })
-      }
     },
     [trackId, storeLyrics],
   )
 
-  const [syncOffsets, setSyncOffsets] = useState({})
+  const [syncOffsets, setSyncOffsets] = useState(() => readLocal('nt.lyricSync') || {})
+
+  useEffect(() => {
+    writeLocal('nt.lyricSync', syncOffsets)
+  }, [syncOffsets])
 
   const adjustSync = useCallback((id, delta) => {
     setSyncOffsets((prev) => {
@@ -6122,129 +5854,6 @@ function App() {
       return next
     })
   }, [])
-
-  const applyCloudBackup = useCallback(
-    (data) => {
-      // A conta é a verdade: cada recebimento traz as linhas das tabelas e o
-      // aparelho passa a refletir a conta (estilo Spotify). Nada é gravado no
-      // aparelho — os áudios baixam só na hora de tocar.
-      const cloudMap = data && data.tracks instanceof Map ? data.tracks : new Map()
-      const cloudTracks = [...cloudMap.values()].filter((t) => t && t.id)
-      const cloudIds = new Set(cloudTracks.map((t) => t.id))
-      const localByCloud = new Map(libraryRef.current.map((t) => [t.id, t]))
-      const mergedTracks = cloudTracks.map((ct) => {
-        const lt = localByCloud.get(ct.id)
-        const playDays = { ...(lt?.playDays || {}), ...(ct.playDays || {}) }
-        for (const [day, v] of Object.entries(lt?.playDays || {})) {
-          const n = Number(v) || 0
-          if (n > (Number(playDays[day]) || 0)) playDays[day] = n
-        }
-        // O áudio/capa ficam SÓ na memória (se este aparelho já baixou nesta
-        // sessão). A referência do arquivo na nuvem vem como cloudAudioKey.
-        const audioBlob = lt?.audioBlob || null
-        const src = audioBlob ? URL.createObjectURL(audioBlob) : null
-        const coverBlob = lt?.coverBlob || null
-        const coverUrl = coverBlob
-          ? URL.createObjectURL(coverBlob)
-          : ct.coverRemote || lt?.coverRemote || null
-        return {
-          id: ct.id,
-          title: ct.title || lt?.title || '',
-          artist: ct.artist || lt?.artist || '',
-          album: ct.album || lt?.album || '',
-          duration: Number(ct.duration) || 0,
-          cover: Array.isArray(ct.cover) ? ct.cover : lt?.cover || null,
-          coverRemote: ct.coverRemote || lt?.coverRemote || null,
-          addedAt: Math.min(Number(lt?.addedAt) || Infinity, Number(ct.addedAt) || Infinity) || Date.now(),
-          fav: ct.fav === true || lt?.fav === true,
-          plays: Math.max(Number(lt?.plays) || 0, Number(ct.plays) || 0),
-          playDays,
-          audioBlob,
-          src,
-          coverBlob,
-          coverUrl,
-          audioMissing: !(audioBlob || ct.hasAudio || ct.audioKey),
-          cloudAudioKey: ct.audioKey || null,
-          coverKey: ct.coverKey || null,
-        }
-      })
-      // Músicas que existem aqui mas ainda não subiram ficam (próximo envio).
-      // As que JÁ estiveram na conta (têm referência de arquivo na nuvem:
-      // audioKey/coverKey) e sumiram do backup SÓ podem ter sido excluídas
-      // por outro aparelho — excluímos aqui também, PRA VALER (não ressuscita).
-      const localOnly = libraryRef.current.filter(
-        (t) => !cloudIds.has(t.id) && !t.audioKey && !t.coverKey && !t.cloudAudioKey,
-      )
-      const tracks = [...mergedTracks, ...localOnly]
-      // Libera os URLs das músicas que saíram/foram substituídas.
-      libraryRef.current.forEach((t) => {
-        if (!cloudIds.has(t.id)) return
-        if (t.src) URL.revokeObjectURL(t.src)
-        if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl)
-      })
-      setLibrary(tracks)
-      if (data.settings && typeof data.settings === 'object') settingsApi.setAll(data.settings)
-      if (data.equalizer && typeof data.equalizer === 'object') eq.importSettings(data.equalizer)
-      if (data.lyricSync && data.lyricSync instanceof Map) {
-        const next = {}
-        for (const row of data.lyricSync.values()) next[row.trackId] = row.offset
-        setSyncOffsets(next)
-      }
-      // Letras salvas manualmente em outro aparelho: aproveita aqui também,
-      // sem precisar buscar de novo — desde que este aparelho ainda não tenha
-      // uma letra aberta para a mesma música.
-      if (data.lyrics && data.lyrics instanceof Map) {
-        for (const [trackId, ly] of data.lyrics) {
-          if (!ly) continue
-          if (loadedLyricsRef.current.has(String(trackId))) continue
-          loadedLyricsRef.current.add(String(trackId))
-          storeLyrics(
-            String(trackId),
-            ly.synced && Array.isArray(ly.lines) && ly.lines.length
-              ? { status: 'done', synced: true, lines: ly.lines, source: ly.source || null, instrumental: ly.instrumental === true }
-              : Array.isArray(ly.lines) && ly.lines.length
-                ? { status: 'done', synced: false, lines: ly.lines, source: ly.source || null, instrumental: ly.instrumental === true }
-                : { status: 'notfound' },
-          )
-        }
-      }
-      if (data.playlists instanceof Map) {
-        const entries = data.playlistEntries instanceof Map ? data.playlistEntries : new Map()
-        setPlaylists(
-          [...data.playlists.values()]
-            .filter((p) => p && p.id)
-            .map((p) => ({
-              id: p.id,
-              name: p.name || '',
-              createdAt: p.createdAt || Date.now(),
-              trackIds: [...entries.values()]
-                .filter((e) => e.playlistId === p.id)
-                .sort((a, b) => a.position - b.position)
-                .map((e) => e.trackId),
-            })),
-        )
-      }
-      if (data.petStats && typeof data.petStats === 'object') {
-        applyPetStats(data.petStats)
-      }
-    },
-    [eq, settingsApi, applyPetStats, storeLyrics],
-  )
-
-  const cloud = useCloudSync({
-    library,
-    settings: appSettings,
-    equalizer: eq.settings,
-    lyricSync: syncOffsets,
-    playlists,
-    petStats,
-    loading: loadingLib,
-    applyRemote: applyCloudBackup,
-  })
-
-  useEffect(() => {
-    uidRef.current = cloud?.user?.id || ''
-  }, [cloud?.user?.id])
 
   const syncOffset = trackId ? syncOffsets[trackId] || 0 : 0
   const firstLineTime = lyrics?.lines?.[0]?.time
@@ -6264,8 +5873,7 @@ function App() {
       setPlaylists((prev) => prev.map((p) => ({ ...p, trackIds: p.trackIds.filter((x) => x !== id) })))
       if (t.src) URL.revokeObjectURL(t.src)
       if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl)
-      // A exclusão vale no banco: o diff (base vs. agora) apaga a linha na
-      // nuvem no próximo envio — e reflete em todos os aparelhos.
+      deleteMediaBlobs(id)
     },
     [library, stopAndReset],
   )
@@ -6278,7 +5886,6 @@ function App() {
       if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl)
     })
     setLibrary([])
-    // As linhas somem do banco no próximo envio (diff), valendo p/ todos.
   }, [library, stopAndReset])
 
   const results = useMemo(() => {
@@ -6378,7 +5985,7 @@ setInstallEvt(null)
         const keys = await caches.keys().catch(() => [])
         await Promise.all(keys.map((k) => caches.delete(k).catch(() => {})))
       }
-      ;['nt.trans', 'nt.recent', 'nt.view', 'nt.playlists', 'nt.lyricSync'].forEach((key) => {
+      ;['nt.trans', 'nt.recent', 'nt.view'].forEach((key) => {
         try {
           localStorage.removeItem(key)
         } catch {
@@ -6757,35 +6364,7 @@ setInstallEvt(null)
     if (dragCounter.current <= 0) setDragOver(false)
   }
 
-  // ── Gate de conta (1ª vez / saiu da conta = tela bonita) ──────────────
-  if (!cloud.authReady) {
-    return (
-      <div className={`app ${IS_NATIVE ? 'app-native' : ''}`} id="top">
-        <div className="welcome-hero welcome-loading">
-          <div className="welcome-logo spin">
-            <svg viewBox="0 0 24 24" width="52" height="52" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
-            </svg>
-          </div>
-          <p className="welcome-tag">Preparando o seu NebulaTune…</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (cloud.cloudEnabled && !cloud.user) {
-    return (
-      <WelcomeScreen
-        cloud={cloud}
-        cloudRedirect={
-          IS_NATIVE
-            ? `${SITE_URL}/?nt=app`
-            : `${window.location.origin}${window.location.pathname}`
-        }
-      />
-    )
-  }
-
+  // App 100% local: abre direto na tela principal, sem login.
   return (
     <div
       className={`app ${IS_NATIVE ? 'app-native' : ''}`}
@@ -6914,9 +6493,6 @@ setInstallEvt(null)
 
         {view === 'inicio' && (
           <section className="view">
-            {cloud.user && appSettings.welcomeSeen !== true && (
-              <WelcomeCard onDone={() => settingsApi.set('welcomeSeen', true)} />
-            )}
             <div className="lib-head lib-head-home">
               <h1 className="greeting">
                 {appSettings.userName
@@ -7294,12 +6870,6 @@ setInstallEvt(null)
             onClearCache={clearCache}
             cacheCleanMsg={cacheCleanMsg}
             onOpenChangelog={() => setChangelogOpen(true)}
-            cloud={cloud}
-            cloudRedirect={
-              IS_NATIVE
-                ? `${SITE_URL}/?nt=app`
-                : `${window.location.origin}${window.location.pathname}`
-            }
           />
         )}
       </main>
