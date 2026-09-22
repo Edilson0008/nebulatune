@@ -197,7 +197,10 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
       const remote = await pullFromDb(id)
       if (!remote) throw new Error('nenhum dado na nuvem')
       applyingRef.current = true
-      await applyRef.current(remote)
+      // Passa a base ANTERIOR (o que a conta tinha antes) junto com o remote:
+      // assim o aparelho sabe o que foi excluído DE VERDADE na nuvem e não
+      // "ressuscita" música apagada por outro aparelho.
+      await applyRef.current(remote, baseRef.current)
       armedRef.current = true
       baseRef.current = remote
       justPulledRef.current = true

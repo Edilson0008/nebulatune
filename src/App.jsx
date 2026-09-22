@@ -88,6 +88,15 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.9.12',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Exclusão funciona PRA VALER entre aparelhos: música que você apaga (ou "apagar tudo") no notebook/celular SOME de todos os aparelhos na mesma conta e NÃO volta mais sozinha.' },
+      { type: 'correcao', text: 'Corrigido o "vai-e-vem" da sincronização: o que cada aparelho deleta agora é respeitado na nuvem, em vez de ser "guardado pra reenviar" e ressuscitar.' },
+      { type: 'novo', text: 'APK agora é publicado de VERDADE junto com o site (antes o arquivo do aplicativo não subia, então o app no celular SEMPRE baixava uma versão velha — por isso as correções não chegavam).' },
+    ],
+  },
+  {
     version: '1.9.11',
     date: 'Setembro de 2026',
     items: [
@@ -6234,7 +6243,12 @@ function App() {
         }
       })
       // Músicas que existem aqui mas ainda não subiram ficam (próximo envio).
-      const localOnly = libraryRef.current.filter((t) => !cloudIds.has(t.id))
+      // As que JÁ estiveram na conta (têm referência de arquivo na nuvem:
+      // audioKey/coverKey) e sumiram do backup SÓ podem ter sido excluídas
+      // por outro aparelho — excluímos aqui também, PRA VALER (não ressuscita).
+      const localOnly = libraryRef.current.filter(
+        (t) => !cloudIds.has(t.id) && !t.audioKey && !t.coverKey && !t.cloudAudioKey,
+      )
       const tracks = [...mergedTracks, ...localOnly]
       // Libera os URLs das músicas que saíram/foram substituídas.
       libraryRef.current.forEach((t) => {

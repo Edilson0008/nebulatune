@@ -1,5 +1,17 @@
+// IMPORTANTE: o resolver de toolchain (foojay) TEM que vir ANTES de qualquer
+// include/apply, senão o Gradle não configura os repositórios de download de
+// JDK e o build falha com "Toolchain download repositories have not been
+// configured" mesmo em máquina com JDK 17/25 (Capacitor 8 pede toolchain 21).
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.10.0'
+}
+
 include ':app'
 include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
+
+// Permite que o Gradle BAIXE automáticamente um JDK da toolchain que o
+// projeto pede (Capacitor 8 quer Java 21). Sem isso, o build falha em
+// máquinas sem JDK 21 instalado no sistema.
 
 apply from: 'capacitor.settings.gradle'
