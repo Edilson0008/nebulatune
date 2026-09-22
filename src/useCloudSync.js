@@ -228,7 +228,13 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     async (id) => {
       try {
         await migrateLegacy(id)
-        await doPush(id, true)
+        // A conta manda: primeiro BAIXA a nuvem e aplica (tema/nome/músicas
+        // aparecem na hora, sem sobrescrever o que já está salvo no e-mail).
+        // Enviar ANTES baixar fazia um aparelho "novo" (ex.: navegador) subir
+        // os ajustes de fábrica por cima da conta e apagar o que o outro
+        // aparelho tinha salvo. Depois do pull, qualquer dado que este
+        // aparelho tiver por conta própria (música importada antes do login)
+        // sobe sozinho pelo auto-push em ~5s.
         await doPull(id)
         armedRef.current = true
         setSeeded(true)
@@ -237,7 +243,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
         armedRef.current = false
       }
     },
-    [doPush, doPull],
+    [doPull],
   )
 
   // ---- AUTH: detecta login/logout ----------------------------------------
@@ -403,13 +409,17 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
   const syncNow = useCallback(async () => {
     if (!userId) return
     try {
-      await doPush(userId, true)
+      // Primeiro BAIXA a conta (a nuvem manda) — evita que um aparelho
+      // "novo" suba seus valores de fábrica por cima do que já está salvo.
+      // Depois o auto-push sobe em ~5s o que este aparelho tiver a mais.
       await doPull(userId)
+      setStatus('ok')
+      setMessage('')
     } catch (e) {
       setStatus('error')
       setMessage(traduzErro(e))
     }
-  }, [userId, doPush, doPull])
+  }, [userId, doPull])
 
   // Apaga TODOS os dados da conta (tabelas + arquivos) e zera o aparelho.
   const purgeAll = useCallback(async () => {

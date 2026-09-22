@@ -5,6 +5,13 @@ cd "$(dirname "$0")/.."
 NODE_BIN="${NODE_BIN:-node22}"
 GRADLE_FLAGS="--no-daemon"
 
+# O aapt2 baixado pelo Gradle não executa em alguns Linux (interpreter ausente).
+# Usamos o do SDK quando existir — sem quebrar o build em outras máquinas.
+LOCAL_AAPT2=/opt/android-sdk/build-tools/36.0.0/aapt2
+if [ -x "$LOCAL_AAPT2" ]; then
+  GRADLE_FLAGS="$GRADLE_FLAGS -Pandroid.aapt2FromMavenOverride=$LOCAL_AAPT2"
+fi
+
 echo "==> 1/6 Build web"
 APP_VERSION=$("$NODE_BIN" --input-type=module -e "import {APP_VERSION} from './src/app-config.js'; process.stdout.write(String(APP_VERSION || '1.0.0'))" 2>/dev/null || echo 1.0.0)
 VC=$("$NODE_BIN" --input-type=module -e "import {VERSION_CODE} from './src/app-config.js'; process.stdout.write(String(VERSION_CODE || 1))" 2>/dev/null || echo 1)
