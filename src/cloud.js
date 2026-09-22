@@ -116,8 +116,11 @@ export function canonTrackRow(t) {
     plays: Number(t?.plays) || 0,
     playDays: t?.playDays && typeof t.playDays === 'object' ? t.playDays : {},
     fav: t?.fav === true,
-    audioKey: safeKey(t?.audioKey || t?.cloudAudioKey || null),
-    coverKey: safeKey(t?.coverKey || null),
+    // Keys de áudio/capa são caminhos no bucket (ex.: "tracks/x-123.bin") gerados
+// por nós. DEVEM permanecer idênticas (pontos e barras inclusos) para o arquivo
+// ser encontrado e removido — nenhuma sanitização aqui.
+    audioKey: t?.audioKey || t?.cloudAudioKey || null,
+    coverKey: t?.coverKey || null,
     hasAudio: Boolean(t?.hasAudio === true || (t?.audioBlob && t.audioBlob.size)),
     hasCover: Boolean(t?.hasCover === true || (t?.coverBlob && t.coverBlob.size)),
   }
@@ -244,8 +247,9 @@ export function computeDiff(localSnap, baseSnap) {
   for (const [id, bRow] of base.tracks) {
     if (!localSnap.tracks.has(id)) {
       trackDeleteIds.push(id)
-      if (bRow?.audioKey) trackDeleteKeys.push(`${TRACKS_DIR}/${bRow.audioKey}`.replace(`${TRACKS_DIR}/${safeKey(bRow.audioKey)}`, `tracks/${safeKey(bRow.audioKey)}`))
-      if (bRow?.coverKey) trackDeleteKeys.push(`${COVERS_DIR}/${safeKey(bRow.coverKey)}`)
+      // As chaves de áudio/capa já vêm com o caminho completo (ex.: "tracks/x.bin").
+      if (bRow?.audioKey) trackDeleteKeys.push(bRow.audioKey)
+      if (bRow?.coverKey) trackDeleteKeys.push(bRow.coverKey)
     }
   }
 
@@ -335,11 +339,52 @@ function trackToDb(row, userId) {
   }
 }
 
+// Sobe os BYTES de uma música (áudio/capa) para o bucket, se a conta ainda não
+// tiver esse arquivo. Devolve a chave do arquivo (uso interno).
+async function uploadTrackMedia(userId, row, srcTrack, forceKey) {
+  const out = { audioKey: null, coverKey: null }
+  if (!row) return out
+  // ÁUDIO: só envia se este aparelho TEM o arquivo e a conta ainda não tem.
+  if (row.hasAudio && !row.audioKey) {
+    const blob = srcTrack?.audioBlob
+    if (blob && blob.size) {
+      const key = forceKey || `${TRACKS_DIR}/${row.id}-${blob.size}.bin`
+      const { error } = await storage().upload(
+        `${userId}/${key}`,
+        blob,
+        { upsert: true, contentType: blob.type || 'audio/mpeg', cacheControl: '3600' },
+      )
+      if (error) throw error
+      out.audioKey = key
+    }
+  }
+  // CAPA: mesma regra.
+  if (row.hasCover && !row.coverKey) {
+    const blob = srcTrack?.coverBlob
+    if (blob && blob.size) {
+      const key = forceKey ? null : `${COVERS_DIR}/${row.id}-${blob.size}.bin`
+      if (key) {
+        const { error } = await storage().upload(
+          `${userId}/${key}`,
+          blob,
+          { upsert: true, contentType: blob.type || 'image/jpeg', cacheControl: '3600' },
+        )
+        if (error) throw error
+        out.coverKey = key
+      }
+    }
+  }
+  return out
+}
+
 // Grava na nuvem exatamente o que o diff mandou (insere, atualiza, apaga).
-export async function pushDiffToDb(userId, localSnap, diff) {
+// `sourceLibrary` é a biblioteca REAL deste aparelho (com os blobs de
+// áudio/capa em memória) — usada para enviar os bytes que ainda faltam.
+export async function pushDiffToDb(userId, localSnap, diff, sourceLibrary = []) {
   if (!supabase) return
   const now = new Date().toISOString()
   const ops = []
+  const srcByTrack = new Map((sourceLibrary || []).map((t) => [String(t?.id), t]))
 
   if (diff.settingsChanged || diff.equalizerChanged) {
     ops.push(
@@ -356,10 +401,18 @@ export async function pushDiffToDb(userId, localSnap, diff) {
   }
 
   if (diff.trackUpsert.length) {
+    const rows = []
+    for (const row of diff.trackUpsert) {
+      // Envia o áudio/capa que ainda não subiu; a chave fica na linha gravada.
+      const media = await uploadTrackMedia(userId, row, srcByTrack.get(String(row.id)))
+      if (media.audioKey) row.audioKey = media.audioKey
+      if (media.coverKey) row.coverKey = media.coverKey
+      rows.push(row)
+    }
     ops.push(
       supabase
         .from('tracks')
-        .upsert(diff.trackUpsert.map((row) => trackToDb(row, userId)), {
+        .upsert(rows.map((row) => trackToDb(row, userId)), {
           onConflict: 'user_id,id',
         }),
     )

@@ -123,3 +123,55 @@ with check (bucket_id = 'backups' and (storage.foldername(name))[1] = auth.uid()
 create policy "backups_delete_own"
 on storage.objects for delete to authenticated
 using (bucket_id = 'backups' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- 5) TABELA DE DADOS DO USUÁRIO (perfil genérico: tudo que for só do dono) ---
+-- user_id é a chave; a linha é criada AUTOMATICAMENTE no cadastro (trigger).
+create table if not exists public.user_data (
+  user_id   uuid primary key references auth.users(id) on delete cascade,
+  payload   jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- 6) TRIGGER: quando um usuário é criado via auth.signUp (e-mail/senha),
+-- cria a linha inicial em user_data e em user_settings automaticamente. -----
+-- security definer: roda como dona da função (postgres), então não é barrado
+-- pelo RLS no momento do cadastro (o usuário ainda nem tem sessão plena).
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.user_data (user_id, payload)
+  values (new.id, '{}'::jsonb)
+  on conflict (user_id) do nothing;
+
+  insert into public.user_settings (user_id, settings)
+  values (new.id, '{}'::jsonb)
+  on conflict (user_id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function public.handle_new_user();
+
+-- 7) RLS da user_data + políticas (dono só enxerga/edita as próprias linhas) ----
+alter table public.user_data enable row level security;
+
+do $$
+begin
+  execute format('drop policy if exists "user_data_select_own" on public.user_data');
+  execute format('drop policy if exists "user_data_insert_own" on public.user_data');
+  execute format('drop policy if exists "user_data_update_own" on public.user_data');
+  execute format('drop policy if exists "user_data_delete_own" on public.user_data');
+  execute format('create policy "user_data_select_own" on public.user_data for select to authenticated using (user_id = auth.uid())');
+  execute format('create policy "user_data_insert_own" on public.user_data for insert to authenticated with check (user_id = auth.uid())');
+  execute format('create policy "user_data_update_own" on public.user_data for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid())');
+  execute format('create policy "user_data_delete_own" on public.user_data for delete to authenticated using (user_id = auth.uid())');
+end $$;

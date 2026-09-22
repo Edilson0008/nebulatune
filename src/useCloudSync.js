@@ -164,7 +164,7 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     busyRef.current = true
     setStatus('syncing')
     try {
-      await pushDiffToDb(id, localSnap, diff)
+      await pushDiffToDb(id, localSnap, diff, dataRef.current.library || [])
       // A partir de agora, o estado local É a base (o que mandamos).
       baseRef.current = localSnap
       justPulledRef.current = false
