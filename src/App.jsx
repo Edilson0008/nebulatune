@@ -88,6 +88,15 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.9.10',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Tela de login consertada pra valer: o rodapé "Seus dados ficam guardados" não sobe MAIS em cima do botão do Google (nada mais se sobrepõe) e o logo nunca mais some pra cima em celular baixinho — o conteúdo rola suave e continua centralizado.' },
+      { type: 'novo', text: 'Visual profissional: botões "Continue" e "Entrar com Google" viraram pílulas bem arredondadas com brilho ao pressionar, e os campos ganham realce suave quando você toca neles.' },
+      { type: 'correcao', text: 'Respeita o "recorte" do celular (notch): o conteúdo nunca mais fica espremido nem atrás da câmera/barra de navegação (safe-area).' },
+    ],
+  },
+  {
     version: '1.9.9',
     date: 'Setembro de 2026',
     items: [

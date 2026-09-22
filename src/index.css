@@ -65,3 +65,18 @@ body {
 .welcome-hero .welcome-submit{width:100%;max-width:360px;padding:14px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--accent,#8b5cf6),var(--accent-2,#c084fc));color:#fff;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 14px 34px rgba(139,92,246,.4);position:relative;z-index:1}
 .welcome-hero .welcome-err{color:#fb7185;font-size:13px;margin:6px 0 0}
 .welcome-hero .welcome-foot{position:absolute;bottom:12px;font-size:11px;opacity:.4;z-index:1}
+
+/* ==== v1.9.10: login PROFISSIONAL - nada sobrepoe, nada corta, tudo arredondadinho ==== */
+.welcome-hero{justify-content:flex-start;gap:16px;padding:max(48px,env(safe-area-inset-top,0px)) 20px max(44px,env(safe-area-inset-bottom,0px));overflow-y:auto}
+.welcome-hero .welcome-brand{margin-top:auto}
+.welcome-hero .welcome-box{margin-bottom:auto}
+.welcome-hero .welcome-foot{position:relative;bottom:auto;left:auto;right:auto;width:100%;margin:4px 0 0;text-align:center}
+.welcome-hero .welcome-submit,.welcome-hero .welcome-google{border-radius:999px}
+.welcome-hero .welcome-submit{letter-spacing:.2px}
+.welcome-hero .welcome-google{padding:14px;transition:transform .18s ease,box-shadow .18s ease}
+.welcome-hero .welcome-google:hover{transform:translateY(-2px);box-shadow:0 16px 36px rgba(0,0,0,.35)}
+.welcome-hero .welcome-google:active{transform:translateY(0) scale(.98)}
+.welcome-hero .welcome-input,.welcome-hero .auth-input{transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}
+.welcome-hero .welcome-input:focus,.welcome-hero .auth-input:focus{background:rgba(255,255,255,.09)}
+.welcome-hero .welcome-google svg{width:20px;height:20px}
+.welcome-hero .welcome-tabs{width:100%;max-width:360px}
