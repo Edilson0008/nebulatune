@@ -1,11 +1,11 @@
-export const APP_VERSION = '1.9.13'
-export const VERSION_CODE = 39
+export const APP_VERSION = '1.9.14'
+export const VERSION_CODE = 40
 
 export const SITE_URL = 'https://edilson0008.github.io/nebulatune'
 
 // Configuração do servidor de contas/sincronização (Supabase).
-// A chave abaixo é a "publishable/anon", que é pública por design.
+// A chave abaixo é a "publishable", que é pública por design.
 export const SUPABASE_URL = 'https://omusoirnpyduuyeirreo.supabase.co'
-export const SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9tdXNvaXJucHlkdXV5ZWlycmVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2OTI5MTIsImV4cCI6MjEwNTI2ODkxMn0.rmuaEMdjQH1BohHMdym2MRHFEpBkfBLTSPHJzuv34_k'
+export const SUPABASE_PUBLISHABLE_KEY =
+  'sb_publishable_TaTyV08pc73d-q4wJ_BTSw_M5CAp8su'
 // deploy-touch no Pages real (1.9.3/29) 2026-09-21

@@ -23,14 +23,12 @@ import {
   requestNotificationsPermission,
   wasUpdatePrompted,
 } from './updater'
-import { exchangeOAuthCode, fetchCloudBlob, OAUTH_CALLBACK, supabase } from './cloud'
+import { fetchCloudBlob } from './cloud'
 import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
 import { updateNowPlaying, hideNowPlaying, onMediaAction } from './mediaNotification'
 
 
 const IS_NATIVE = !!(typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.())
-
-const DEEP_LINK_PREFIX = OAUTH_CALLBACK
 
 const LYRICS_CACHE_MAX = 30
 
@@ -87,6 +85,13 @@ function nf(n) {
 }
 
 const CHANGELOG = [
+  {
+    version: '1.9.14',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Login simplificado: agora é só com e-mail e senha. O "Entrar com Google" saiu para o app ter um único jeito de entrar — e seus dados sempre chegam igual em qualquer aparelho.' },
+    ],
+  },
   {
     version: '1.9.12',
     date: 'Setembro de 2026',
@@ -5200,13 +5205,6 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
                     Criar conta
                   </button>
                 </div>
-                <button
-                  type="button"
-                  className="btn-ghost auth-google"
-                  onClick={() => cloud.google(cloudRedirect)}
-                >
-                  Entrar com Google
-                </button>
               </div>
               {cloud.message && (
                 <p
@@ -5553,29 +5551,6 @@ function WelcomeScreen({ cloud, cloudRedirect }) {
               ? 'Criar minha conta ✦'
               : 'Entrar no app ✦'}
         </button>
-
-        <div className="welcome-divider"><span>ou</span></div>
-
-        <button
-          className="welcome-google"
-          type="button"
-          onClick={() => {
-            setErr('')
-            try {
-              cloud.google(cloudRedirect)
-            } catch (er) {
-              setErr(er?.message || 'Não consegui abrir o Google. Tenta de novo.')
-            }
-          }}
-        >
-          <svg viewBox="0 0 48 48" width="20" height="20">
-            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-          </svg>
-          Continuar com Google
-        </button>
       </form>
 
       <p className="welcome-foot">
@@ -5717,102 +5692,6 @@ function App() {
         }
       } catch {
         /* sem internet ou site indisponível: tenta de novo na próxima abertura */
-      }
-    })()
-    return () => {
-      active = false
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!IS_NATIVE) return undefined
-    let active = true
-    const buildSession = (params) => {
-      const at = params.get('access_token')
-      if (!at) return null
-      const session = {
-        access_token: at,
-        refresh_token: params.get('refresh_token'),
-        token_type: params.get('token_type') || 'bearer',
-      }
-      if (params.get('expires_in')) {
-        session.expires_in = Number(params.get('expires_in'))
-      }
-      if (params.get('expires_at')) {
-        session.expires_at = Number(params.get('expires_at'))
-      }
-      if (!session.expires_at && session.expires_in) {
-        session.expires_at = Math.floor(Date.now() / 1000) + session.expires_in
-      }
-      return session
-    }
-    const goHome = () => {
-      window.location.href = '/'
-    }
-    const handleOAuthReturn = async (url) => {
-      if (!active || typeof url !== 'string' || !url.startsWith(DEEP_LINK_PREFIX)) return
-      let parsed
-      try {
-        parsed = new URL(url)
-      } catch {
-        return
-      }
-      const q = parsed.searchParams
-
-      if (q.get('err') === '1') {
-        goHome()
-        return
-      }
-
-      if (q.get('auto') === '1') {
-        let payload = null
-        try {
-          payload = JSON.parse(q.get('t') || 'null')
-        } catch {
-          payload = null
-        }
-        if (payload?.access_token) {
-          try {
-            await supabase.auth.setSession(payload)
-          } catch {
-            /* sessão inválida: usuário tenta de novo */
-          }
-        }
-        goHome()
-        return
-      }
-
-      const code = q.get('code')
-      if (code) {
-        if (code === window.__ntOAuthCode) return
-        window.__ntOAuthCode = code
-        try {
-          await exchangeOAuthCode(code)
-        } catch {
-          /* falha ao trocar o código: o usuário pode tentar de novo */
-        }
-        goHome()
-        return
-      }
-
-      const session = buildSession(new URLSearchParams(parsed.hash.slice(1)))
-      if (session && session.access_token) {
-        try {
-          await supabase.auth.setSession(session)
-        } catch {
-          /* sessão inválida: usuário tenta de novo */
-        }
-        goHome()
-      }
-    }
-    ;(async () => {
-      const { App } = await import('@capacitor/app')
-      App.addListener('appUrlOpen', (e) => handleOAuthReturn(e.url))
-      try {
-        const launch = (await App.getLaunchUrl?.()) || null
-        if (launch?.url) handleOAuthReturn(launch.url)
-      } catch {
-        /* sem deep link de inicialização */
       }
     })()
     return () => {

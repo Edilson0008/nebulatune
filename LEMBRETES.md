@@ -11,7 +11,7 @@
 
 ## Login e sincronização (feito)
 - Servidor: Supabase (projeto `omusoirnpyduuyeirreo`). Chaves em `src/app-config.js`
-  (`SUPABASE_URL` + `SUPABASE_ANON_KEY`, anon pública).
+  (`SUPABASE_URL` + `SUPABASE_PUBLISHABLE_KEY`, publicável).
 - Ativo: login por e-mail/senha e sincronização automática nos dois sentidos.
   Ao entrar, o app baixa tudo sozinho (biblioteca com áudio, favoritos, ajustes,
   equalizador, sincronia de letras); qualquer mudança feita no aparelho sobe
@@ -31,6 +31,15 @@
   plano grátis. SQL em `supabase/setup.sql`.
 - Google OAuth configurado e funcionando (web + app). No app, o login usa o
   endereço `br.com.nebulatune://callback` (Deep Link declarado no manifesto).
+- **REMOVIDO o login por Google (1.9.14/40, 22/09):** usuário escolheu usar SÓ
+  e-mail/senha (as contas "e-mail" e "Google" com o mesmo e-mail viram contas
+  separadas no Supabase e os dados não se sincronizavam). Código do Google
+  (botões, `signInGoogle`, `exchangeOAuthCode`, deep link `br.com.nebulatune://callback`)
+  foi retirado de `src/cloud.js`, `src/App.jsx` e `src/useCloudSync.js`. O
+  `SupabaseSettingsView`/welcome só têm e-mail+senha agora.
+- **PENDENTE (usuário):** apagar no painel do Supabase a conta duplicada vazia
+  criada pelo login com Google (os dados dele estão na conta de e-mail/senha).
+  Auth → Users → excluir a conta com provider Google do mesmo e-mail.
 - PENDENTE: ligar de volta a confirmação de e-mail no Supabase quando quiser
   mais segurança (hoje está desligada para facilitar os testes).
 
@@ -58,7 +67,7 @@
 - Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.7 / código 33** (APK real na main +
+- Versão atual publicada/remota: **1.9.14 / código 40** (APK real na main +
   site). Fonte da verdade = GitHub.
 - **ATENÇÃO (21/09):** pasta sincronizada com o GitHub via `git reset --hard
   origin/main` (backups: `%TEMP%\opencode\nebulatune-*.patch`). NÃO trabalhar
@@ -197,8 +206,9 @@
   "enviado" antes de aplicar a nuvem (evita reenvio de dados velhos).
 
 ## Ação recorrente
-- De tempos em tempos, lembrar o usuário dos itens pendentes (agora: login com
-  Google e, se quiser, religar a confirmação de e-mail).
+- De tempos em tempos, lembrar o usuário dos itens pendentes (agora: apagar a
+  conta Google duplicada no painel do Supabase e, se quiser, religar a
+  confirmação de e-mail).
 
 ## Rodada de melhorias 2 (feito)
 - Fundo da tela "Tocando agora" usa as cores da capa + um brilho (aura) ao redor

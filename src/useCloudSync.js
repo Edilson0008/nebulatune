@@ -5,7 +5,6 @@ import {
   onAuthChange,
   signUpEmail,
   signInEmail,
-  signInGoogle,
   signOutCloud,
   pullFromDb,
   pushDiffToDb,
@@ -383,16 +382,6 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     }
   }, [])
 
-  const google = useCallback(async (redirectTo) => {
-    setMessage('')
-    try {
-      await signInGoogle(redirectTo)
-    } catch (e) {
-      setStatus('error')
-      setMessage(traduzErro(e))
-    }
-  }, [])
-
   const signOut = useCallback(async () => {
     await signOutCloud()
     armedRef.current = false
@@ -460,7 +449,6 @@ export function useCloudSync({ library, settings, equalizer, lyricSync, playlist
     cloudSummary,
     signIn,
     signUp,
-    google,
     signOut,
     syncNow,
     purgeAll,
