@@ -88,6 +88,15 @@ function nf(n) {
 
 const CHANGELOG = [
   {
+    version: '1.9.11',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Tela de login NÃO fica mais torta pra esquerda (nada mais desalinhado): logo, textos, campos e botões agora são FORÇADOS ao centro, em qualquer altura de celular — curtiu, né? 💜' },
+      { type: 'novo', text: 'Rodapé "Seus dados ficam guardados" foi recolocado no lugar certo: agora ele fica bem embaixo, SEM sobrepor o botão "Entrar com Google".' },
+      { type: 'novo', text: 'Versão de verdade subindo em todo lugar: site, app e changelog internos todos na 1.9.11/37.' },
+    ],
+  },
+  {
     version: '1.9.10',
     date: 'Setembro de 2026',
     items: [
