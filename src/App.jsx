@@ -91,6 +91,13 @@ function nf(n) {
 // Ao adicionar a próxima versão, REMOVER a mais antiga para entrar a nova.
 const CHANGELOG = [
   {
+    version: '1.9.25',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Agora TODAS as capas aparecem: as que vieram da internet (busca automática) tinham sumido ao reabrir o app, só voltavam as que vêm de dentro do próprio arquivo. Todas voltam agora.' },
+    ],
+  },
+  {
     version: '1.9.24',
     date: 'Setembro de 2026',
     items: [
@@ -113,13 +120,6 @@ const CHANGELOG = [
       { type: 'novo', text: '3 animações novas: pulo animado, giro e quicada (boing!) — o gatinho fica ainda mais vivo cantando e dançando.' },
       { type: 'correcao', text: 'Corrigido o sumiço de músicas: o app não grava mais uma lista vazia por cima da sua biblioteca ao abrir ou atualizar.' },
       { type: 'melhoria', text: 'Animações mais leves para o processador (usam só os recursos rápidos da GPU), pra app e site ficarem ainda mais fluídos.' },
-    ],
-  },
-  {
-    version: '1.9.21',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'correcao', text: 'Corrigido o app que às vezes abria e ficava preso em "Carregando sua biblioteca…": as músicas agora carregam de uma vez (e não uma por uma), e até uma música com problema não trava mais a tela.' },
     ],
   },
 ]
@@ -5627,7 +5627,9 @@ function App() {
             audioBlob,
             src: audioBlob ? URL.createObjectURL(audioBlob) : null,
             coverBlob,
-            coverUrl: coverBlob ? URL.createObjectURL(coverBlob) : prevCover,
+            coverUrl: coverBlob
+              ? URL.createObjectURL(coverBlob)
+              : row.coverRemote || prevCover,
             audioMissing: row.audioMissing === true && !audioBlob,
           })
         } catch {

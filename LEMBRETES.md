@@ -1,5 +1,10 @@
 # Lembretes
 
+## FEITO e PUBLICADO em 22/09 (1.9.25/51) — capas das músicas da internet voltam
+- Hidratação ignorava `coverRemote` (capa achada no iTunes): na reabertura do app,
+  essas capas viravam meu gradiente. Agora: `coverUrl = coverBlob ? blob :
+  row.coverRemote || prevCover`. Capas de TODAS voltam.
+
 ## FEITO e PUBLICADO em 22/09 (1.9.24/50) — corrigido capas sumindo + áudio "piano"
 - CRÍTICO: `loadAllMediaBlobs` devolvia lista ACHATADA (áudio,capa,áudio,capa...)
   e o App lia `.audio`/`.cover` → tudo vinha vazio (sem capa; play tocava o
@@ -133,7 +138,7 @@
 - Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.24 / código 50** (APK real na main +
+- Versão atual publicada/remota: **1.9.25 / código 51** (APK real na main +
   site). Fonte da verdade = GitHub.
 
 ## FEITO em 22/09 (1.9.17/43) — app 100% local (removida a nuvem)
