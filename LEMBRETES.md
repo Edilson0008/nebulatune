@@ -1,5 +1,12 @@
 # Lembretes
 
+## FEITO e PUBLICADO em 22/09 (1.9.23/49) — a gatinha ganhou nome: Nebula
+- O gatinho agora se chama NEBULA (nome que o dono escolheu): se apresenta ao
+  pedir o nome do usuário, fala "eu sou a Nebula" e aparece como
+  "🐱 Nebula, seu gatinho" na notificação e "Nebula 🐾" no lembrete do site.
+- Todos os pontos de download do site usam `apk/nebulatune.apk` (sempre a
+  versão mais nova, regravada no build). Changelog máx. 4 (1.9.19 saiu).
+
 ## FEITO e PUBLICADO em 22/09 (1.9.22/48) — gatinho fala com você, notifica, + corretivos
 - Gatinho chama pelo NOme: usa appSettings.userName nas saudações e interações
   (toque, favoritos, humor, tédio, volta). Sem nome salvo, ele pergunta. `name`
@@ -120,7 +127,7 @@
 - Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.22 / código 48** (APK real na main +
+- Versão atual publicada/remota: **1.9.23 / código 49** (APK real na main +
   site). Fonte da verdade = GitHub.
 
 ## FEITO em 22/09 (1.9.17/43) — app 100% local (removida a nuvem)

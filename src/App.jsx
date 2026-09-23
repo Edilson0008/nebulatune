@@ -91,6 +91,13 @@ function nf(n) {
 // Ao adicionar a próxima versão, REMOVER a mais antiga para entrar a nova.
 const CHANGELOG = [
   {
+    version: '1.9.23',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'O gatinho tem nome agora: é a Nebula! 🐱 Ela se apresenta pra você, pede seu nome e mostra o nome dela nas notificações e nos lembretes.' },
+    ],
+  },
+  {
     version: '1.9.22',
     date: 'Setembro de 2026',
     items: [
@@ -113,13 +120,6 @@ const CHANGELOG = [
     date: 'Setembro de 2026',
     items: [
       { type: 'melhoria', text: 'Mini player mais esperto: ele agora aparece SÓ na tela inicial e só quando você seleciona ou toca uma música — e ficou um pouco mais baixo, perto do canto.' },
-    ],
-  },
-  {
-version: '1.9.19',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'Backup completo: os comandos de Exportar e Importar agora levam TUDO junto — músicas, favoritos, playlists, ajustes e até os dados do seu gatinho. Dá pra levar tudo de um aparelho para o outro.' },
     ],
   },
 ]
@@ -515,7 +515,7 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
                 : playing
                   ? moodPools[mood] ||
                     ['que música boa!', '{n}, essa é top!', 'meu som!', 'curtindo!', 'no beat!', 'uuuu!']
-                  : ['oi!', 'e aí?!', 'tô de boa...', 'que legal!', 'ué?', 'nossa, quanta música!', 'óia eu!', 'hehe']
+                  : ['oi!', 'e aí?!', 'tô de boa...', 'que legal!', 'ué?', 'nossa, quanta música!', 'óia eu!', 'hehe', 'eu sou a Nebula! 🐱', 'o bixo sou eu, a Nebula 🐾']
               say(pickNamePool(pool), 2600)
             }
           },
@@ -5451,9 +5451,9 @@ function App() {
     if (!n) {
       // Sem nome salvo: o gatinho lembra (de leve) de perguntar.
       const prompts = [
-        'Ei! Qual é o seu nome? Conta lá em Configurações! 🐾',
-        'Hmm, ainda não sei seu nome... conta pra mim? 🥺',
-        'Oi! Me diz seu nome nas Configurações pra eu te chamar! ✨',
+        'Ei! Sou a Nebula... qual é o seu nome? Conta lá em Configurações! 🐾',
+        'Hmm, ainda não sei seu nome... eu sou a Nebula, e você? 🥺',
+        'Oi! Me diz seu nome nas Configurações pra eu te chamar! Eu sou a Nebula. ✨',
       ]
       greetIdxRef.current = (greetIdxRef.current + 1) % prompts.length
       return prompts[greetIdxRef.current]
@@ -5473,7 +5473,7 @@ function App() {
           notifications: [
             {
               id: ID,
-              title: '🐱 O gatinho Nebula',
+              title: '🐱 Nebula, seu gatinho',
               body: pickPetNudge(),
               channelId: 'pet',
               smallIcon: 'ic_notification',
@@ -7283,7 +7283,7 @@ onPetAction={handlePetAction}
         >
           <span className="pet-reminder-icon">🐱</span>
           <span className="pet-reminder-body">
-            <b className="pet-reminder-title">O gatinho Nebula</b>
+            <b className="pet-reminder-title">Nebula 🐾</b>
             <span className="pet-reminder-text">{petReminder.text}</span>
           </span>
           <span
