@@ -99,32 +99,39 @@ export async function loadAllMediaBlobs(ids) {
     return await new Promise((resolve) => {
       const t = db.transaction(STORE, 'readonly')
       const store = t.objectStore(STORE)
-      const jobs = ids.map((id) => [
-        store.get(`${id}:audio`),
-        store.get(`${id}:cover`),
-      ])
-      let done = 0
-      const out = new Array(jobs.length)
-      const settle = () => {
-        if (++done === jobs.length) {
+      let pending = ids.length
+      const out = new Array(ids.length)
+      // Cada música tem UM par de pedidos (áudio + capa) que respondem SEPARADO.
+      // Só libera o resultado quando as DUAS respostas do par chegaram; antes,
+      // a contagem errada encerrava na metade do caminho e a metade restante
+      // ficava sem áudio e sem capa ao reabrir o app.
+      const settlePair = (i) => {
+        if (--pending === 0) {
           db.close()
           resolve(out)
         }
       }
-      jobs.forEach((pair, i) => {
+      ids.forEach((id, i) => {
         const media = { audio: null, cover: null }
         out[i] = media
-        pair[0].onsuccess = () => {
-          media.audio = pair[0].result || null
-          settle()
+        let pairDone = 0
+        const mark = () => {
+          if (++pairDone === 2) settlePair(i)
         }
-        pair[0].onerror = () => settle()
-        pair[1].onsuccess = () => {
-          media.cover = pair[1].result || null
-          settle()
+        const audioReq = store.get(`${id}:audio`)
+        const coverReq = store.get(`${id}:cover`)
+        audioReq.onsuccess = () => {
+          media.audio = audioReq.result || null
+          mark()
         }
-        pair[1].onerror = () => settle()
+        audioReq.onerror = () => mark()
+        coverReq.onsuccess = () => {
+          media.cover = coverReq.result || null
+          mark()
+        }
+        coverReq.onerror = () => mark()
       })
+      // Rede de segurança: nunca deixar pendurado.
       t.oncomplete = () => {
         db.close()
         resolve(out)

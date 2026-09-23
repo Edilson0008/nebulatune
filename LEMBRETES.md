@@ -1,5 +1,12 @@
 # Lembretes
 
+## FEITO e PUBLICADO em 22/09 (1.9.26/52) — metade das músicas sem capa/som ao reabrir
+- BUG real de `loadAllMediaBlobs` (localstore.js): contava respostas errado —
+  esperava N respostas, mas cada música dispara 2 (áudio+capa) → resolvia no
+  meio, deixando ~metade com blobs null. Por isso capas iam e voltavam.
+  Corrigido: cada par sinaliza UMA vez (pairDone===2 → pending--).
+  Também explica o "piano" nas 1.9.24/25 (áudio de metade das músicas faltava).
+
 ## FEITO e PUBLICADO em 22/09 (1.9.25/51) — capas das músicas da internet voltam
 - Hidratação ignorava `coverRemote` (capa achada no iTunes): na reabertura do app,
   essas capas viravam meu gradiente. Agora: `coverUrl = coverBlob ? blob :
@@ -138,7 +145,7 @@
 - Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.25 / código 51** (APK real na main +
+- Versão atual publicada/remota: **1.9.26 / código 52** (APK real na main +
   site). Fonte da verdade = GitHub.
 
 ## FEITO em 22/09 (1.9.17/43) — app 100% local (removida a nuvem)

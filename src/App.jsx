@@ -91,6 +91,13 @@ function nf(n) {
 // Ao adicionar a próxima versão, REMOVER a mais antiga para entrar a nova.
 const CHANGELOG = [
   {
+    version: '1.9.26',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Corrigido o bug que fazia metade das músicas voltar sem capa (e às vezes sem som) ao reabrir o app ou o site: a leitura das músicas era encerrada no meio do caminho. Agora todas carregam completas.' },
+    ],
+  },
+  {
     version: '1.9.25',
     date: 'Setembro de 2026',
     items: [
@@ -109,17 +116,6 @@ const CHANGELOG = [
     date: 'Setembro de 2026',
     items: [
       { type: 'novo', text: 'O gatinho tem nome agora: é a Nebula! 🐱 Ela se apresenta pra você, pede seu nome e mostra o nome dela nas notificações e nos lembretes.' },
-    ],
-  },
-  {
-    version: '1.9.22',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'O gatinho agora manda NOTIFICAÇÃO de vez em quando pra te chamar de volta — "Cadê você?", "Bora ouvir seu som?" e outras mensagens dele. No app ele avisa com notificação de verdade; no site, aparece um lembrete dele na tela.' },
-      { type: 'novo', text: 'O gatinho agora fala COM VOCÊ: ele usa seu nome nas saudações e nas interações (quando você toca nele, curte uma música, volta pro app e até quando sente falta de você). Salve seu nome em Ajustes e veja! Se ainda não tiver nome, ele te pergunta. 🐾' },
-      { type: 'novo', text: '3 animações novas: pulo animado, giro e quicada (boing!) — o gatinho fica ainda mais vivo cantando e dançando.' },
-      { type: 'correcao', text: 'Corrigido o sumiço de músicas: o app não grava mais uma lista vazia por cima da sua biblioteca ao abrir ou atualizar.' },
-      { type: 'melhoria', text: 'Animações mais leves para o processador (usam só os recursos rápidos da GPU), pra app e site ficarem ainda mais fluídos.' },
     ],
   },
 ]
