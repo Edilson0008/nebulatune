@@ -10,6 +10,9 @@ import { PRESETS, useEqualizer } from './audio/equalizer'
 import { APP_VERSION, SITE_URL } from './app-config'
 import { Share as CapShare } from '@capacitor/share'
 import { Filesystem, Directory } from '@capacitor/filesystem'
+import { App as CapacitorApp } from '@capacitor/app'
+import { LocalNotifications } from '@capacitor/local-notifications'
+import { pickPetNudge } from './petNudges'
 import { resolveAudiusStream, searchAudiusTracks, topTracks } from './online'
 import { blobToDataUrl, dataUrlToBlob } from './backup'
 import {
@@ -88,6 +91,17 @@ function nf(n) {
 // Ao adicionar a próxima versão, REMOVER a mais antiga para entrar a nova.
 const CHANGELOG = [
   {
+    version: '1.9.22',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'O gatinho agora manda NOTIFICAÇÃO de vez em quando pra te chamar de volta — "Cadê você?", "Bora ouvir seu som?" e outras mensagens dele. No app ele avisa com notificação de verdade; no site, aparece um lembrete dele na tela.' },
+      { type: 'novo', text: 'O gatinho agora fala COM VOCÊ: ele usa seu nome nas saudações e nas interações (quando você toca nele, curte uma música, volta pro app e até quando sente falta de você). Salve seu nome em Ajustes e veja! Se ainda não tiver nome, ele te pergunta. 🐾' },
+      { type: 'novo', text: '3 animações novas: pulo animado, giro e quicada (boing!) — o gatinho fica ainda mais vivo cantando e dançando.' },
+      { type: 'correcao', text: 'Corrigido o sumiço de músicas: o app não grava mais uma lista vazia por cima da sua biblioteca ao abrir ou atualizar.' },
+      { type: 'melhoria', text: 'Animações mais leves para o processador (usam só os recursos rápidos da GPU), pra app e site ficarem ainda mais fluídos.' },
+    ],
+  },
+  {
     version: '1.9.21',
     date: 'Setembro de 2026',
     items: [
@@ -102,21 +116,10 @@ const CHANGELOG = [
     ],
   },
   {
-    version: '1.9.19',
+version: '1.9.19',
     date: 'Setembro de 2026',
     items: [
-      { type: 'novo', text: 'Backup agora é TUDO num arquivo: além das músicas (com som e capa), ele guarda e restaura também suas configurações (nome, avatar, velocidade, equalizador), o gatinho (toques e moedas), as playlists e a sincronia das letras. Leve para outro aparelho e tudo volta igual.' },
-    ],
-  },
-  {
-    version: '1.9.18',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'Visual "Design 2.0" cósmico: tema em roxo, rosa, verde e ciano, com o gatinho num habitat novo (pílulas de humor, ilha brilhante e moedas).' },
-      { type: 'novo', text: 'Moedas! Você ganha 🪙 ao tocar no seu gatinho e ao ouvir músicas.' },
-      { type: 'novo', text: '"Destaques recentes" e o player flutuante com botões de repetir e embaralhar; tocar numa música agora carimba play verde nas capas.' },
-      { type: 'melhoria', text: 'Letras com muito mais cobertura: a busca agora consulta dois serviços diferentes e indica quando a letra simples não é sincronizada.' },
-      { type: 'melhoria', text: 'App muito mais leve: o relógio da música não obriga mais a tela inteira a se redesenhar a cada segundo, e o fundo cósmico ficou mais barato para o processador.' },
+      { type: 'novo', text: 'Backup completo: os comandos de Exportar e Importar agora levam TUDO junto — músicas, favoritos, playlists, ajustes e até os dados do seu gatinho. Dá pra levar tudo de um aparelho para o outro.' },
     ],
   },
 ]
@@ -171,6 +174,8 @@ const PET_GREETINGS = [
   (n) => (n ? `${n}, bora ouvir um som? 🎶` : 'Bora ouvir um som? 🎶'),
   (n) => (n ? `E aí, ${n}! Pronto pra curtir? ✨` : 'E aí! Pronto pra curtir? ✨'),
   (n) => (n ? `${n}, você chegou! 🥰` : 'Você chegou! 🥰'),
+  (n) => (n ? `${n}, hoje a gente se diverte! 🎵` : 'Hoje a gente se diverte! 🎵'),
+  (n) => (n ? `Que bom te ver de novo, ${n}! 💜` : 'Que bom te ver de novo! 💜'),
   () => 'Tava te esperando! 😻',
   () => 'Me dá um toque pra eu ronronar. 🐱',
   () => 'Bora cantar junto? 🎤',
@@ -195,6 +200,7 @@ function PetFriend({
   mood = 'neutral',
   greetOnMount = null,
   greetOnMountMs = 4800,
+  userName = '',
 }) {
   const [anim, setAnim] = useState(null)
   const [burst, setBurst] = useState('')
@@ -243,6 +249,20 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
     clearTimeout(sayT.current)
     if (ms) sayT.current = setTimeout(() => setSpeech(null), ms)
   }, [])
+
+  // Tira uma frase de um conjunto já pronto para chamar o usuário pelo nome.
+  // Frases com {n} só são usadas quando o usuário salvou um nome.
+  const pickNamePool = useCallback(
+    (pool) => {
+      const nm = (userName || '').trim()
+      const usable = nm ? pool : pool.filter((t) => !t.includes('{n}'))
+      const src = usable.length ? usable : pool
+      let t = src[Math.floor(Math.random() * src.length)]
+      if (nm && t.includes('{n}')) t = t.split('{n}').join(nm.split(/\s+/)[0])
+      return t
+    },
+    [userName],
+  )
 
   const layoutBubble = useCallback(() => {
     const el = rootRef.current
@@ -298,18 +318,18 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
       setBurst(b)
       if (phrasePool) {
         const P = {
-          heart: ['adoro!', 'coraçãozinho pra ela!', 'essa entra na lista!', 'que fofo!'],
-          scared: ['ih!', 'que susto!'],
+          heart: ['adoro!', '{n}, amei isso!', 'coraçãozinho pra ela!', 'essa entra na lista!', 'que fofo!'],
+          scared: ['ih!', 'que susto!', '{n}! que susto!'],
           angry: ['grr...', 'não gostei!', 'fica quieto!'],
-          roulette: ['sorte!', 'rumo ao aleatório!'],
-          cuddle: ['hehe...', 'que bom!', 'mais!'],
-          return: ['oi de novo!', 'senti tua falta!', 'cadê você?'],
+          roulette: ['sorte!', 'rumo ao aleatório!', '{n}, a sorte!'],
+          cuddle: ['{n}! hehe...', 'que bom!', 'mais!', 'adoro você!'],
+          return: ['oi de novo!', 'senti tua falta!', '{n}! senti tua falta!', 'cadê você?'],
         }
-        say(P[phrasePool][Math.floor(Math.random() * P[phrasePool].length)], Math.min(3000, ms + 1200))
+        say(pickNamePool(P[phrasePool]), Math.min(3000, ms + 1200))
       }
       if (ms) burstT.current = setTimeout(() => setBurst(''), ms)
     },
-    [say],
+    [say, pickNamePool],
   )
 
   const playMeow = useCallback(() => {
@@ -370,13 +390,13 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
     const phrases = {
       triste: ['que triste...', 'essa música é melancólica...', 'sinto muito...', 'hmm...'],
       calmo: ['que calmaria...', 'relaxando...', 'suave...'],
-      alegre: ['que alegria!', 'essa música é linda!', 'tô feliz!'],
-      dancante: ['no ritmo!', 'bom de dançar!', 'que muda!'],
-      hype: ['agito total!', 'isso!', 'uauuu!', 'energia!'],
+      alegre: ['que alegria!', '{n}, que alegria!', 'essa música é linda!', 'tô feliz!'],
+      dancante: ['no ritmo!', '{n}, no ritmo!', 'bom de dançar!', 'que muda!'],
+      hype: ['agito total!', 'isso!', '{n}! isso!', 'uauuu!', 'energia!'],
     }
     const pool = phrases[mood] || ['que música!']
-    say(pool[Math.floor(Math.random() * pool.length)], 2600)
-  }, [mood, playing, say])
+    say(pickNamePool(pool), 2600)
+  }, [mood, playing, say, pickNamePool])
 
   useEffect(() => {
     const onVis = () => {
@@ -407,17 +427,24 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
         const bored = idleFor > 90000
         if (bored && Date.now() - boredTellRef.current > 60000) {
           boredTellRef.current = Date.now()
-          const boredPhrases = ['que tédio...', 'vem brincar...', 'alguém aí?', 'tão quieto...']
-          say(boredPhrases[Math.floor(Math.random() * boredPhrases.length)], 2400)
+          const boredPhrases = [
+            'que tédio...',
+            'vem brincar...',
+            'alguém aí?',
+            'tão quieto...',
+            '{n}, vem brincar comigo!',
+            '{n}? tô esperando você...',
+          ]
+          say(pickNamePool(boredPhrases), 2400)
         }
-        const playOpts = ['sing', 'dance', 'hype', 'sing', 'dance', 'hop', 'sing', 'hype']
+        const playOpts = ['sing', 'dance', 'hype', 'sing', 'dance', 'hop', 'sing', 'hype', 'jump', 'boing', 'spin']
         if (heavy) playOpts.push('headbang', 'headbang')
-        if (mood === 'hype') playOpts.splice(0, playOpts.length, 'hype', 'headbang', 'hype', 'sing', 'dance', 'hype')
-        else if (mood === 'dancante') playOpts.push('dance', 'dance', 'twirl', 'sing')
-        else if (mood === 'alegre') playOpts.push('sing', 'hop', 'twirl', 'dance')
+        if (mood === 'hype') playOpts.splice(0, playOpts.length, 'hype', 'headbang', 'hype', 'sing', 'dance', 'hype', 'spin', 'jump')
+        else if (mood === 'dancante') playOpts.push('dance', 'dance', 'twirl', 'sing', 'spin')
+        else if (mood === 'alegre') playOpts.push('sing', 'hop', 'twirl', 'dance', 'jump')
         else if (mood === 'calmo') playOpts.push('glint', 'look', 'sing', 'sing')
         else if (mood === 'triste') playOpts.splice(0, playOpts.length, 'sing', 'look', 'walk', 'glint', 'sing')
-        const idleOpts = ['walk', 'twirl', 'glint', 'hop', 'look', 'wiggle', 'stretch', 'sleep', 'sleep', 'glint', 'curious']
+        const idleOpts = ['walk', 'twirl', 'glint', 'hop', 'look', 'wiggle', 'stretch', 'sleep', 'sleep', 'glint', 'curious', 'jump', 'boing', 'spin']
         if (bored) idleOpts.push('curious', 'curious', 'curious', 'walk', 'walk')
         if (sleepMode) idleOpts.push('sleep', 'yawn')
         if (hour >= 22 || hour < 6) idleOpts.push('sleep', 'sleep', 'yawn')
@@ -426,10 +453,10 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
         if (hour >= 19 && hour < 23) idleOpts.push('yawn', 'sleep')
         const moodPools = {
           triste: ['que triste...', 'essa música é melancólica...', 'sinto muito...', 'hmm...'],
-          calmo: ['que calmaria...', 'relaxando...', 'suave...'],
-          alegre: ['que alegria!', 'essa música é linda!', 'tô feliz!'],
-          dancante: ['no ritmo!', 'bom de dançar!', 'que muda!'],
-          hype: ['agito total!', 'isso!', 'uauuu!', 'energia!'],
+          calmo: ['que calmaria...', 'relaxando...', 'suave...', '{n}, relaxa aí...'],
+          alegre: ['que alegria!', '{n}, que alegria!', 'essa música é linda!', 'tô feliz!'],
+          dancante: ['no ritmo!', '{n}, no ritmo!', 'bom de dançar!', 'que muda!'],
+          hype: ['agito total!', 'isso!', '{n}! isso!', 'uauuu!', 'energia!'],
         }
         const opts = playing ? playOpts : idleOpts
         const avoid = lastAnimRef.current
@@ -468,7 +495,7 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
         setAnim(pick)
         if (pick === 'sleep' || pick === 'yawn') onActionRef.current?.('sleep')
         const dur =
-          { sing: 4600, dance: 3200, hype: 3200, sleep: 3000, walk: 5600, twirl: 1500, glint: 2200, curious: 4600, yawn: 2600, headbang: 2400 }[pick] ??
+          { sing: 4600, dance: 3200, hype: 3200, sleep: 3000, walk: 5600, twirl: 1500, glint: 2200, curious: 4600, yawn: 2600, headbang: 2400, jump: 2400, spin: 3000, boing: 1600 }[pick] ??
           1700
         if (phraseT.current) clearTimeout(phraseT.current)
         phraseT.current = setTimeout(
@@ -479,14 +506,17 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
                 yawn: ['haaah...', 'soninho chegando...'],
                 headbang: ['que grave!', 'queeee!', 'pesado!'],
                 curious: ['o que é isso?', 'qué-é isso?'],
+                spin: ['uhuuul!', 'que giro!', '{n}, olha o giro!'],
+                jump: ['woba!', 'pula pula!', 'voei!'],
+                boing: ['boing!', 'quicando!'],
               }
               const pool = pools[pick]
                 ? pools[pick]
                 : playing
                   ? moodPools[mood] ||
-                    ['que música boa!', 'essa é top!', 'meu som!', 'curtindo!', 'no beat!', 'uuuu!']
+                    ['que música boa!', '{n}, essa é top!', 'meu som!', 'curtindo!', 'no beat!', 'uuuu!']
                   : ['oi!', 'e aí?!', 'tô de boa...', 'que legal!', 'ué?', 'nossa, quanta música!', 'óia eu!', 'hehe']
-              say(pool[Math.floor(Math.random() * pool.length)], 2600)
+              say(pickNamePool(pool), 2600)
             }
           },
           dur * 0.4 + random(300, 800),
@@ -504,7 +534,7 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
       if (sayT.current) clearTimeout(sayT.current)
       if (tapWindowT.current) clearTimeout(tapWindowT.current)
     }
-  }, [playing, heavy, sleepMode, hour, say, mood])
+  }, [playing, heavy, sleepMode, hour, say, mood, pickNamePool])
 
   const onPointerDown = (e) => {
     const el = rootRef.current
@@ -765,7 +795,7 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
   )
 }
 
-function PetHabitatCard({ greeting, greetMs = 4800, stats, onShowProfile = null, ...pet }) {
+function PetHabitatCard({ greeting, greetMs = 4800, stats, onShowProfile = null, userName = '', ...pet }) {
   const fmtNum = (n) => {
     const v = n || 0
     if (v >= 100000) return `${(v / 1000).toFixed(0)}k`
@@ -808,7 +838,7 @@ function PetHabitatCard({ greeting, greetMs = 4800, stats, onShowProfile = null,
       <div className="pet-habitat-stage">
         <span className="pet-habitat-orb pet-habitat-orb-1" />
         <span className="pet-habitat-orb pet-habitat-orb-2" />
-        <PetFriend {...pet} size={148} greetOnMount={greeting} greetOnMountMs={greetMs} />
+        <PetFriend {...pet} size={148} greetOnMount={greeting} greetOnMountMs={greetMs} userName={userName} />
       </div>
       <div className="pet-stats-bar">
         {bar.map((c) => (
@@ -2027,6 +2057,7 @@ function NowPlaying({
   idleSinceRef = null,
   onPetAction = null,
   mood = 'neutral',
+  userName = '',
 }) {
   const barRef = useRef(null)
   const draggingRef = useRef(false)
@@ -2373,6 +2404,7 @@ function NowPlaying({
             idleSinceRef={idleSinceRef}
             onPetAction={onPetAction}
             mood={mood}
+            userName={userName}
           />
         </div>
         <div className="np-cover">
@@ -5400,6 +5432,7 @@ if (typeof window !== 'undefined') {
 function App() {
   const [library, setLibrary] = useState([])
   const [loadingLib, setLoadingLib] = useState(false)
+  const [libraryHydrated, setLibraryHydrated] = useState(false)
   const [cacheCleanMsg, setCacheCleanMsg] = useState('')
   const [view, setView] = useState('inicio')
   const [query, setQuery] = useState('')
@@ -5413,11 +5446,103 @@ function App() {
   const { settings: appSettings, api: settingsApi } = useSettings()
   const greetIdxRef = useRef(0)
   const nextPetGreet = useCallback((name, empty) => {
-    greetIdxRef.current = (greetIdxRef.current + 1) % PET_GREETINGS.length
-    const tpl = PET_GREETINGS[greetIdxRef.current]
-    return empty ? PET_GREETINGS[0]() : tpl(name || '')
+    if (empty) return PET_GREETINGS[0]()
+    const n = (name || '').trim()
+    if (!n) {
+      // Sem nome salvo: o gatinho lembra (de leve) de perguntar.
+      const prompts = [
+        'Ei! Qual é o seu nome? Conta lá em Configurações! 🐾',
+        'Hmm, ainda não sei seu nome... conta pra mim? 🥺',
+        'Oi! Me diz seu nome nas Configurações pra eu te chamar! ✨',
+      ]
+      greetIdxRef.current = (greetIdxRef.current + 1) % prompts.length
+      return prompts[greetIdxRef.current]
+    }
+    greetIdxRef.current = ((greetIdxRef.current + 1) % (PET_GREETINGS.length - 1)) + 1
+    return PET_GREETINGS[greetIdxRef.current](n)
   }, [])
   const [petGreet, setPetGreet] = useState(null)
+  // Gatinho chamando de volta: notificação real no app + lembrete na tela no site.
+  const [petReminder, setPetReminder] = useState(null)
+  useEffect(() => {
+    if (!IS_NATIVE) return undefined
+    const ID = 9017
+    const scheduleNudge = () => {
+      try {
+        LocalNotifications.schedule({
+          notifications: [
+            {
+              id: ID,
+              title: '🐱 O gatinho Nebula',
+              body: pickPetNudge(),
+              channelId: 'pet',
+              smallIcon: 'ic_notification',
+              schedule: { at: new Date(Date.now() + Math.round(random(90, 300)) * 60000) },
+            },
+          ],
+        }).catch(() => {})
+      } catch {
+        /* notificação indisponível */
+      }
+    }
+    const cancelNudge = () => {
+      LocalNotifications.cancel({ notifications: [{ id: ID }] }).catch(() => {})
+    }
+    try {
+      LocalNotifications.createChannel({
+        id: 'pet',
+        name: 'Gatinho',
+        description: 'Lembretes do gatinho do NebulaTune',
+        importance: 4,
+      }).catch(() => {})
+    } catch {
+      /* canal indisponível */
+    }
+    let unreg = null
+    try {
+      unreg = CapacitorApp.addListener('appStateChange', (s) => {
+        if (s.isActive) cancelNudge()
+        else scheduleNudge()
+      })
+    } catch {
+      /* sem suporte */
+    }
+    return () => {
+      try {
+        unreg?.then((l) => l.remove?.())
+      } catch {
+        /* ignora */
+      }
+      cancelNudge()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (IS_NATIVE) return undefined
+    let lastTouch = Date.now()
+    const bump = () => {
+      lastTouch = Date.now()
+    }
+    const evs = ['pointerdown', 'touchstart', 'keydown']
+    evs.forEach((ev) => window.addEventListener(ev, bump, { passive: true }))
+    const timer = setInterval(() => {
+      if (document.hidden || petReminder) return
+      if (Date.now() - lastTouch > 45 * 60000) {
+        setPetReminder({ id: Date.now(), text: pickPetNudge() })
+        lastTouch = Date.now()
+      }
+    }, 30000)
+    return () => {
+      evs.forEach((ev) => window.removeEventListener(ev, bump))
+      clearInterval(timer)
+    }
+  }, [petReminder])
+
+  useEffect(() => {
+    if (!petReminder) return undefined
+    const t = setTimeout(() => setPetReminder(null), 9000)
+    return () => clearTimeout(t)
+  }, [petReminder])
   const [notifOpen, setNotifOpen] = useState(false)
   const notifRef = useRef(null)
   useEffect(() => {
@@ -5479,7 +5604,10 @@ function App() {
     }
     ;(async () => {
       const rows = readLocal('nt.library')
-      if (!alive || !Array.isArray(rows)) return
+      if (!alive || !Array.isArray(rows)) {
+        if (alive) setLibraryHydrated(true)
+        return
+      }
       setLoadingLib(true)
       const ids = rows.map((r) => (r && r.id) || '')
       const mediaList = await loadAllMediaBlobs(ids)
@@ -5508,6 +5636,7 @@ function App() {
       }
       if (!alive) return
       setLibrary(hydrated)
+      setLibraryHydrated(true)
       finish()
     })()
     // Rede de segurança: nunca deixar preso em "Carregando sua biblioteca…".
@@ -5521,6 +5650,9 @@ function App() {
   // Salva a biblioteca localmente (debounce): metadados + blobs novos.
   useEffect(() => {
     const t = setTimeout(() => {
+      // Nunca gravar "biblioteca vazia" por cima da verdadeira antes de a
+      // hidratação terminar: isso fazia as músicas sumirem ao trocar de versão.
+      if (!libraryHydrated && library.length === 0) return
       const rows = library
         .filter((x) => x && x.id)
         .map((x) => ({
@@ -5550,7 +5682,7 @@ function App() {
       })
     }, 600)
     return () => clearTimeout(t)
-  }, [library])
+  }, [library, libraryHydrated])
 
   useEffect(() => {
     const mark = () => {
@@ -6693,8 +6825,9 @@ setInstallEvt(null)
               soundOn={appSettings.petSound !== false}
               cheer={cheer}
               idleSinceRef={idleSinceRef}
-              onPetAction={handlePetAction}
+onPetAction={handlePetAction}
               mood={mood}
+              userName={appSettings.userName}
             />
 
             {loadingLib ? (
@@ -7110,6 +7243,7 @@ setInstallEvt(null)
           idleSinceRef={idleSinceRef}
           onPetAction={handlePetAction}
           mood={mood}
+          userName={appSettings.userName}
         />
       )}
 
@@ -7135,6 +7269,36 @@ setInstallEvt(null)
           }}
           onClose={() => setEditingTrack(null)}
         />
+      )}
+
+      {petReminder && (
+        <div
+          className="pet-reminder"
+          role="button"
+          tabIndex={0}
+          onClick={() => setPetReminder(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') setPetReminder(null)
+          }}
+        >
+          <span className="pet-reminder-icon">🐱</span>
+          <span className="pet-reminder-body">
+            <b className="pet-reminder-title">O gatinho Nebula</b>
+            <span className="pet-reminder-text">{petReminder.text}</span>
+          </span>
+          <span
+            className="pet-reminder-close"
+            role="button"
+            tabIndex={0}
+            aria-label="Fechar lembrete"
+            onClick={(e) => {
+              e.stopPropagation()
+              setPetReminder(null)
+            }}
+          >
+            ✕
+          </span>
+        </div>
       )}
 
       {toast && <div className="toast">{toast}</div>}

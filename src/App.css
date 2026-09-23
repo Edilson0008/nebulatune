@@ -1282,6 +1282,7 @@ button {
 
 .pet-body {
   animation: pet-hop 1.8s cubic-bezier(0.4, 0, 0.25, 1) infinite;
+  will-change: transform;
 }
 
 .pet-tail {
@@ -1322,6 +1323,65 @@ button {
   }
   62% {
     transform: translateY(-2px) scale(0.99, 1.01);
+  }
+}
+
+.pet-jump .pet-body {
+  animation: pet-jump 2.2s cubic-bezier(0.45, 0, 0.3, 1);
+}
+
+.pet-spin .pet-body {
+  animation: pet-spin 3s cubic-bezier(0.45, 0, 0.3, 1);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.pet-boing .pet-body {
+  animation: pet-boing 1.6s cubic-bezier(0.45, 0, 0.3, 1);
+}
+
+@keyframes pet-jump {
+  0%, 100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  18% {
+    transform: translateY(0) scale(1.12, 0.84);
+  }
+  40% {
+    transform: translateY(-16px) scale(0.94, 1.12);
+  }
+  55% {
+    transform: translateY(0) scale(1.09, 0.9);
+  }
+  72% {
+    transform: translateY(-7px) scale(0.97, 1.05);
+  }
+}
+
+@keyframes pet-spin {
+  0% {
+    transform: rotate(0deg) translateY(0);
+  }
+  50% {
+    transform: rotate(170deg) translateY(-5px);
+  }
+  100% {
+    transform: rotate(360deg) translateY(0);
+  }
+}
+
+@keyframes pet-boing {
+  0%, 100% {
+    transform: scale(1, 1) translateY(0);
+  }
+  28% {
+    transform: scale(1.2, 0.8) translateY(2px);
+  }
+  52% {
+    transform: scale(0.9, 1.14) translateY(-10px);
+  }
+  74% {
+    transform: scale(1.07, 0.93) translateY(-1px);
   }
 }
 
@@ -1955,6 +2015,93 @@ button {
   pointer-events: none;
   white-space: nowrap;
   animation: toast-in 0.18s ease-out;
+}
+
+.pet-reminder {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 135;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 28px);
+  width: min(420px, calc(100vw - 28px));
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: rgba(22, 18, 38, 0.92);
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  animation: pet-reminder-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.pet-reminder-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 183, 120, 0.35), rgba(139, 92, 246, 0.28));
+  animation: pet-reminder-bob 1.6s ease-in-out infinite;
+}
+
+.pet-reminder-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pet-reminder-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #c9b8ff;
+}
+
+.pet-reminder-text {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-h);
+}
+
+.pet-reminder-close {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-2);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes pet-reminder-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes pet-reminder-bob {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
 }
 
 @keyframes toast-in {

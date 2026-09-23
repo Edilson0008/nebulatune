@@ -1,5 +1,21 @@
 # Lembretes
 
+## FEITO e PUBLICADO em 22/09 (1.9.22/48) — gatinho fala com você, notifica, + corretivos
+- Gatinho chama pelo NOme: usa appSettings.userName nas saudações e interações
+  (toque, favoritos, humor, tédio, volta). Sem nome salvo, ele pergunta. `name`
+  entra via `userName` prop no PetFriend/PetHabitatCard/NowPlaying +
+  `pickNamePool` (frases com {n} só com nome).
+- 3 animações novas: `pet-jump`, `pet-spin`, `pet-boing` (CSS + playOpts/idleOpts).
+- Notificações de retorno: app nativo usa `@capacitor/local-notifications`
+  (ADICIONADO como dep; canal 'pet'; schedule ao ir p/ background ~1,5-5h;
+  cancel ao voltar; id 9017; icon ic_notification). Site: cartão
+  `.pet-reminder` após 45 min sem mexer (petNudges.js tem as mensagens).
+- Corrigido sumiço de músicas: salvamento da biblioteca só grava após a
+  hidratação (libraryHydrated) — antes o app reescrevia 'nt.library' vazio.
+- Otimizações: will-change no .pet-body, keyframes de transform só.
+- Changelog máx. 4 (saiu 1.9.18, entrou 1.9.22). APK 1.9.22/48 no celular,
+  site na 1.9.22.
+
 ## FEITO e PUBLICADO em 22/09 (1.9.21/47) — corrigido "Carregando biblioteca…" preso
 - Bug: ao reabrir o app às vezes ficava preso em "Carregando sua biblioteca…".
   Causa: abria o IndexedDB 1x por música (lento em biblioteca grande) e uma
@@ -104,7 +120,7 @@
 - Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.21 / código 47** (APK real na main +
+- Versão atual publicada/remota: **1.9.22 / código 48** (APK real na main +
   site). Fonte da verdade = GitHub.
 
 ## FEITO em 22/09 (1.9.17/43) — app 100% local (removida a nuvem)
