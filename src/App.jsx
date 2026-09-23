@@ -91,6 +91,13 @@ function nf(n) {
 // Ao adicionar a próxima versão, REMOVER a mais antiga para entrar a nova.
 const CHANGELOG = [
   {
+    version: '1.9.24',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Corrigido um bug que fazia as capas das músicas sumirem e o áudio não carregar (ele tocava um som de "quem aprende piano", que era um áudio de teste de reserva). Agora cada música volta a abrir com capa e som corretos.' },
+    ],
+  },
+  {
     version: '1.9.23',
     date: 'Setembro de 2026',
     items: [
@@ -113,13 +120,6 @@ const CHANGELOG = [
     date: 'Setembro de 2026',
     items: [
       { type: 'correcao', text: 'Corrigido o app que às vezes abria e ficava preso em "Carregando sua biblioteca…": as músicas agora carregam de uma vez (e não uma por uma), e até uma música com problema não trava mais a tela.' },
-    ],
-  },
-  {
-    version: '1.9.20',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'melhoria', text: 'Mini player mais esperto: ele agora aparece SÓ na tela inicial e só quando você seleciona ou toca uma música — e ficou um pouco mais baixo, perto do canto.' },
     ],
   },
 ]

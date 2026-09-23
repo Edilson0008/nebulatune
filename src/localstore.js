@@ -91,6 +91,7 @@ export function loadMediaBlobs(id) {
 // Carrega os blobs de VÁRIAS músicas abrindo o banco UMA vez só (uma única
 // transação de leitura). Muito mais rápido do que abrir uma transação por
 // música, e evita travar telas grandes de biblioteca no carregamento.
+// Devolve [{ audio, cover }, ...] na mesma ordem dos ids.
 export async function loadAllMediaBlobs(ids) {
   if (!ids || !ids.length) return []
   try {
@@ -98,7 +99,7 @@ export async function loadAllMediaBlobs(ids) {
     return await new Promise((resolve) => {
       const t = db.transaction(STORE, 'readonly')
       const store = t.objectStore(STORE)
-      const jobs = ids.flatMap((id) => [
+      const jobs = ids.map((id) => [
         store.get(`${id}:audio`),
         store.get(`${id}:cover`),
       ])
@@ -110,15 +111,19 @@ export async function loadAllMediaBlobs(ids) {
           resolve(out)
         }
       }
-      jobs.forEach((req, i) => {
-        req.onsuccess = () => {
-          out[i] = req.result || null
+      jobs.forEach((pair, i) => {
+        const media = { audio: null, cover: null }
+        out[i] = media
+        pair[0].onsuccess = () => {
+          media.audio = pair[0].result || null
           settle()
         }
-        req.onerror = () => {
-          out[i] = null
+        pair[0].onerror = () => settle()
+        pair[1].onsuccess = () => {
+          media.cover = pair[1].result || null
           settle()
         }
+        pair[1].onerror = () => settle()
       })
       t.oncomplete = () => {
         db.close()

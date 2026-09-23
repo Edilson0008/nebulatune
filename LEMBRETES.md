@@ -1,5 +1,11 @@
 # Lembretes
 
+## FEITO e PUBLICADO em 22/09 (1.9.24/50) — corrigido capas sumindo + áudio "piano"
+- CRÍTICO: `loadAllMediaBlobs` devolvia lista ACHATADA (áudio,capa,áudio,capa...)
+  e o App lia `.audio`/`.cover` → tudo vinha vazio (sem capa; play tocava o
+  synthFallback "piano"). Corrigido: devolve [{audio, cover}, ...] por música.
+- Causa introduzida na 1.9.21. Changelog máx. 4 (1.9.20 saiu). APK no celular.
+
 ## FEITO e PUBLICADO em 22/09 (1.9.23/49) — a gatinha ganhou nome: Nebula
 - O gatinho agora se chama NEBULA (nome que o dono escolheu): se apresenta ao
   pedir o nome do usuário, fala "eu sou a Nebula" e aparece como
@@ -127,7 +133,7 @@
 - Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.23 / código 49** (APK real na main +
+- Versão atual publicada/remota: **1.9.24 / código 50** (APK real na main +
   site). Fonte da verdade = GitHub.
 
 ## FEITO em 22/09 (1.9.17/43) — app 100% local (removida a nuvem)
