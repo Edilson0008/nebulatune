@@ -88,6 +88,56 @@ export function loadMediaBlobs(id) {
   }).catch(() => ({ audio: null, cover: null }))
 }
 
+// Carrega os blobs de VÁRIAS músicas abrindo o banco UMA vez só (uma única
+// transação de leitura). Muito mais rápido do que abrir uma transação por
+// música, e evita travar telas grandes de biblioteca no carregamento.
+export async function loadAllMediaBlobs(ids) {
+  if (!ids || !ids.length) return []
+  try {
+    const db = await openDB()
+    return await new Promise((resolve) => {
+      const t = db.transaction(STORE, 'readonly')
+      const store = t.objectStore(STORE)
+      const jobs = ids.flatMap((id) => [
+        store.get(`${id}:audio`),
+        store.get(`${id}:cover`),
+      ])
+      let done = 0
+      const out = new Array(jobs.length)
+      const settle = () => {
+        if (++done === jobs.length) {
+          db.close()
+          resolve(out)
+        }
+      }
+      jobs.forEach((req, i) => {
+        req.onsuccess = () => {
+          out[i] = req.result || null
+          settle()
+        }
+        req.onerror = () => {
+          out[i] = null
+          settle()
+        }
+      })
+      t.oncomplete = () => {
+        db.close()
+        resolve(out)
+      }
+      t.onerror = () => {
+        db.close()
+        resolve(out)
+      }
+      t.onabort = () => {
+        db.close()
+        resolve(out)
+      }
+    })
+  } catch {
+    return []
+  }
+}
+
 export function deleteMediaBlobs(id) {
   return runTx('readwrite', (s) => {
     s.delete(`${id}:audio`)

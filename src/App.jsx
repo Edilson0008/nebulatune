@@ -22,7 +22,7 @@ import {
   requestNotificationsPermission,
   wasUpdatePrompted,
 } from './updater'
-import { readLocal, writeLocal, saveMediaBlobs, loadMediaBlobs, deleteMediaBlobs } from './localstore'
+import { readLocal, writeLocal, saveMediaBlobs, loadAllMediaBlobs, deleteMediaBlobs } from './localstore'
 import { ProgressProvider, useProgress } from './progress'
 import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
 import { updateNowPlaying, hideNowPlaying, onMediaAction } from './mediaNotification'
@@ -88,6 +88,13 @@ function nf(n) {
 // Ao adicionar a próxima versão, REMOVER a mais antiga para entrar a nova.
 const CHANGELOG = [
   {
+    version: '1.9.21',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Corrigido o app que às vezes abria e ficava preso em "Carregando sua biblioteca…": as músicas agora carregam de uma vez (e não uma por uma), e até uma música com problema não trava mais a tela.' },
+    ],
+  },
+  {
     version: '1.9.20',
     date: 'Setembro de 2026',
     items: [
@@ -110,15 +117,6 @@ const CHANGELOG = [
       { type: 'novo', text: '"Destaques recentes" e o player flutuante com botões de repetir e embaralhar; tocar numa música agora carimba play verde nas capas.' },
       { type: 'melhoria', text: 'Letras com muito mais cobertura: a busca agora consulta dois serviços diferentes e indica quando a letra simples não é sincronizada.' },
       { type: 'melhoria', text: 'App muito mais leve: o relógio da música não obriga mais a tela inteira a se redesenhar a cada segundo, e o fundo cósmico ficou mais barato para o processador.' },
-    ],
-  },
-  {
-    version: '1.9.17',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'NebulaTune voltou a ser 100% local: sem login, sem conta e sem nuvem. O app abre direto na música e tudo (músicas, favoritos, playlists, estatísticas, ajustes e seu gatinho) fica guardado SÓ no seu aparelho.' },
-      { type: 'melhoria', text: 'Tudo fica salvo de verdade entre uma abertura e outra: agora o aplicativo lembra sua biblioteca, o equalizador, o gatinho e os ajustes mesmo depois de fechar.' },
-      { type: 'melhoria', text: 'Sumiu o card de boas-vindas e a área de "Conta e sincronização" das configurações — nada mais de "Sincronizar agora" nem mensagens de nuvem.' },
     ],
   },
 ]
@@ -5475,33 +5473,48 @@ function App() {
   // IndexedDB. O app abre direto na tela principal, sem login.
   useEffect(() => {
     let alive = true
+    const finish = () => {
+      if (!alive) return
+      requestAnimationFrame(() => setLoadingLib(false))
+    }
     ;(async () => {
       const rows = readLocal('nt.library')
       if (!alive || !Array.isArray(rows)) return
       setLoadingLib(true)
+      const ids = rows.map((r) => (r && r.id) || '')
+      const mediaList = await loadAllMediaBlobs(ids)
+      if (!alive) return
       const hydrated = []
-      for (const row of rows) {
-        const media = await loadMediaBlobs(row.id)
-        if (!alive) return
-        const audioBlob = media.audio || null
-        const coverBlob = media.cover || null
-        const prevCover =
-          row.coverUrl && row.coverUrl.startsWith('blob:') ? null : row.coverUrl || null
-        hydrated.push({
-          ...row,
-          audioBlob,
-          src: audioBlob ? URL.createObjectURL(audioBlob) : null,
-          coverBlob,
-          coverUrl: coverBlob ? URL.createObjectURL(coverBlob) : prevCover,
-          audioMissing: row.audioMissing === true && !audioBlob,
-        })
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i]
+        if (!row || typeof row !== 'object') continue
+        try {
+          const media = mediaList[i] || {}
+          const audioBlob = media.audio instanceof Blob ? media.audio : null
+          const coverBlob = media.cover instanceof Blob ? media.cover : null
+          const prevCover =
+            row.coverUrl && row.coverUrl.startsWith('blob:') ? null : row.coverUrl || null
+          hydrated.push({
+            ...row,
+            audioBlob,
+            src: audioBlob ? URL.createObjectURL(audioBlob) : null,
+            coverBlob,
+            coverUrl: coverBlob ? URL.createObjectURL(coverBlob) : prevCover,
+            audioMissing: row.audioMissing === true && !audioBlob,
+          })
+        } catch {
+          // Música defeituosa não derruba o carregamento da biblioteca inteira.
+        }
       }
       if (!alive) return
       setLibrary(hydrated)
-      requestAnimationFrame(() => setLoadingLib(false))
+      finish()
     })()
+    // Rede de segurança: nunca deixar preso em "Carregando sua biblioteca…".
+    const guard = setTimeout(finish, 8000)
     return () => {
       alive = false
+      clearTimeout(guard)
     }
   }, [])
 

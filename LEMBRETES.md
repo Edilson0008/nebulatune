@@ -1,5 +1,15 @@
 # Lembretes
 
+## FEITO e PUBLICADO em 22/09 (1.9.21/47) — corrigido "Carregando biblioteca…" preso
+- Bug: ao reabrir o app às vezes ficava preso em "Carregando sua biblioteca…".
+  Causa: abria o IndexedDB 1x por música (lento em biblioteca grande) e uma
+  música com blob inválido derrubava o loop (tela presa para sempre).
+- Correção: novo `loadAllMediaBlobs` em localstore.js (uma transação única,
+  rápida); App.jsx pula músicas defeituosas (try/catch por linha) e tem rede de
+  segurança que zera o loading em até 8s. Import passou a ser `loadAllMediaBlobs`.
+- Changelog segue máx. 4 (saiu 1.9.17, entrou 1.9.21). Lint 0, build OK, APK
+  1.9.21/47 no celular.
+
 ## FEITO e PUBLICADO em 22/09 (1.9.20/46) — mini player só na tela inicial
 - O mini player agora só aparece na **tela inicial** (`view === 'inicio'`) e
   apenas quando há música selecionada/tocando. Ficou um pouco mais baixo: web
@@ -94,7 +104,7 @@
 - Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.20 / código 46** (APK real na main +
+- Versão atual publicada/remota: **1.9.21 / código 47** (APK real na main +
   site). Fonte da verdade = GitHub.
 
 ## FEITO em 22/09 (1.9.17/43) — app 100% local (removida a nuvem)
