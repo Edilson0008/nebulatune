@@ -10,7 +10,9 @@ export function hasNativeMediaImport() {
 export async function scanDeviceTracks() {
   if (!isNative()) return { available: false, tracks: [] }
   try {
-    return { available: true, tracks: await NativeImport.getTracks() }
+    const out = await NativeImport.getTracks()
+    const list = Array.isArray(out) ? out : out?.tracks || []
+    return { available: true, tracks: list }
   } catch (e) {
     return { available: false, tracks: [], error: String(e?.message || e) }
   }

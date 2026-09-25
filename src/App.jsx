@@ -5,7 +5,7 @@ import { COVERS, featuredCovers } from './data/tracks'
 import * as engine from './audio/engine'
 import * as graph from './audio/graph'
 import { EQ_FREQS } from './audio/graph'
-import { ACCENTS, SPEEDS, useSettings, usePetStats } from './settings'
+import { ACCENTS, SPEEDS, resolveAccent, useSettings, usePetStats } from './settings'
 import { PRESETS, useEqualizer } from './audio/equalizer'
 import { APP_VERSION, SITE_URL } from './app-config'
 import { Share as CapShare } from '@capacitor/share'
@@ -91,6 +91,14 @@ function nf(n) {
 // Ao adicionar a próxima versão, REMOVER a mais antiga para entrar a nova.
 const CHANGELOG = [
   {
+    version: '1.9.27',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Busca por voz na barra de pesquisa, Recentes de verdade no início, Conquistas com banner de desbloqueio, Top do mês automática, sino com avisos úteis, cores novas e cor personalizada, e Modo leve para celular simples.' },
+      { type: 'correcao', text: 'Biblioteca e Perfil mais limpos, letras que acham música com acento, controle de ganho no equalizador e conserto do Importar do aparelho.' },
+    ],
+  },
+  {
     version: '1.9.26',
     date: 'Setembro de 2026',
     items: [
@@ -109,13 +117,6 @@ const CHANGELOG = [
     date: 'Setembro de 2026',
     items: [
       { type: 'correcao', text: 'Corrigido um bug que fazia as capas das músicas sumirem e o áudio não carregar (ele tocava um som de "quem aprende piano", que era um áudio de teste de reserva). Agora cada música volta a abrir com capa e som corretos.' },
-    ],
-  },
-  {
-    version: '1.9.23',
-    date: 'Setembro de 2026',
-    items: [
-      { type: 'novo', text: 'O gatinho tem nome agora: é a Nebula! 🐱 Ela se apresenta pra você, pede seu nome e mostra o nome dela nas notificações e nos lembretes.' },
     ],
   },
 ]
@@ -820,7 +821,7 @@ function PetHabitatCard({ greeting, greetMs = 4800, stats, onShowProfile = null,
     <div className="pet-habitat">
       <div className="pet-habitat-glow" />
       <div className="pet-habitat-head">
-        <span className="pet-habitat-title">✦ Pet Habitat</span>
+        <span className="pet-habitat-title">✦ PET HABITAT</span>
         <div className="pet-habitat-pills">
           <span className="pet-pill">
             <span className="pill-glyph">⸗</span>
@@ -849,37 +850,11 @@ function PetHabitatCard({ greeting, greetMs = 4800, stats, onShowProfile = null,
   )
 }
 
-function MusicRow({ title, tracks, onPlay }) {
-  if (!tracks || tracks.length === 0) return null
-  return (
-    <div className="music-row">
-      <h2 className="section-title">{title}</h2>
-      <div className="music-row-track">
-        {tracks.map((t) => (
-          <button className="music-card" key={t.id} onClick={() => onPlay(t.id)} tabIndex={0}>
-            <span className="music-card-cover">
-              <Cover colors={t.cover} image={t.coverUrl} size={112} radius={16} />
-              <span className="music-card-play">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              </span>
-            </span>
-            <span className="music-card-title">{t.title}</span>
-            <span className="music-card-artist">{t.artist || '—'}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-MusicRow = reactMemo(MusicRow)
-
-function QuickTrackGrid({ tracks, onPlay }) {
+function QuickTrackGrid({ title = '', tracks, onPlay }) {
   if (!tracks || tracks.length === 0) return null
   return (
     <div className="quick-section">
-      <h2 className="section-title">Destaques recentes</h2>
+      {title ? <h2 className="section-title">{title}</h2> : null}
       <div className="quick-grid">
         {tracks.map((t) => (
           <button className="quick-card" key={t.id} onClick={() => onPlay(t.id)} tabIndex={0}>
@@ -917,12 +892,6 @@ function Sidebar({ view, setView, onPickFiles }) {
             <path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h5v-6h4v6h5V9.5" />
           </svg>
           Início
-        </button>
-        <button className={`nav-item ${view === 'buscar' ? 'active' : ''}`} onClick={() => setView('buscar')}>
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
-          </svg>
-          Buscar
         </button>
         <button className={`nav-item ${view === 'perfil' ? 'active' : ''}`} onClick={() => setView('perfil')}>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
@@ -994,14 +963,14 @@ function Sidebar({ view, setView, onPickFiles }) {
   )
 }
 
-const BG_STARS = Array.from({ length: 130 }, (_, i) => {
+const BG_STARS = Array.from({ length: 80 }, (_, i) => {
   const x = (i * 137.508 + 17) % 100
   const y = (i * 97.31 + 21) % 100
   const size = 1 + (i % 5) * 0.6
   return { x, y, size, delay: (i * 0.19) % 5.5, dur: 2.2 + (i % 4) * 1.4 }
 })
 
-function SpaceParticles({ count = 26 }) {
+function SpaceParticles({ count = 16 }) {
   const ref = useRef(null)
 
   useEffect(() => {
@@ -1076,7 +1045,7 @@ function SpaceParticles({ count = 26 }) {
 
 function BackgroundFX({ bgAnimated, cosmosAnimated }) {
   if (!bgAnimated) return null
-  const stars = IS_NATIVE ? BG_STARS.slice(0, 42) : BG_STARS
+  const stars = IS_NATIVE ? BG_STARS.slice(0, 24) : BG_STARS
   return (
     <div className="bg-fx">
       {cosmosAnimated && (
@@ -1087,7 +1056,7 @@ function BackgroundFX({ bgAnimated, cosmosAnimated }) {
           <div className="bg-galaxy" />
         </>
       )}
-      <SpaceParticles count={IS_NATIVE ? 14 : 26} />
+      <SpaceParticles count={IS_NATIVE ? 8 : 16} />
       <div className="bg-stars">
         {stars.map((s, i) => (
           <div
@@ -1105,6 +1074,158 @@ function BackgroundFX({ bgAnimated, cosmosAnimated }) {
         ))}
       </div>
     </div>
+  )
+}
+
+function getAchievements(library, touches) {
+  const list = Array.isArray(library) ? library : []
+  const totalPlaysAll = list.reduce((acc, t) => acc + (t.plays || 0), 0)
+  const favCount = list.filter((t) => t.fav).length
+  const daySet = new Set()
+  list.forEach((t) => Object.keys(t.playDays || {}).forEach((d) => daySet.add(d)))
+  const defs = [
+    { id: 'first', icon: '🎵', name: 'Primeira música', color: '#4ade80', need: 1, have: list.length },
+    { id: 'ten', icon: '💿', name: 'Coleção com 10', color: '#22d3ee', need: 10, have: list.length },
+    { id: 'fifty', icon: '📀', name: 'Coleção com 50', color: '#a78bfa', need: 50, have: list.length },
+    { id: 'plays100', icon: '🔥', name: '100 plays', color: '#fb923c', need: 100, have: totalPlaysAll },
+    { id: 'plays500', icon: '🚀', name: '500 plays', color: '#f472b6', need: 500, have: totalPlaysAll },
+    { id: 'fav10', icon: '❤️', name: '10 favoritas', color: '#f87171', need: 10, have: favCount },
+    { id: 'days7', icon: '📅', name: '7 dias com música', color: '#facc15', need: 7, have: daySet.size },
+    { id: 'pet50', icon: '🐾', name: '50 toques no gatinho', color: '#34d399', need: 50, have: touches || 0 },
+  ]
+  return defs.map((a) => ({
+    ...a,
+    done: a.have >= a.need,
+    shown: Math.min(a.have, a.need),
+    pct: Math.min(100, Math.round((a.have / a.need) * 100)),
+  }))
+}
+
+let fanfareCtx = null
+function playFanfare() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext
+    if (!AC) return
+    fanfareCtx = fanfareCtx || new AC()
+    const ctx = fanfareCtx
+    if (ctx.state === 'suspended') ctx.resume()
+    ;[523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+      const t0 = ctx.currentTime + i * 0.12
+      const osc = ctx.createOscillator()
+      const g = ctx.createGain()
+      osc.type = 'triangle'
+      osc.frequency.setValueAtTime(f, t0)
+      g.gain.setValueAtTime(0.0001, t0)
+      g.gain.exponentialRampToValueAtTime(0.3, t0 + 0.03)
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4)
+      osc.connect(g).connect(ctx.destination)
+      osc.start(t0)
+      osc.stop(t0 + 0.45)
+    })
+  } catch {
+    /* áudio indisponível */
+  }
+}
+
+function MicButton({ onResult, notify }) {
+  const [listening, setListening] = useState(false)
+  const recRef = useRef(null)
+  const supported =
+    typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
+
+  const stop = () => {
+    try {
+      recRef.current?.stop()
+    } catch {
+      /* já parado */
+    }
+    recRef.current = null
+    setListening(false)
+  }
+
+  const toggle = () => {
+    if (listening) {
+      stop()
+      return
+    }
+    if (!supported) {
+      notify?.('Este navegador não tem busca por voz')
+      return
+    }
+    try {
+      const Rec = window.SpeechRecognition || window.webkitSpeechRecognition
+      const rec = new Rec()
+      rec.lang = 'pt-BR'
+      rec.interimResults = true
+      rec.maxAlternatives = 1
+      rec.onresult = (e) => {
+        let text = ''
+        for (let i = 0; i < e.results.length; i += 1) text += e.results[i][0]?.transcript || ''
+        text = text.trim()
+        if (text) onResult?.(text)
+      }
+      rec.onerror = (e) => {
+        stop()
+        if (e?.error === 'not-allowed' || e?.error === 'service-not-allowed') {
+          notify?.('Microfone bloqueado: libere a permissão no navegador')
+        }
+      }
+      rec.onend = () => {
+        recRef.current = null
+        setListening(false)
+      }
+      recRef.current = rec
+      rec.start()
+      setListening(true)
+    } catch {
+      notify?.('Não consegui abrir o microfone')
+    }
+  }
+
+  useEffect(() => () => {
+    try {
+      recRef.current?.abort?.()
+    } catch {
+      /* ignora */
+    }
+  }, [])
+
+  return (
+    <button
+      className={`mic-btn ${listening ? 'on' : ''}`}
+      onClick={toggle}
+      aria-label={listening ? 'Parar de ouvir' : 'Buscar por voz'}
+      title={listening ? 'Parar de ouvir' : 'Buscar por voz'}
+    >
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="9" y="2" width="6" height="12" rx="3" />
+        <path d="M5 10a7 7 0 0 0 14 0M12 19v3" />
+      </svg>
+    </button>
+  )
+}
+
+function AchToast({ item, soundOn, onDone }) {
+  useEffect(() => {
+    if (!item) return undefined
+    if (soundOn) playFanfare()
+    const t = setTimeout(onDone, 4500)
+    return () => clearTimeout(t)
+  }, [item, soundOn, onDone])
+  if (!item) return null
+  return (
+    <button
+      className="ach-toast"
+      style={{ '--achc': item.color }}
+      onClick={onDone}
+      aria-label={`Conquista desbloqueada: ${item.name}`}
+    >
+      <span className="ach-toast-icon">{item.icon}</span>
+      <span className="ach-toast-main">
+        <span className="ach-toast-title">Conquista desbloqueada</span>
+        <span className="ach-toast-name">{item.name}</span>
+      </span>
+    </button>
   )
 }
 
@@ -1132,6 +1253,10 @@ function Profile({ settings, api, library, onPlay, petStats }) {
     .sort((a, b) => playsInPeriod(b, statsPeriod) - playsInPeriod(a, statsPeriod))
 
   const totalPlaysPeriod = mostPlayed.reduce((acc, t) => acc + playsInPeriod(t, statsPeriod), 0)
+
+  const [achOpen, setAchOpen] = useState(false)
+  const achievements = getAchievements(library, petStats?.touches || 0)
+  const achUnlocked = achievements.filter((a) => a.done).length
 
   return (
     <section className="view">
@@ -1227,7 +1352,34 @@ function Profile({ settings, api, library, onPlay, petStats }) {
       )}
 
       <div className="settings-card">
+        <button className="ach-head" onClick={() => setAchOpen((v) => !v)} aria-expanded={achOpen}>
+          <span className="ach-head-main">
+            <span className="section-title">Conquistas</span>
+            <span className="lib-sub">{achUnlocked} de {achievements.length} desbloqueadas</span>
+          </span>
+          <svg className={`ach-arrow ${achOpen ? 'open' : ''}`} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+        {achOpen && (
+          <div className="ach-grid">
+            {achievements.map((a) => (
+              <div className={`ach ${a.done ? 'on' : ''}`} key={a.id}>
+                <span className="ach-icon">{a.icon}</span>
+                <span className="ach-main">
+                  <span className="ach-name">{a.name}</span>
+                  <span className="ach-bar"><span className="ach-fill" style={{ width: `${a.pct}%` }} /></span>
+                </span>
+                <span className="ach-prog">{a.done ? '✓' : `${a.shown}/${a.need}`}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="settings-card">
         <h2 className="section-title">Cor de destaque</h2>
+        <p className="lib-sub">Atual: {resolveAccent(settings).name}</p>
         <div className="settings-row">
           <div className="swatch-grid">
             {Object.entries(ACCENTS).map(([key, a]) => (
@@ -1240,6 +1392,20 @@ function Profile({ settings, api, library, onPlay, petStats }) {
                 aria-label={a.name}
               />
             ))}
+            <label
+              className={`swatch swatch-custom ${settings.accent === 'custom' ? 'active' : ''}`}
+              style={settings.accent === 'custom' && settings.customAccent ? { '--sw': settings.customAccent } : undefined}
+              title="Escolher minha cor"
+              aria-label="Escolher minha cor"
+            >
+              <span aria-hidden="true">🎨</span>
+              <input
+                type="color"
+                className="sr-only"
+                value={/^#[0-9a-f]{6}$/i.test(settings.customAccent || '') ? settings.customAccent : '#8b5cf6'}
+                onChange={(e) => api.setCustomAccent(e.target.value)}
+              />
+            </label>
           </div>
         </div>
       </div>
@@ -1375,7 +1541,7 @@ const TrackList = reactMemo(function TrackList({
           {t.audioMissing && (
             <span
               className="track-noaudio"
-              title="Esta música está na sua conta, mas o arquivo de som ainda não desceu para este aparelho"
+              title="Esta música está na biblioteca, mas o arquivo de som não foi encontrado neste aparelho"
             >
               sem áudio
             </span>
@@ -2076,7 +2242,20 @@ function NowPlaying({
   const runSearch = (q) => {
     setSearching(true)
     Promise.resolve(onSearchLyrics?.(q)).then((list) => {
-      setResults(list || [])
+      const arr = Array.isArray(list) ? [...list] : []
+      const ref = Number(duration) || 0
+      arr.sort((x, y) => {
+        const xs = x?.syncedLyrics ? 1 : 0
+        const ys = y?.syncedLyrics ? 1 : 0
+        if (xs !== ys) return ys - xs
+        if (ref) {
+          const xd = x?.duration ? Math.abs(x.duration - ref) : 1e9
+          const yd = y?.duration ? Math.abs(y.duration - ref) : 1e9
+          if (xd !== yd) return xd - yd
+        }
+        return 0
+      })
+      setResults(arr)
       setSearching(false)
     })
   }
@@ -3700,47 +3879,6 @@ function useOnlinePlayer(rate = 1, sink = null) {
   }
 }
 
-function LibraryView({ tracks, onSelect }) {
-  const artists = [...new Set(tracks.map((t) => t.artist))]
-  const albums = [...new Set(tracks.map((t) => t.album))]
-  return (
-    <div className="view">
-      <div className="library-grid">
-        {artists.map((a, i) => {
-          const artistTracks = tracks.filter((t) => t.artist === a)
-          return (
-            <div className="card" key={a} onClick={() => onSelect(artistTracks[0].id)}>
-              <Cover
-                colors={featuredCovers[(i * 3 + 1) % featuredCovers.length]}
-                image={artistTracks[0].coverUrl}
-                size="100%"
-                radius={12}
-              />
-              <p>{a}</p>
-              <small>Artista · {artistTracks.length} faixas</small>
-            </div>
-          )
-        })}
-        {albums.map((a, i) => {
-          const albumTracks = tracks.filter((t) => t.album === a)
-          return (
-            <div className="card" key={a} onClick={() => onSelect(albumTracks[0].id)}>
-              <Cover
-                colors={featuredCovers[(i * 2 + 4) % featuredCovers.length]}
-                image={albumTracks[0].coverUrl}
-                size="100%"
-                radius={12}
-              />
-              <p>{a}</p>
-              <small>Álbum · {albumTracks.length} faixas</small>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 const AUDIO_RE = /\.(mp3|wav|ogg|oga|m4a|aac|flac|opus|webm)$/i
 const IMAGE_RE = /\.(jpe?g|png|webp|gif|bmp)$/i
 
@@ -3919,7 +4057,13 @@ function titleVariants(raw) {
   return [...out].filter(Boolean).slice(0, 4)
 }
 
-const normText = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+const normText = (s) =>
+  (s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
 
 async function fetchLyrics(title, artist, duration) {
   const a = cleanArtist(artist)
@@ -4314,7 +4458,7 @@ function Visualizer() {
 }
 
 function Equalizer({ eq }) {
-  const { settings, setBand, setVolume, applyPreset, toggle, reset } = eq
+  const { settings, setBand, setVolume, setPreampDb, applyPreset, toggle, reset } = eq
   return (
     <div className="eq">
       <div className="eq-head">
@@ -4395,6 +4539,29 @@ function Equalizer({ eq }) {
               <span>0%</span>
               <span>50%</span>
               <span>100%</span>
+            </div>
+          </div>
+          <div className="eq-card">
+            <div className="eq-card-head">
+              <h3>Ganho de entrada</h3>
+              <span className="eq-card-val">{Number(settings.preampDb || 0).toFixed(1)} dB</span>
+            </div>
+            <p className="eq-card-desc">
+              Força do sinal antes do equalizador. Abaixe se o som distorcer com graves altos.
+            </p>
+            <input
+              type="range"
+              className="eq-range"
+              min={-12}
+              max={6}
+              step={0.5}
+              value={Number(settings.preampDb || 0)}
+              onChange={(e) => setPreampDb(Number(e.target.value))}
+            />
+            <div className="eq-range-scale">
+              <span>-12 dB</span>
+              <span>0 dB</span>
+              <span>+6 dB</span>
             </div>
           </div>
         </div>
@@ -4952,7 +5119,7 @@ function ApkDownloadButton() {
   )
 }
 
-function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onImportFolder, onImportDevice, onOpenChangelog, onClearCache, cacheCleanMsg, petStats, playlists, lyricSync }) {
+function SettingsView({ settings, api, library, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onOpenChangelog, onClearCache, cacheCleanMsg, petStats, playlists, lyricSync }) {
   const [storage, setStorage] = useState(null)
   const [exported, setExported] = useState(false)
   const [imported, setImported] = useState(false)
@@ -5143,6 +5310,21 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
 
         <div className="settings-row">
           <div className="settings-info">
+            <span className="settings-label">Modo leve</span>
+            <span className="settings-desc">Desliga fundo animado e efeitos para rodar liso em celular simples.</span>
+          </div>
+          <button
+            className={`eq-switch ${settings.lowPower ? 'on' : ''}`}
+            role="switch"
+            aria-checked={!!settings.lowPower}
+            onClick={() => api.setLowPower(!settings.lowPower)}
+          >
+            <span className="eq-switch-knob" />
+          </button>
+        </div>
+
+        <div className="settings-row">
+          <div className="settings-info">
             <span className="settings-label">Som do gatinho</span>
             <span className="settings-desc">Miado do bichinho ao tocar ou quando algo bom acontece.</span>
           </div>
@@ -5219,17 +5401,6 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
           <div className="settings-actions">
             <button className="btn-ghost" onClick={refreshStorage}>
               Atualizar
-            </button>
-            <button
-              className="btn-ghost btn-ghost-danger"
-              onClick={() => {
-                if (window.confirm('Remover todas as músicas da biblioteca e liberar espaço?')) {
-                  onClearLibrary()
-                  setTimeout(refreshStorage, 400)
-                }
-              }}
-            >
-              Liberar espaço
             </button>
           </div>
         </div>
@@ -5331,32 +5502,6 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
         )}
         <div className="settings-row">
           <div className="settings-info">
-            <span className="settings-label">Importar uma pasta</span>
-            <span className="settings-desc">
-              Escolhe uma pasta inteira com músicas e adiciona tudo de uma vez.
-            </span>
-          </div>
-          <div className="settings-actions">
-            <button className="btn-ghost" onClick={onImportFolder} hidden={isNative}>
-              Escolher pasta
-            </button>
-          </div>
-        </div>
-        <div className="settings-row">
-          <div className="settings-info">
-            <span className="settings-label">Importar músicas do aparelho</span>
-            <span className="settings-desc">
-              Lê as músicas baixadas no telefone (arquivos MP3 e afins).
-            </span>
-          </div>
-          <div className="settings-actions">
-            <button className="btn-ghost" onClick={onImportDevice} hidden={!isNative}>
-              Importar
-            </button>
-          </div>
-        </div>
-        <div className="settings-row">
-          <div className="settings-info">
             <span className="settings-label">Limpar cache</span>
             <span className="settings-desc">
               Apaga arquivos temporários e sobras de atualizações para liberar espaço.
@@ -5400,8 +5545,7 @@ function SettingsView({ settings, api, library, onClearLibrary, isIOS, isAppInst
 }
 
 /* ─────────────────────────────────────────────
-   Tela bonita de boas-vindas / login (1ª vez,
-   sem conta, ou depois de sair da conta)
+   Temporizadores nativos (sleep timer no APK)
    ───────────────────────────────────────────── */
 function sleepNativeStart(timestampMs) {
   try {
@@ -5431,6 +5575,19 @@ function App() {
   const [libraryHydrated, setLibraryHydrated] = useState(false)
   const [cacheCleanMsg, setCacheCleanMsg] = useState('')
   const [view, setView] = useState('inicio')
+  const [libMoreOpen, setLibMoreOpen] = useState(false)
+  const [achSeen, setAchSeen] = useState(() => readLocal('nt.achSeen') || [])
+  const [achQueue, setAchQueue] = useState([])
+  const achQueueRef = useRef([])
+
+  useEffect(() => {
+    writeLocal('nt.achSeen', achSeen)
+  }, [achSeen])
+
+  const dismissAchToast = useCallback(() => {
+    achQueueRef.current = achQueueRef.current.slice(1)
+    setAchQueue(achQueueRef.current)
+  }, [])
   const [query, setQuery] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [showNowPlaying, setShowNowPlaying] = useState(false)
@@ -5555,10 +5712,6 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, loadingLib, library.length, appSettings.userName])
   const { petStats, bumpPet, restorePetStats } = usePetStats()
-  const topTracks = useMemo(
-    () => [...library].sort((a, b) => (b.plays || 0) - (a.plays || 0)).slice(0, 10),
-    [library],
-  )
   const handlePetAction = useCallback(
     (a) => {
       const map = { touch: 'touches', heart: 'hearts', scared: 'scares', sleep: 'sleeps', meow: 'meows' }
@@ -5739,11 +5892,6 @@ function App() {
     }
   }
 
-  useEffect(() => {
-    // A biblioteca NÃO é mais gravada no aparelho: ela existe na memória
-    // durante o uso e é trazida da conta (nuvem) ao entrar. Nada fica salvo.
-  }, [])
-
   const todayKey = () => {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -5839,15 +5987,16 @@ function App() {
     )
   }, [])
 
-  const [recentSearches, setRecentSearches] = useState([])
+  const [playedRecent, setPlayedRecent] = useState(() => readLocal('nt.playedRecent') || [])
 
-  const addRecentSearch = useCallback((q) => {
-    const term = (q || '').trim().toLowerCase()
-    if (!term) return
-    setRecentSearches((prev) => [term, ...prev.filter((x) => x !== term)].slice(0, 8))
+  useEffect(() => {
+    writeLocal('nt.playedRecent', playedRecent)
+  }, [playedRecent])
+
+  const pushPlayedRecent = useCallback((id) => {
+    if (!id) return
+    setPlayedRecent((prev) => [id, ...prev.filter((x) => x !== id)].slice(0, 10))
   }, [])
-
-  const clearRecentSearches = useCallback(() => setRecentSearches([]), [])
 
   const [deviceMusic, setDeviceMusic] = useState(null)
   const [deviceImportOpen, setDeviceImportOpen] = useState(false)
@@ -5906,8 +6055,25 @@ function App() {
   const displayPlaying = onlineActive ? onlinePlaying : playing
   const displayToggle = onlineActive ? toggleOnline : toggle
   const displaySeek = onlineActive ? seekOnline : seek
-  const recent = useMemo(() => library.slice(0, 8), [library])
-  const recentRow = useMemo(() => recent.slice(0, 10), [recent])
+  const recentRow = useMemo(
+    () => playedRecent.map((id) => library.find((t) => t.id === id)).filter(Boolean),
+    [playedRecent, library],
+  )
+
+  useEffect(() => {
+    const done = getAchievements(library, petStats?.touches || 0).filter((a) => a.done)
+    const doneIds = done.map((a) => a.id)
+    const fresh = done.filter(
+      (a) => !achSeen.includes(a.id) && !achQueueRef.current.some((q) => q.id === a.id),
+    )
+    if (fresh.length) {
+      achQueueRef.current = [...achQueueRef.current, ...fresh]
+      setAchQueue(achQueueRef.current)
+    }
+    if (doneIds.length !== achSeen.length || doneIds.some((id) => !achSeen.includes(id))) {
+      setAchSeen(doneIds)
+    }
+  }, [library, petStats, achSeen])
   const favoriteTracks = useMemo(() => library.filter((t) => t.fav), [library])
   const queueTracks = useMemo(() => queue.map((id) => library.find((t) => t.id === id)).filter(Boolean), [queue, library])
   const [showQueue, setShowQueue] = useState(false)
@@ -5915,12 +6081,52 @@ function App() {
   const [editingTrack, setEditingTrack] = useState(null)
   const [toast, setToast] = useState('')
   const toastTimerRef = useRef(null)
+  const hasNotif =
+    !!updatePrompt || !!petReminder || library.some((t) => t.audioMissing)
 
   const showToast = useCallback((msg) => {
     setToast(msg)
     clearTimeout(toastTimerRef.current)
     toastTimerRef.current = setTimeout(() => setToast(''), 2200)
   }, [])
+
+  const genTopMonth = useCallback(() => {
+    const now = new Date()
+    const prefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const scored = library
+      .map((t) => {
+        let n = 0
+        for (const [day, c] of Object.entries(t.playDays || {})) {
+          if (day.startsWith(prefix)) n += Number(c) || 0
+        }
+        return { id: t.id, n }
+      })
+      .filter((x) => x.n > 0)
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 25)
+    if (!scored.length) {
+      showToast('Ouça algumas músicas primeiro')
+      return
+    }
+    const months = [
+      'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+    ]
+    const pid = `top-${prefix.replace('-', '')}`
+    const name = `Top de ${months[now.getMonth()]}`
+    const ids = scored.map((s) => s.id)
+    setPlaylists((prev) => {
+      const ix = prev.findIndex((p) => p.id === pid)
+      if (ix >= 0) {
+        const next = [...prev]
+        next[ix] = { ...next[ix], name, trackIds: ids }
+        return next
+      }
+      return [...prev, { id: pid, name, trackIds: ids, createdAt: Date.now(), auto: true }]
+    })
+    setActivePlaylist(pid)
+    showToast(`${name} pronta!`)
+  }, [library, showToast])
 
   const [lyricsByTrack, setLyricsByTrack] = useState({})
   const loadedLyricsRef = useRef(new Set())
@@ -6271,19 +6477,21 @@ setInstallEvt(null)
       if (i >= 0) {
         stopOnline()
         select(i)
+        pushPlayedRecent(id)
         setShowNowPlaying(true)
       }
     },
-    [library, select, stopOnline],
+    [library, select, stopOnline, pushPlayedRecent],
   )
 
   const playByList = useCallback(
     (tracks, id) => {
       stopOnline()
       playerPlayByList(tracks, id)
+      pushPlayedRecent(id)
       setShowNowPlaying(true)
     },
-    [playerPlayByList, stopOnline],
+    [playerPlayByList, stopOnline, pushPlayedRecent],
   )
 
   const queueNextLocal = useCallback(
@@ -6630,7 +6838,9 @@ setInstallEvt(null)
     >
       <Sidebar view={view} setView={setView} onPickFiles={() => fileInputRef.current?.click()} />
 
-      <BackgroundFX bgAnimated={appSettings.bgAnimated} cosmosAnimated={appSettings.cosmosAnimated} />
+      {!appSettings.lowPower && (
+        <BackgroundFX bgAnimated={appSettings.bgAnimated} cosmosAnimated={appSettings.cosmosAnimated} />
+      )}
 
       <input
         ref={fileInputRef}
@@ -6680,7 +6890,7 @@ setInstallEvt(null)
                     <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
                     <path d="M13.7 21a2 2 0 0 1-3.4 0" />
                   </svg>
-                  <span className="notification-dot" />
+                  {hasNotif && <span className="notification-dot" />}
                 </button>
                 <button
                   className="user-btn app-user"
@@ -6718,11 +6928,15 @@ setInstallEvt(null)
                   value={query}
                   onChange={(e) => {
                     setQuery(e.target.value)
-                    if (e.target.value) setView('buscar')
+                    if (e.target.value) setView('inicio')
                   }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && e.target.value.trim()) addRecentSearch(e.target.value)
+                />
+                <MicButton
+                  onResult={(text) => {
+                    setQuery(text)
+                    if (text) setView('inicio')
                   }}
+                  notify={showToast}
                 />
               </div>
               <span className="app-version-chip">v{APP_VERSION}</span>
@@ -6738,7 +6952,7 @@ setInstallEvt(null)
                     <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
                     <path d="M13.7 21a2 2 0 0 1-3.4 0" />
                   </svg>
-                  <span className="notification-dot" />
+                  {hasNotif && <span className="notification-dot" />}
                 </button>
                 <button className="user-btn" onClick={() => setView('perfil')} title={appSettings.userName || 'Perfil'} aria-label="Abrir perfil">
                   {appSettings.avatar ? (
@@ -6755,18 +6969,70 @@ setInstallEvt(null)
           {notifOpen && (
             <div className="notif-panel" ref={notifRef}>
               <span className="notif-panel-title">Notificações</span>
-              <div className="notif-item">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 8v4l3 2" /><circle cx="12" cy="12" r="9" /></svg>
-                <span>App na versão mais recente: <b>v{APP_VERSION}</b>.</span>
-              </div>
-              <div className="notif-item">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M10 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM18 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM10 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM18 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" /></svg>
-                <span>Toque no gatinho para fazer carinho e ouvir suas reações.</span>
-              </div>
-              <div className="notif-item">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2 3 14h8l-1 8 11-14h-8z" /></svg>
-                <span>Novo visual: Pet Habitat, mini player flutuante e espaço animado.</span>
-              </div>
+              {(() => {
+                const go = (v) => {
+                  setNotifOpen(false)
+                  setView(v)
+                }
+                const items = []
+                if (updatePrompt) {
+                  items.push({
+                    id: 'update',
+                    icon: (
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>
+                    ),
+                    text: <>Nova versão <b>{updatePrompt}</b> disponível. Toque para atualizar.</>,
+                    onClick: () => go('configuracoes'),
+                  })
+                }
+                if (petReminder) {
+                  items.push({
+                    id: 'pet',
+                    icon: (
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M10 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM18 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM10 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM18 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" /></svg>
+                    ),
+                    text: <>{petReminder.text}</>,
+                    onClick: () => go('inicio'),
+                  })
+                }
+                const missingAudio = library.filter((t) => t.audioMissing).length
+                if (missingAudio > 0) {
+                  items.push({
+                    id: 'noaudio',
+                    icon: (
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
+                    ),
+                    text: <>{missingAudio} {missingAudio === 1 ? 'música sem áudio' : 'músicas sem áudio'} na biblioteca.</>,
+                    onClick: () => go('biblioteca'),
+                  })
+                }
+                const lastAchId = achSeen[achSeen.length - 1]
+                const lastAch = lastAchId
+                  ? getAchievements(library, petStats?.touches || 0).find((a) => a.id === lastAchId)
+                  : null
+                if (lastAch) {
+                  items.push({
+                    id: 'ach',
+                    icon: <span aria-hidden="true">{lastAch.icon}</span>,
+                    text: <>Última conquista: <b>{lastAch.name}</b>.</>,
+                    onClick: () => go('perfil'),
+                  })
+                }
+                if (!items.length) {
+                  return (
+                    <div className="notif-item">
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6 9 17l-5-5" /></svg>
+                      <span>Tudo em dia! App na versão <b>v{APP_VERSION}</b>.</span>
+                    </div>
+                  )
+                }
+                return items.map((n) => (
+                  <button key={n.id} className="notif-item notif-item-btn" onClick={n.onClick}>
+                    {n.icon}
+                    <span>{n.text}</span>
+                  </button>
+                ))
+              })()}
             </div>
           )}
         </header>
@@ -6774,7 +7040,6 @@ setInstallEvt(null)
         <div className={`mobile-tabs ${IS_NATIVE ? 'app-bottom-nav' : ''}`}>
           {[
             ['inicio', 'Início', 'home'],
-            ['buscar', 'Buscar', 'search'],
             ['online', 'Online', 'online'],
             ['favoritas', 'Favoritas', 'heart'],
             ['biblioteca', 'Biblioteca', 'library'],
@@ -6800,6 +7065,25 @@ setInstallEvt(null)
                   ? `${greetingForHour(now.getHours())}, ${appSettings.userName} ✦`
                   : `${greetingForHour(now.getHours())} ✦`}
               </h1>
+              <div className="search-wrap home-search">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
+                </svg>
+                <input
+                  className="search"
+                  placeholder="O que você quer ouvir?"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <MicButton onResult={(text) => setQuery(text)} notify={showToast} />
+                {query && (
+                  <button className="search-clear" onClick={() => setQuery('')} aria-label="Limpar busca">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
               <span className="lib-head-right">
                 <button className="btn-primary" onClick={() => fileInputRef.current?.click()}>
                   + Adicionar músicas
@@ -6807,6 +7091,17 @@ setInstallEvt(null)
               </span>
             </div>
 
+            {query.trim() ? (
+              <>
+                <h2 className="section-title">Resultados</h2>
+                {results.length ? (
+                  <TrackList tracks={results} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onOpenSource={openExternal} onAddToPlaylist={setPlaylistPickerTrack} />
+                ) : (
+                  <p className="empty">Nenhuma música encontrada para “{query}”.</p>
+                )}
+              </>
+            ) : (
+              <>
             <PetHabitatCard
               greeting={petGreet}
               greetMs={!loadingLib && library.length === 0 ? 0 : 4800}
@@ -6856,10 +7151,9 @@ onPetAction={handlePetAction}
               </div>
             ) : (
               <>
-                {topTracks.length > 0 && <MusicRow title="Mais tocadas" tracks={topTracks} onPlay={playById} />}
-                {recentRow.length > 0 && <MusicRow title="Recentes" tracks={recentRow} onPlay={playById} />}
-
-                <QuickTrackGrid tracks={library.slice(0, 2)} onPlay={playById} />
+                {recentRow.length > 0 && (
+                  <QuickTrackGrid title="Recentes" tracks={recentRow.slice(0, 2)} onPlay={playById} />
+                )}
 
                 <div className="section">
                   <h2 className="section-title">Todas as músicas</h2>
@@ -6867,67 +7161,7 @@ onPetAction={handlePetAction}
                 </div>
               </>
             )}
-          </section>
-        )}
-
-        {view === 'buscar' && (
-          <section className="view">
-            {IS_NATIVE && (
-              <div className="search-wrap view-search">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
-                </svg>
-                <input
-                  className="search"
-                  placeholder="O que você quer ouvir?"
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value)
-                    if (e.target.value) setView('buscar')
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && e.target.value.trim()) addRecentSearch(e.target.value)
-                  }}
-                />
-              </div>
-            )}
-            <h1 className="greeting">{query ? 'Resultados' : 'Buscar'}</h1>
-            {!query && recentSearches.length > 0 && (
-              <div className="recent-searches">
-                <div className="recent-header">
-                  <h2 className="section-title">Busca recente</h2>
-                  <button className="recent-clear" onClick={clearRecentSearches}>
-                    Limpar
-                  </button>
-                </div>
-                <div className="recent-chips">
-                  {recentSearches.map((term) => (
-                    <button
-                      key={term}
-                      className="recent-chip"
-                      onClick={() => {
-                        addRecentSearch(term)
-                        setQuery(term)
-                      }}
-                    >
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="m21 21-4.3-4.3" />
-                        <circle cx="11" cy="11" r="7" />
-                      </svg>
-                      {term}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {results.length ? (
-              <TrackList tracks={results} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onOpenSource={openExternal} onAddToPlaylist={setPlaylistPickerTrack} />
-            ) : (
-              query ? (
-                <p className="empty">Nenhuma música encontrada para “{query}”.</p>
-              ) : (
-                <p className="empty">Digite algo no campo de busca acima para encontrar músicas, artistas ou álbuns.</p>
-              )
+              </>
             )}
           </section>
         )}
@@ -6950,7 +7184,14 @@ onPetAction={handlePetAction}
                         </svg>
                         Biblioteca
                       </button>
-                      <h1 className="greeting">{pl.name}</h1>
+                      <div className="lib-title-wrap">
+                        <h1 className="greeting">{pl.name}</h1>
+                        <p className="lib-sub">
+                          {plTracks.length} {plTracks.length === 1 ? 'música' : 'músicas'}
+                          {' · '}
+                          {formatTime(plTracks.reduce((acc, t) => acc + (t.duration || 0), 0))}
+                        </p>
+                      </div>
                       <div className="lib-actions">
                         <button className="btn-ghost" onClick={() => setRenamePlaylistOpen(true)}>
                           Renomear
@@ -6959,10 +7200,6 @@ onPetAction={handlePetAction}
                           Apagar
                         </button>
                       </div>
-                    </div>
-                    <div className="playlist-summary">
-                      <span>{plTracks.length} {plTracks.length === 1 ? 'música' : 'músicas'}</span>
-                      <span>Duração total: {formatTime(plTracks.reduce((acc, t) => acc + (t.duration || 0), 0))}</span>
                     </div>
                     <button
                       className="btn-primary playlist-add-tracks"
@@ -6994,37 +7231,61 @@ onPetAction={handlePetAction}
             ) : (
               <>
                 <div className="lib-head">
-                  <h1 className="greeting">Sua Biblioteca</h1>
-                  <div className="lib-actions">
+                  <div className="lib-title-wrap">
+                    <h1 className="greeting">Sua Biblioteca</h1>
                     {library.length > 0 && (
-                      <button className="btn-ghost" onClick={clearLibrary}>
-                        Limpar
-                      </button>
+                      <p className="lib-sub">
+                        {library.length} {library.length === 1 ? 'música' : 'músicas'}
+                        {' · '}
+                        {formatTime(library.reduce((acc, t) => acc + (t.duration || 0), 0))}
+                      </p>
                     )}
-                    {!IS_NATIVE && (
-                      <button className="btn-ghost" onClick={() => folderInputRef.current?.click()}>
-                        Importar pasta
-                      </button>
-                    )}
+                  </div>
+                  <div className="lib-actions">
+                    <button className="btn-ghost" onClick={() => setLibMoreOpen((v) => !v)} aria-expanded={libMoreOpen} title="Mais ações">
+                      ⋯
+                    </button>
                     <button className="btn-primary" onClick={() => fileInputRef.current?.click()}>
-                      + Adicionar músicas
+                      + Adicionar
                     </button>
                   </div>
                 </div>
 
-                <div className="section">
-                  <div className="playlist-head">
-                    <h2 className="section-title">Suas playlists</h2>
-                    <button className="btn-ghost" onClick={() => setCreatePlaylistOpen(true)}>
-                      + Nova
-                    </button>
+                {libMoreOpen && (
+                  <div className="lib-more">
+                    {!IS_NATIVE && (
+                      <button className="btn-ghost" onClick={() => { setLibMoreOpen(false); folderInputRef.current?.click() }}>
+                        Importar pasta
+                      </button>
+                    )}
+                    {IS_NATIVE && (
+                      <button className="btn-ghost" onClick={() => { setLibMoreOpen(false); openDeviceImport() }}>
+                        Importar do aparelho
+                      </button>
+                    )}
+                    {library.length > 0 && (
+                      <button className="btn-ghost danger" onClick={() => { setLibMoreOpen(false); clearLibrary() }}>
+                        Limpar tudo
+                      </button>
+                    )}
                   </div>
-                  {playlists.length === 0 ? (
-                    <p className="empty playlist-empty">
-                      Crie uma playlist para organizar suas músicas. Use “⋯” em qualquer música e escolha
-                      “Adicionar à playlist”.
-                    </p>
-                  ) : (
+                )}
+
+                {(playlists.length > 0 || library.length > 0) && (
+                  <div className="section">
+                    <div className="playlist-head">
+                      <h2 className="section-title">Playlists</h2>
+                      <div className="lib-actions">
+                        {library.length > 0 && (
+                          <button className="btn-ghost" onClick={genTopMonth}>
+                            Top do mês
+                          </button>
+                        )}
+                        <button className="btn-ghost" onClick={() => setCreatePlaylistOpen(true)}>
+                          + Nova
+                        </button>
+                      </div>
+                    </div>
                     <div className="playlist-grid">
                       {playlists.map((p) => {
                         const first = p.trackIds.map((id) => library.find((t) => t.id === id)).find(Boolean)
@@ -7037,8 +7298,8 @@ onPetAction={handlePetAction}
                         )
                       })}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {library.length === 0 ? (
                   <div className="empty-state">
@@ -7056,26 +7317,7 @@ onPetAction={handlePetAction}
                     </button>
                   </div>
                 ) : (
-                  <>
-                    <TrackList tracks={library} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onOpenSource={openExternal} onAddToPlaylist={setPlaylistPickerTrack} />
-                    <LibraryView tracks={library} onSelect={playById} />
-                  </>
-                )}
-
-                {IS_NATIVE && (
-                  <div className="settings-card library-import-card">
-                    <div className="library-import-row">
-                      <div className="library-import-info">
-                        <span className="settings-label">Importar músicas do aparelho</span>
-                        <span className="settings-desc">
-                          Lê as músicas baixadas no telefone e adiciona à biblioteca.
-                        </span>
-                      </div>
-                      <button className="btn-primary" onClick={openDeviceImport}>
-                        Importar do aparelho
-                      </button>
-                    </div>
-                  </div>
+                  <TrackList tracks={library} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onOpenSource={openExternal} onAddToPlaylist={setPlaylistPickerTrack} />
                 )}
               </>
             )}
@@ -7153,7 +7395,6 @@ onPetAction={handlePetAction}
             settings={appSettings}
             api={settingsApi}
             library={library}
-            onClearLibrary={clearLibrary}
             isIOS={isIOS}
             isAppInstalled={isAppInstalled}
             installEvt={installEvt}
@@ -7161,8 +7402,6 @@ onPetAction={handlePetAction}
             isNative={IS_NATIVE}
             onImport={importLibrary}
             onShareApp={shareApp}
-            onImportFolder={() => folderInputRef.current?.click()}
-            onImportDevice={openDeviceImport}
             onClearCache={clearCache}
             cacheCleanMsg={cacheCleanMsg}
             onOpenChangelog={() => setChangelogOpen(true)}
@@ -7300,6 +7539,12 @@ onPetAction={handlePetAction}
       )}
 
       {toast && <div className="toast">{toast}</div>}
+
+      <AchToast
+        item={achQueue[0] || null}
+        soundOn={appSettings.petSound !== false}
+        onDone={dismissAchToast}
+      />
 
       {changelogOpen && <ChangelogModal onClose={() => setChangelogOpen(false)} />}
 

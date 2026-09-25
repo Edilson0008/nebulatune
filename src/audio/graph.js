@@ -1,5 +1,6 @@
 let ctx = null
 let input = null
+let preamp = null
 let master = null
 let presence = null
 let comp = null
@@ -23,6 +24,9 @@ function buildGraph() {
   input = ctx.createGain()
   input.gain.value = 1
 
+  preamp = ctx.createGain()
+  preamp.gain.value = 1
+
   for (let i = 0; i < BAND_COUNT; i += 1) {
     const b = ctx.createBiquadFilter()
     b.type = 'peaking'
@@ -31,7 +35,8 @@ function buildGraph() {
     b.gain.value = 0
     bands.push(b)
   }
-  input.connect(bands[0])
+  input.connect(preamp)
+  preamp.connect(bands[0])
   bands.forEach((b, i) => {
     if (i > 0) bands[i - 1].connect(b)
   })
@@ -85,6 +90,13 @@ function applyNow(s) {
     master.gain.cancelScheduledValues(t)
     master.gain.setValueAtTime(master.gain.value, t)
     master.gain.linearRampToValueAtTime(s.volume, t + 0.06)
+  }
+
+  if (s.preampDb != null && Number.isFinite(Number(s.preampDb))) {
+    const g = Math.pow(10, Math.max(-12, Math.min(6, Number(s.preampDb))) / 20)
+    preamp.gain.cancelScheduledValues(t)
+    preamp.gain.setValueAtTime(preamp.gain.value, t)
+    preamp.gain.linearRampToValueAtTime(g, t + 0.06)
   }
 }
 

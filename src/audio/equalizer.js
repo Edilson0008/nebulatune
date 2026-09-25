@@ -29,8 +29,15 @@ export function defaultSettings() {
     enabled: true,
     preset: 'flat',
     volume: 1,
+    preampDb: 0,
     bands: PRESETS.flat.bands.slice(),
   }
+}
+
+function cleanPreamp(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return 0
+  return Math.max(-12, Math.min(6, n))
 }
 
 function loadSettings() {
@@ -40,6 +47,7 @@ function loadSettings() {
   return {
     ...base,
     ...raw,
+    preampDb: cleanPreamp(raw.preampDb),
     bands:
       Array.isArray(raw.bands) && raw.bands.length === BAND_COUNT
         ? raw.bands
@@ -67,6 +75,7 @@ export function useEqualizer() {
         return { ...s, bands, preset: 'personalizado' }
       }),
     setVolume: (v) => setSettings((s) => ({ ...s, volume: v })),
+    setPreampDb: (v) => setSettings((s) => ({ ...s, preampDb: cleanPreamp(v) })),
     applyPreset: (name) =>
       setSettings((s) => ({
         ...s,
@@ -86,6 +95,7 @@ export function useEqualizer() {
         return {
           ...base,
           ...clean,
+          preampDb: cleanPreamp(clean.preampDb),
           bands:
             Array.isArray(clean.bands) && clean.bands.length === BAND_COUNT
               ? clean.bands

@@ -1,5 +1,18 @@
 # Lembretes
 
+## FEITO em 25/09 (1.9.27/53) — leva de melhorias + conserto do importar
+- Busca por voz na barra de pesquisa (início e topo); aba Buscar removida,
+  pesquisa centralizada no topo do início. Recentes de verdade (histórico salvo
+  no aparelho). Biblioteca e Perfil minimalistas (menu ⋯, sem duplicatas nas
+  Configurações). Conquistas com banner de desbloqueio + som + recolhível.
+  Top do mês automática. Sino com avisos úteis (atualização, gatinho, sem áudio,
+  última conquista). Cores novas + personalizada. Modo leve (celular simples).
+  Letras sem acento + manual ordenada. Ganho de entrada no equalizador.
+- Consertado Importar do aparelho (lista vinha em formato errado e quebrava a
+  tela; permissão agora responde). Limpeza: supabase/setup.sql e
+  src/storage/db.js apagados, backup.js enxutado. Tela preta do Top do mês
+  corrigida (mesmo dia).
+
 ## FEITO e PUBLICADO em 22/09 (1.9.26/52) — metade das músicas sem capa/som ao reabrir
 - BUG real de `loadAllMediaBlobs` (localstore.js): contava respostas errado —
   esperava N respostas, mas cada música dispara 2 (áudio+capa) → resolvia no
@@ -103,8 +116,9 @@
   sempre "📁 Meus Arquivos"). Exportar/Importar backup (`backup-completo`)
   continua funcionando 100% local.
 - **FEITO (22/09):** o usuário apagou o projeto do Supabase no painel
-  (`omusoirnpyduuyeirreo`) — confirmado pelo próprio usuário. O
-  `supabase/setup.sql` fica no repositório só como registro.
+  (`omusoirnpyduuyeirreo`) — confirmado pelo próprio usuário. A pasta
+  `supabase/setup.sql` foi apagada do repositório (24/09) junto com a limpeza
+  do código morto — não tinha mais nenhum uso.
 
 ## Site publicado (feito)
 - Site oficial no ar: https://edilson0008.github.io/nebulatune/
@@ -145,7 +159,7 @@
 - Lint 0 erros, build web OK, APK 1.9.7/33 gerado.
 
 ## Versões (importante)
-- Versão atual publicada/remota: **1.9.26 / código 52** (APK real na main +
+- Versão atual publicada/remota: **1.9.27 / código 53** (APK real na main +
   site). Fonte da verdade = GitHub.
 
 ## FEITO em 22/09 (1.9.17/43) — app 100% local (removida a nuvem)

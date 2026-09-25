@@ -6,16 +6,38 @@ const PSTAT_DEFAULTS = { touches: 0, hearts: 0, sleeps: 0, scares: 0, meows: 0, 
 export const ACCENTS = {
   violet: { name: 'Violeta', accent: '#8b5cf6', accent2: '#c084fc' },
   pink: { name: 'Rosa', accent: '#ec4899', accent2: '#f472b6' },
-  green: { name: 'Verde', accent: '#10b981', accent2: '#34d399' },
-  blue: { name: 'Azul', accent: '#3b82f6', accent2: '#60a5fa' },
+  red: { name: 'Vermelho', accent: '#ef4444', accent2: '#f87171' },
   orange: { name: 'Laranja', accent: '#f97316', accent2: '#fb923c' },
+  amber: { name: 'Âmbar', accent: '#f59e0b', accent2: '#fbbf24' },
+  green: { name: 'Verde', accent: '#10b981', accent2: '#34d399' },
+  teal: { name: 'Turquesa', accent: '#14b8a6', accent2: '#2dd4bf' },
+  blue: { name: 'Azul', accent: '#3b82f6', accent2: '#60a5fa' },
   cyan: { name: 'Ciano', accent: '#06b6d4', accent2: '#22d3ee' },
+}
+
+function lighten(hex, amount = 0.45) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '')
+  if (!m) return hex
+  const n = parseInt(m[1], 16)
+  const mix = (c) => Math.round(c + (255 - c) * amount)
+  const r = mix((n >> 16) & 255)
+  const g = mix((n >> 8) & 255)
+  const b = mix(n & 255)
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`
+}
+
+export function resolveAccent(settings) {
+  if (settings?.accent === 'custom' && /^#[0-9a-f]{6}$/i.test(settings?.customAccent || '')) {
+    return { name: 'Personalizada', accent: settings.customAccent, accent2: lighten(settings.customAccent) }
+  }
+  return ACCENTS[settings?.accent] || ACCENTS.violet
 }
 
 export const SPEEDS = [1, 1.25, 1.5, 2]
 
 const DEFAULTS = {
   accent: 'violet',
+  customAccent: '',
   userName: '',
   bio: '',
   speed: 1,
@@ -24,6 +46,7 @@ const DEFAULTS = {
   bgAnimated: true,
   cosmosAnimated: true,
   petSound: true,
+  lowPower: false,
 }
 
 function merge(raw) {
@@ -33,11 +56,18 @@ function merge(raw) {
 export function useSettings() {
   const [settings, setSettings] = useState(() => merge(readLocal('nt.settings')))
 
+  const accentKey = settings.accent
+  const customAccentValue = settings.customAccent
+
   useEffect(() => {
-    const a = ACCENTS[settings.accent] || ACCENTS.violet
+    const a = resolveAccent({ accent: accentKey, customAccent: customAccentValue })
     document.documentElement.style.setProperty('--accent', a.accent)
     document.documentElement.style.setProperty('--accent-2', a.accent2)
-  }, [settings.accent])
+  }, [accentKey, customAccentValue])
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('low-power', settings.lowPower === true)
+  }, [settings.lowPower])
 
   useEffect(() => {
     writeLocal('nt.settings', settings)
@@ -47,6 +77,7 @@ export function useSettings() {
     () => ({
       set: (key, value) => setSettings((s) => ({ ...s, [key]: value })),
       setAccent: (value) => setSettings((s) => ({ ...s, accent: value })),
+      setCustomAccent: (value) => setSettings((s) => ({ ...s, customAccent: value, accent: 'custom' })),
       setUserName: (value) => setSettings((s) => ({ ...s, userName: value })),
       setBio: (value) => setSettings((s) => ({ ...s, bio: value })),
       setSpeed: (value) => setSettings((s) => ({ ...s, speed: value })),
@@ -55,6 +86,7 @@ export function useSettings() {
       setBgAnimated: (value) => setSettings((s) => ({ ...s, bgAnimated: value })),
       setCosmosAnimated: (value) => setSettings((s) => ({ ...s, cosmosAnimated: value })),
       setPetSound: (value) => setSettings((s) => ({ ...s, petSound: value })),
+      setLowPower: (value) => setSettings((s) => ({ ...s, lowPower: value })),
       setAll: (value) => setSettings((s) => ({ ...s, ...(value || {}) })),
     }),
     [],
@@ -78,7 +110,7 @@ export function usePetStats() {
     [],
   )
 
-  // Aplica pontuações vindas da nuvem sem nunca diminuir os contadores:
+  // Aplica pontuações salvas (backup) sem nunca diminuir os contadores:
   // cada aparelho contribui com os seus toques/corações e o total só cresce.
   const applyPetStats = useMemo(
     () => (value) => {

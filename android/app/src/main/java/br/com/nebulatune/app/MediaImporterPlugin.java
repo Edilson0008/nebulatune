@@ -16,6 +16,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 
@@ -47,6 +48,7 @@ public class MediaImporterPlugin extends Plugin {
         listTracks(call);
     }
 
+    @PermissionCallback
     private void permissionResult(PluginCall call) {
         if (canReadAudio()) {
             listTracks(call);
