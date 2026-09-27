@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "pretest": "vite build --ssr ssr-smoke.jsx --outDir ssr-out --emptyOutDir --logLevel error",
+    "test": "node --experimental-test-module-mocks --test \"*.test.mjs\" \"scripts/tests-*.mjs\"",
+    "verify": "pnpm build && node verify.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

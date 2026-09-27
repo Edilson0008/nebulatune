@@ -1,11 +1,5 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
-
-// Isola o estado de progresso da música (elapsed/duration) num contexto próprio.
-// Os players emitem mudanças a no máximo 2x/s pelo `sinkRef`; só quem consome
-// `useProgress()` re-renderiza (PlayerBar, NowPlaying, QueueSheet...), poupando
-// a árvore da Home inteira de re-renderizar a cada segundo.
-
-const ProgressCtx = createContext({ elapsed: 0, duration: 0 })
+import { useEffect, useRef, useState } from 'react'
+import { ProgressCtx } from './progress-context.js'
 
 export function ProgressProvider({ sinkRef, onProgressRef, children }) {
   const [value, setValue] = useState({ elapsed: 0, duration: 0 })
@@ -27,8 +21,4 @@ export function ProgressProvider({ sinkRef, onProgressRef, children }) {
   }, [sinkRef, onProgressRef])
 
   return <ProgressCtx.Provider value={value}>{children}</ProgressCtx.Provider>
-}
-
-export function useProgress() {
-  return useContext(ProgressCtx)
 }

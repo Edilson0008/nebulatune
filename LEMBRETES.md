@@ -1,5 +1,79 @@
 # Lembretes
 
+## FEITO em 27/09 (1.9.28/54) — tela preta + APK leve + menos espaço
+- **Tela preta ao abrir: era um import faltando.** `src/components/track-list.jsx`
+  usava `memo(...)` sem ter o `memo` importado do `react` — a lista de músicas
+  quebrava ao montar e derrubava o app inteiro. Corrigido.
+- Segundo bug do mesmo tipo que eu mesmo introduzi: `use-lyrics-translation`
+  refazia a lista de linhas a cada render e disparava a tradução em laço
+  (tela travada). A chave passou a ser o **texto** das linhas, não o array.
+- **Novo teste que pega esse tipo de erro** (`scripts/tests-render.mjs`):
+  monta os **29 componentes** do app em memória, sem navegador, e falha se
+  algum não renderizar. Ele achou o `memo` faltando. Roda no `pnpm test`
+  (14 testes). O shim de navegador está em `scripts/browser-shim.mjs`.
+- `.gitignore` novo: `dist`, `ssr-out`, `android/build`, `node_modules`.
+- APK: o `build-android.sh` agora apaga também `public/projeto` do
+  `assets/public` (12,4 MB = 75% do APK era o próprio código-fonte). O APK
+  sai de 16,7 MB para ~4,5 MB. **Falta recompilar no PC** (sem JDK/SDK aqui
+  e o `aapt2` x86_64 não roda em Android/ARM).
+- **Pendência: a chave de assinatura `android/keystore/nebulatune-release.jks`
+  não está no celular.** O `keystore.properties` (senhas) está no git e
+  confere, mas o `.jks` não aparece em nenhum lugar do armazenamento. Sem ela
+  o Android não aceita atualizar mantendo as instalações. O arquivo precisa ser
+  transferido para o PC (e NÃO commitado — ver `.gitignore`).
+
+## FEITO em 27/09 — manutenção do código (sem mudança de visual, sem bump de versão)
+- `src/App.jsx` estava com **7.650 linhas** (275 KB). Foi quebrado em:
+  `src/components/` (uma tela por arquivo: `now-playing`, `pet`, `player-bar`,
+  `track-list`, `library-ui`, `settings-view`, `online-view`, `profile`,
+  `queue-sheet`, `equalizer`, `visualizer`, `background`, `Cover`, `mic-button`,
+  `media-session-bridge`), `src/hooks/` (`use-player`, `use-online-player`,
+  `use-mood-detector`, `use-lyrics-translation`, `use-media-session`) e
+  `src/lib/` (função pura: `format`, `cover`, `filename`, `lyrics`, `stats`,
+  `pet`, `fanfare`, `share`, `sleep-native`, `translate-cache`, `env`) +
+  `src/data/changelog.js`. **`App.jsx` ficou com 2.121 linhas** (estado global
+  e tela inicial). Nenhuma linha de código foi perdida (conferido por diff de
+  linhas) e o comportamento é o mesmo — build, lint e testes iguais.
+- Corrigido de verdade: os 2 arquivos de teste estavam quebrados
+  (`mediaNotification.test.mjs` importava `src/` por caminho absoluto do PC do
+  autor; `scripts/tests-mediaNotification.mjs` apontava para `scripts/src/` que
+  não existe) e 2 testes affirmavam coisa errada (sem capa a notificação
+  **usa o ícone do app**, de propósito).
+- `pnpm test` e `pnpm verify` novos no `package.json`; CI `.github/workflows/
+  check.yml` roda lint + testes + build a cada push.
+- Lint: 20 avisos → **0**. `no-func-assign` resolvido trocando `X = memo(X)`
+  por `const X = memo(function X(...))`; `only-export-components` resolvido
+  parando de exportar constante junto de componente (`useProgress` foi para
+  `src/progress-context.js`); `set-state-in-effect` resolvido puxando o reset
+  de humor/tradução para o render (a tela também deixa de piscar o valor
+  antigo). Os 4 `exhaustive-deps`(sumiram) eram dependências de `useCallback`
+  estáveis — foram adicionadas de verdade.
+- `AGENTS.md` corrigido: a nuvem/login foi removida DE VEZ (1.9.17) — não é mais
+  pendência, e o texto antigo mandava lembrar o usuário de algo que não existe.
+
+## FEITO em 27/09 — menos espaço e mais fluidez (sem bump de versão)
+- **APK 17,5 MB → ~4,5 MB.** Descobri que 12,4 MB do APK (75%!) era o próprio
+  código-fonte: `public/projeto/nebulatune-src.zip` estava sendo copiado para
+  dentro do app. O `build-android.sh` já apagava `apk/` e `backup/` do APK
+  (senão o app embolia uma cópia de si mesmo), mas esquecia do `projeto/`.
+  Agora apaga os três. O zip continua disponível no site.
+- **O app não guarda mais o áudio streaming nem as respostas de API.** O
+  service worker (`public/sw.js`) guardava *qualquer* GET, inclusive a música
+  que tocava do Audius (isso enchia o aparelho de sobra) e a letra antiga
+  continuava aparecendo mesmo com a internet funcionando. Agora só guarda o
+  app em si e as capas; áudio, vídeo e API ficam de fora.
+- `sw.js` não sabia mais a própria versão (tava travado em `1.9.26`, então o
+  cache offline não se limpava sozinho nas versões novas). A versão agora é
+  escrita no build pelo `vite.config.js` — não dá para esquecer de novo.
+- **Novo botão "Liberar espaço das músicas"** em Configurações: apaga só os
+  arquivos de músicas que você já removeu da biblioteca (antes esses blobs
+  ficavam ocupando espaço para sempre, sem como limpá-los). A "Limpar cache"
+  antiga continua igual, porque ela **não** pode apagar isso.
+- Telas `Perfil`, `Online` e `Configurações` passaram a carregar só quando são
+  abertas (`lazy` + `Suspense`), em vez de pesar na abertura do app.
+- Pacote principal: 422 KB → 410 KB (o resto virou 3 arquivinhos de 3 a 7 KB
+  que só vêm quando a tela é aberta).
+
 ## FEITO em 25/09 (1.9.27/53) — leva de melhorias + conserto do importar
 - Busca por voz na barra de pesquisa (início e topo); aba Buscar removida,
   pesquisa centralizada no topo do início. Recentes de verdade (histórico salvo
@@ -356,6 +430,21 @@
 - **pnpm** instalado globalmente (usado pelo `scripts/build-android.sh`).
 
 ## Pendente: repetição A-B (feature 14)
-- Ainda nÃO implementada (usuário pediu para deixar para depois).
+- Ainda NÃO implementada (usuário pediu para deixar para depois).
 - Ideia: marcar ponto A (início) e ponto B (fim) de um trecho na tela "Tocando
   agora" (botões ao lado do timer de desligar) e repetir só esse trecho em loop.
+
+## Pendente: loja de moedas do gatinho (feature 15)
+- Anotado em 27/09 a pedido do usuário. HOJE AS MOEDAS NÃO GASTAM NADA:
+  `PSTAT_DEFAULTS` em `src/settings.js` tem `coins: 0`; `bumpPet('coins', 2)` no
+  toque no gatinho e `bumpPet('coins', 1)` por música iniciada
+  (`src/App.jsx`) — o contador só sobe e nunca desce. A barra "🪙 Moedas" no
+  habitat do gatinho é o único lugar onde aparece.
+- Ideia: gastar as moedas. Uma lojinha dentro do card do gatinho com
+  adesivos/stickers, cores e enfeites do habitat, capas do player e itens
+  cosméticos pro Nebula (ex.: óculos de sol, chapéu, cachecol), e talvez um
+  "apito" que chama atenção nas conquistas. Comprar = `coins -= preco` com
+  guarda de saldo, e o item comprado fica guardado no petStats (exportar/
+  importar backup já leva o `petStats` inteiro, então vem de graça no backup).
+- Bônus sugerido: ganhar mais moedas — música ouvida até o fim (+1), ouvir todo
+  dia (+1), completar uma conquista (+3), em vez de só tocar no gatinho.

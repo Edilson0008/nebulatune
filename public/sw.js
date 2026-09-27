@@ -1,4 +1,4 @@
-const VERSION = '1.9.26'
+const VERSION = '__APP_VERSION__'
 const PREFIX = `nebulatune-${VERSION}`
 const CACHE_SHELL = `${PREFIX}-shell`
 const CACHE_ASSETS = `${PREFIX}-assets`
@@ -35,6 +35,17 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url)
 
   if (url.pathname.includes('version.json') || url.pathname.startsWith('/apk/')) return
+
+  /* NUNCA guardar o que o app toca: musica em streaming da internet e o
+     resultado das APIs (letras, busca). Sem isso o aparelho enchia de copia
+     de audio e a letra velha continuava aparecendo. */
+  if (req.destination === 'audio' || req.destination === 'video') return
+  const accept = req.headers.get('accept') || ''
+  if (accept.includes('audio/') || accept.includes('video/')) return
+  if (req.destination === '') return
+
+  /* Fora do site so interessa a capa da musica (o resto vem de API). */
+  if (url.origin !== self.location.origin && req.destination !== 'image') return
 
   if (req.mode === 'navigate') {
     event.respondWith(

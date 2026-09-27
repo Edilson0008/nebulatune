@@ -26,8 +26,11 @@ echo "==> 2/6 Sync com Capacitor"
 "$NODE_BIN" node_modules/@capacitor/cli/bin/capacitor sync android
 
 echo "==> 3/6 Remove arquivos que nao devem entrar no APK"
+# Sem isto o APK carrega uma copia de 12 MB do proprio codigo-fonte
+# (public/projeto/nebulatune-src.zip) e um APK antigo dentro de si.
 rm -rf android/app/src/main/assets/public/apk
 rm -rf android/app/src/main/assets/public/backup
+rm -rf android/app/src/main/assets/public/projeto
 
 echo "==> 4/6 Compila APK (release assinado)"
 (cd android && ./gradlew assembleRelease $GRADLE_FLAGS)

@@ -7,7 +7,7 @@ const capgo = {
   setMetadata: async (m) => { log.metadata.push(m); return { value: true } },
   setPlaybackState: async (s) => { log.playback.push(s); return { value: true } },
   setPositionState: async (p) => { log.position.push(p); return { value: true } },
-  setActionHandler: async () => { log.actions.push('handler'); return { value: true } },
+  setActionHandler: async (a) => { log.actions.push(a?.action); return { value: true } },
   clearMetadata: async () => { log.cleared += 1; return { value: true } },
 }
 
@@ -26,10 +26,15 @@ globalThis.FileReader = class {
     queueMicrotask(() => this.onload?.())
   }
 }
-globalThis.navigator = { mediaSession: undefined }
+/* navigator no Node 22 e somente leitura: defineProperty em vez de atribuir */
+Object.defineProperty(globalThis, 'navigator', {
+  value: { mediaSession: undefined },
+  configurable: true,
+  writable: true,
+})
 
 const { updateNowPlaying, hideNowPlaying, hasMediaNotification, onMediaAction } =
-  await import('./src/mediaNotification.js')
+  await import(new URL('../src/mediaNotification.js', import.meta.url).href)
 
 const base = {
   title: 'Teste', artist: 'Artista', album: 'Album',
@@ -57,11 +62,11 @@ test('2) playback state playing + position state no limite correto', async () =>
   assert.equal(pos.playbackRate, 1)
 })
 
-test('3) cover invalido/ausente -> artwork vazio (nao quebra)', async () => {
+test('3) cover invalido/ausente -> artwork cai no icone do app (nao quebra)', async () => {
   await updateNowPlaying({ ...base, cover: null })
-  assert.deepEqual(log.metadata.at(-1).artwork, [])
+  assert.equal(log.metadata.at(-1).artwork.length, 1)
   await updateNowPlaying({ ...base, cover: 'qualquer-coisa' })
-  assert.deepEqual(log.metadata.at(-1).artwork, [])
+  assert.equal(log.metadata.at(-1).artwork.length, 1)
 })
 
 test('4) posicao clamp pausada com arte + sem arte; sem tempo nao reenvia infinito', async () => {
@@ -80,11 +85,15 @@ test('6) hasMediaNotification retorna true no nativo', () => {
   assert.equal(hasMediaNotification(), true)
 })
 
-test('7) onMediaAction registra handlers + dispara callback', async () => {
-  let got = null
-  const off = onMediaAction((a) => { got = a })
-  await capgo.setActionHandler({ action: 'play' })
-  capgo.setActionHandler && null
-  if (off) await off()
-  assert.ok(true, 'registro ok')
+test('7) onMediaAction registra os handlers da barra de notificacao', async () => {
+  const off = onMediaAction(() => {})
+  assert.equal(typeof off, 'function', 'devolve a funcao que desliga')
+  const esperados = [
+    'play', 'pause', 'previoustrack', 'nexttrack', 'stop',
+    'seekto', 'seekbackward', 'seekforward',
+  ]
+  /* os handlers sao registrados dentro de safe() (promessa): da um tick */
+  await new Promise((r) => setTimeout(r, 0))
+  assert.deepEqual(log.actions.slice(-esperados.length), esperados)
+  off()
 })

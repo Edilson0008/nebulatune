@@ -1,8 +1,5 @@
 import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 
 const log = { metadata: [], playback: [], position: [], actions: [], cleared: 0, hidden: 0, handlers: [] }
 
@@ -10,7 +7,7 @@ const log = { metadata: [], playback: [], position: [], actions: [], cleared: 0,
 globalThis.window = { setInterval, clearInterval }
 globalThis.fetch = async () => ({ blob: async () => ({}) })
 globalThis.FileReader = class {
-  readAsDataURL(blob) {
+  readAsDataURL() {
     this.result = 'data:image/png;base64,' + Buffer.from('x').toString('base64') + '_photo'
     queueMicrotask(() => this.onload?.())
   }
@@ -33,13 +30,12 @@ mock.module('@capgo/capacitor-media-session', {
 })
 
 const { hasMediaNotification, updateNowPlaying, hideNowPlaying, onMediaAction } =
-  await import('/root/nebulatune/src/mediaNotification.js')
+  await import(new URL('./src/mediaNotification.js', import.meta.url).href)
 
 const base = {
   title: 'Musica', artist: 'Artista', album: 'Album',
   cover: 'blob:x', playing: true, position: 30, duration: 100, playbackRate: 1,
 }
-const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
 test('1) metadata SEMPRE com titulo/artista/album, mesmo sem duracao; capa blob: convertida p/ data:', async () => {
   await updateNowPlaying({ ...base, cover: 'blob:x' })
@@ -51,11 +47,13 @@ test('1) metadata SEMPRE com titulo/artista/album, mesmo sem duracao; capa blob:
   assert.ok(meta.artwork[0].src.startsWith('data:image/png;base64,'), 'blob: -> dataURL')
 })
 
-test('2) sem capa -> artwork [] mas titulo/artista continuam (nao quebra)', async () => {
+test('2) sem capa -> artwork cai no ICONE do app (fallback), titulo/artista continuam (nao quebra)', async () => {
   await updateNowPlaying({ ...base, cover: '' })
   const meta = log.metadata.at(-1)
   assert.equal(meta.title, 'Musica')
-  assert.deepEqual(meta.artwork, [])
+  assert.equal(meta.artist, 'Artista')
+  assert.equal(meta.artwork.length, 1)
+  assert.ok(meta.artwork[0].src.startsWith('data:image/png;base64,'), 'fallback = icone do app')
 })
 
 test('3) playing=true -> playbackState playing; posicao clampada dentro da duracao', async () => {

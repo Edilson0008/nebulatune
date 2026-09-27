@@ -1,36 +1,16 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
 node_modules
 dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Android / Capacitor
-android/.gradle
-android/build
+ssr-out
 android/app/build
-android/local.properties
-android/keystore
-# public/apk NÃO fica mais ignorado: o APK atual publicado no site precisa
-# subir junto, senão o site (e seus links) continuam servindo versão velha.
-# public/apk
+android/build
+android/.gradle
+android/app/src/main/assets/public
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+*.log
+.DS_Store
 
-.ctest/
+# Chave de assinatura do app: NUNCA commitar
+android/keystore/
+*.jks
+*.keystore

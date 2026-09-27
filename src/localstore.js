@@ -105,7 +105,7 @@ export async function loadAllMediaBlobs(ids) {
       // Só libera o resultado quando as DUAS respostas do par chegaram; antes,
       // a contagem errada encerrava na metade do caminho e a metade restante
       // ficava sem áudio e sem capa ao reabrir o app.
-      const settlePair = (i) => {
+      const settlePair = () => {
         if (--pending === 0) {
           db.close()
           resolve(out)
@@ -116,7 +116,7 @@ export async function loadAllMediaBlobs(ids) {
         out[i] = media
         let pairDone = 0
         const mark = () => {
-          if (++pairDone === 2) settlePair(i)
+          if (++pairDone === 2) settlePair()
         }
         const audioReq = store.get(`${id}:audio`)
         const coverReq = store.get(`${id}:cover`)
@@ -159,6 +159,69 @@ export function deleteMediaBlobs(id) {
 
 export function clearAllMedia() {
   return runTx('readwrite', (s) => s.clear()).catch(() => {})
+}
+
+// ── Liberar espaço ───────────────────────────────────────────────────────────
+// Ao trocar de versão, remover músicas ou importar o mesmo arquivo várias vezes
+// sobram blobs no banco que nenhuma música da biblioteca usa mais. Como o app é
+// 100% local, esse lixo ocupa espaço do aparelho para sempre até a limpeza de
+// cache ser apertada. Estas duas funções permitem achá-lo e apagá-lo.
+
+const orphanKey = (key) => (key || '').split(':')[0]
+
+/* Bytes guardados e quantos blobs existem, sem carregar o conteúdo. */
+export function mediaStorageInfo() {
+  return runTx('readonly', (s) => {
+    let bytes = 0
+    let count = 0
+    return new Promise((resolve) => {
+      const req = s.openCursor()
+      req.onsuccess = () => {
+        const cur = req.result
+        if (!cur) {
+          resolve({ bytes, count })
+          return
+        }
+        const v = cur.value
+        if (v && typeof v.size === 'number') bytes += v.size
+        count += 1
+        cur.continue()
+      }
+      req.onerror = () => resolve({ bytes, count })
+    })
+  }).catch(() => ({ bytes: 0, count: 0 }))
+}
+
+/* Ids que têm áudio/capa guardado mas NÃO estão mais na biblioteca. */
+export async function findOrphanMedia(libraryIds) {
+  const validos = new Set((libraryIds || []).filter(Boolean))
+  if (!validos.size) return []
+  const chaves = await runTx('readonly', (s) => {
+    return new Promise((resolve) => {
+      const req = s.getAllKeys()
+      req.onsuccess = () => resolve(req.result || [])
+      req.onerror = () => resolve([])
+    })
+  }).catch(() => [])
+  const orfaos = new Set()
+  chaves.forEach((k) => {
+    const id = orphanKey(k)
+    if (id && !validos.has(id)) orfaos.add(id)
+  })
+  return [...orfaos]
+}
+
+/* Apaga os blobs que sobraram. Devolve quantos ids foram limpos. */
+export async function purgeOrphanMedia(libraryIds) {
+  const orfaos = await findOrphanMedia(libraryIds)
+  if (!orfaos.length) return 0
+  await runTx('readwrite', (s) => {
+    orfaos.forEach((id) => {
+      s.delete(`${id}:audio`)
+      s.delete(`${id}:cover`)
+    })
+  }).catch(() => {})
+  return orfaos.length
 }
 
 function typeOf(v) {
