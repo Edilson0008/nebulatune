@@ -34,6 +34,20 @@ jobs:
         run: pnpm build
         env:
           WEB_BASE: /nebulatune/
+      - name: Incluir APK mais recente no site
+        run: |
+          set -euo pipefail
+          # Pega o nebulatune.apk da última Release do GitHub e coloca em dist/apk/,
+          # para o link /apk/nebulatune.apk do site sempre servir o APK novo.
+          URL=$(curl -fsSL "https://api.github.com/repos/${{ github.repository }}/releases/latest" \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const r=JSON.parse(s);const a=(r.assets||[]).find(x=>x.name==='nebulatune.apk');console.log(a?a.browser_download_url:'')}catch{console.log('')}})")
+          if [ -n "$URL" ]; then
+            mkdir -p dist/apk
+            curl -fsSL "$URL" -o dist/apk/nebulatune.apk
+            echo "APK incluido no site: $URL"
+          else
+            echo "Nenhum APK em release ainda; site sem /apk/nebulatune.apk"
+          fi
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
