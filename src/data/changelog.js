@@ -1,5 +1,18 @@
 export const CHANGELOG = [
   {
+    version: '3.0.0',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Minijogos: Corte as Frutas! Fatia as frutas com o dedo, elas voam alto, e cuidado: se cortar a bomba o jogo acaba. São 3 rodadas cada vez mais difíceis.' },
+      { type: 'novo', text: 'Minijogos: Chuva de Moedas arrumada — as moedas não ficam mais presas no topo e a meta agora conta só moedas (a bomba virou desafio extra).' },
+      { type: 'novo', text: 'Medalhas em cada minijogo: bronze, prata e ouro de acordo com a pontuação.' },
+      { type: 'novo', text: 'Bônus diário com sequência de dias: quanto mais dias seguidos, maior o bônus (até 20+).' },
+      { type: 'novo', text: '8 troféus/conquistas para desbloquear e resgatar moedas: primeiro jogo, veterano, maratonista, campeão, mestre dos 7 jogos, medalhista e dias seguidos.' },
+      { type: 'novo', text: 'Pausa em qualquer jogo, com opções de som e saída. Recomeçar a contagem e os objetos congelam de verdade.' },
+      { type: 'novo', text: 'Sons mais altos quando não tem música tocando — e discretos quando tem.' },
+    ],
+  },
+  {
     version: '1.9.28',
     date: 'Setembro de 2026',
     items: [
