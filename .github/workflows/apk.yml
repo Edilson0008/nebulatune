@@ -1,0 +1,82 @@
+name: Gerar APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # O runner do GitHub já traz o Android SDK; garante as licenças aceitas
+      # para o Gradle baixar a plataforma (android-36) e o build-tools.
+      - name: Aceitar licencas do Android SDK
+        run: |
+          mkdir -p "$ANDROID_HOME/licenses"
+          printf '601085b94cd77f0b54ff86406957099ebe79c4d6' > "$ANDROID_HOME/licenses/android-googletv-license"
+          printf '24333f8a63b6825ea9c5514f83c2829b004d1fee' > "$ANDROID_HOME/licenses/android-sdk-license"
+          printf 'd56f5187479451eabf01fb78af6dfcb131a6481e' > "$ANDROID_HOME/licenses/google-gms-license"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Compilar APK (release assinado)
+        run: ./scripts/build-android.sh
+        env:
+          NODE_BIN: node
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nebulatune-apk
+          path: public/apk/nebulatune.apk
+          if-no-files-found: error
+
+      - name: Anexar APK na Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: public/apk/nebulatune.apk
+          tag_name: ${{ github.ref_name }}
+          name: NebulaTune ${{ github.ref_name }}
+          body: |
+            **NebulaTune ${{ github.ref_name }}** — compilado automaticamente.
+
+            ## Minijogos com recompensas! 🎮
+
+            ### Novos minijogos
+            - 🍉 **Corte as Frutas**: fatie com o dedo, as frutas voam alto, 3 rodadas (cuidado: cortar a bomba acaba o jogo!)
+            - 🪙 **Chuva de Moedas** arrumada: moedas não ficam mais presas no topo e a meta conta só moedas (a bomba virou desafio extra)
+
+            ### Recompensas
+            - 🥉🥈🥇 Medalhas em cada minigame (bronze, prata e ouro)
+            - 📅 Bônus diário com sequência de dias (streak, até 20+)
+            - 🏆 8 troféus/conquistas para desbloquear e resgatar moedas
+
+            ### Qualidade de vida
+            - ⏸️ Pausa em qualquer jogo + opções de som e saída
+            - 🔊 Sons mais altos quando não tem música, discretos quando tem
+            - 🍉 Frutas maiores e voando mais alto
+
+            ### Como instalar
+            Baixe o **nebulatune.apk** e instale **por cima** da versão anterior (a assinatura é a mesma, seus dados continuam).
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
