@@ -7450,3 +7450,2232 @@ button.pet-pill {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+
+/* =====================================================================
+   Tela do Habitat — Arquitetura Híbrida (CSS Glassmorphism + Assets + Canvas Partículas)
+   ===================================================================== */
+
+/* =====================================================================
+   CONTAINER PRINCIPAL
+   ===================================================================== */
+.habitat-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow: hidden;
+  background: #0b0b14;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  width: 100vw;
+}
+
+/* =====================================================================
+   CAMADA 0 (z-0) — FUNDO DO QUARTO: Gradiente CSS por Cena
+   ===================================================================== */
+.habitat-bg-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+/* Gradiente de fundo por cena (substitui canvas room) *//* =====================================================================
+   CAMADA 0 — SALA ESTRELADA (fundo, céu, decoração e chão)
+   ===================================================================== */
+.habitat-gradient-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to top, #150f2d 0%, #251741 22%, #352150 40%, transparent 40%),
+    linear-gradient(180deg, #05082b 0%, #0b0f3c 40%, #161248 70%, #22184e 88%, #2b1c44 100%);
+  background-color: #060926;
+}
+
+.habitat-gradient-bg.manha,
+.habitat-gradient-bg.tarde,
+.habitat-gradient-bg.entardecer,
+.habitat-gradient-bg.noite {
+  background:
+    linear-gradient(to top, #150f2d 0%, #251741 22%, #352150 40%, transparent 40%),
+    linear-gradient(180deg, #05082b 0%, #0b0f3c 40%, #161248 70%, #22184e 88%, #2b1c44 100%);
+  background-color: #060926;
+}
+
+/* Céu galáctico */
+.habitat-cosmic {
+  position: absolute;
+  inset: 0 0 40% 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Duas camadas de estrelas cintilantes */
+.habitat-stars-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.habitat-stars-a {
+  background-image:
+    radial-gradient(1.6px 1.6px at 12% 22%, rgba(255,255,255,0.95)),
+    radial-gradient(1.2px 1.2px at 38% 58%, rgba(255,255,255,0.8)),
+    radial-gradient(2px 2px at 64% 18%, rgba(255,240,180,0.9)),
+    radial-gradient(1.4px 1.4px at 82% 44%, rgba(190,220,255,0.85)),
+    radial-gradient(1px 1px at 24% 84%, rgba(255,255,255,0.7)),
+    radial-gradient(1.8px 1.8px at 90% 74%, rgba(255,255,255,0.8)),
+    radial-gradient(1.3px 1.3px at 52% 88%, rgba(255,214,170,0.75));
+  background-size: 320px 320px;
+  background-position: 0 0;
+  animation: habitat-shimmer 5s ease-in-out infinite;
+}
+.habitat-stars-b {
+  background-image:
+    radial-gradient(1px 1px at 20% 12%, rgba(255,255,255,0.85)),
+    radial-gradient(1.6px 1.6px at 50% 32%, rgba(200,230,255,0.9)),
+    radial-gradient(1.2px 1.2px at 78% 8%, rgba(255,255,255,0.8)),
+    radial-gradient(2.2px 2.2px at 34% 70%, rgba(255,240,190,0.9)),
+    radial-gradient(1.4px 1.4px at 8% 52%, rgba(255,255,255,0.75)),
+    radial-gradient(1.1px 1.1px at 66% 56%, rgba(255,255,255,0.8)),
+    radial-gradient(1.7px 1.7px at 94% 30%, rgba(255,214,214,0.7));
+  background-size: 420px 420px;
+  background-position: 180px 60px;
+  animation: habitat-shimmer 7s ease-in-out infinite reverse;
+}
+@keyframes habitat-shimmer {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+/* Estrelas pontuais fixas (texto, sem emoji) */
+@keyframes habitat-twinkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+
+/* Estrela cadente ocasional */
+.habitat-shooting-star {
+  position: absolute;
+  top: 16%;
+  left: 58%;
+  width: 130px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.95));
+  transform: rotate(-35deg);
+  transform-origin: right center;
+  opacity: 0;
+  animation: habitat-shoot 9s ease-in-out infinite;
+}
+@keyframes habitat-shoot {
+  0%, 72% { opacity: 0; }
+  74% { opacity: 1; transform: rotate(-35deg) translateX(0); }
+  88% { opacity: 0; transform: rotate(-35deg) translateX(150px); }
+  100% { opacity: 0; }
+}
+
+/* =====================================================================
+   DECORAÇÕES — janela redonda (portal cósmico), quadros estrela,
+   prateleira com planetas
+   ===================================================================== */
+.habitat-room-decor {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.habitat-baseboard {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 62%;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* Janela redonda mostrando o cosmo */
+.habitat-window {
+  position: absolute;
+  left: 6%;
+  top: 24%;
+  width: 120px;
+  height: 132px;
+}
+
+/* Vidraça quadrada com moldura */
+.habitat-window-glass {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  border: 7px solid rgba(255, 244, 222, 0.5);
+  box-shadow:
+    0 0 0 3px rgba(16, 18, 54, 0.85),
+    0 12px 28px rgba(0, 0, 0, 0.5),
+    inset 0 0 20px rgba(0, 0, 0, 0.6);
+  background:
+    radial-gradient(70% 90% at 28% 24%, rgba(34, 46, 130, 0.85), transparent 75%),
+    linear-gradient(180deg, #141a4a 0%, #0a0e32 100%);
+  overflow: hidden;
+}
+
+/* Lua na vidraça */
+.habitat-window-glass::before {
+  content: '';
+  position: absolute;
+  top: 13%;
+  right: 13%;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 34%, #fff9df, #ffe9a8 62%, #e0b458);
+  box-shadow: 0 0 18px rgba(255, 232, 160, 0.9);
+}
+
+/* Estrela principal na vidraça */
+.habitat-window-glass::after {
+  content: '\2605';
+  position: absolute;
+  left: 15%;
+  bottom: 14%;
+  font-size: 15px;
+  color: #fff;
+  text-shadow: 0 0 9px rgba(255, 255, 255, 0.95);
+  animation: habitat-twinkle 3s ease-in-out infinite;
+}
+
+/* Estrelinhas pontuais dentro da vidraça */
+.habitat-window-star {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.95);
+  animation: habitat-twinkle 3.4s ease-in-out infinite;
+}
+
+/* Cruzeta da janela */
+.habitat-window-cross {
+  position: absolute;
+  inset: 0;
+}
+.habitat-window-cross::before,
+.habitat-window-cross::after {
+  content: '';
+  position: absolute;
+  background: linear-gradient(180deg, rgba(255, 244, 222, 0.5), rgba(198, 208, 255, 0.75));
+}
+.habitat-window-cross::before {
+  width: 4px;
+  height: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.habitat-window-cross::after {
+  width: 100%;
+  height: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Peitoril embaixo da janela */
+.habitat-window-sill {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: -10px;
+  height: 10px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #ece6ff 0%, #b7aee0 60%, #9187c4 100%);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* =====================================================================
+   DETALHES DA PAREDE — guirlanda de estrelas, arandela e relógio
+   ===================================================================== */
+/* Nebulosa colorida suave */
+.habitat-nebula {
+  position: absolute;
+  inset: 0 0 40% 0;
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(closest-side at 20% 30%, rgba(104, 82, 220, 0.4), transparent 72%),
+    radial-gradient(closest-side at 82% 26%, rgba(60, 72, 220, 0.35), transparent 72%),
+    radial-gradient(closest-side at 55% 10%, rgba(168, 92, 224, 0.28), transparent 72%);
+  animation: habitat-drift 18s ease-in-out infinite alternate;
+}
+@keyframes habitat-drift {
+  from { transform: translateX(-2%); }
+  to { transform: translateX(2%); }
+}
+
+/* Guirlanda de estrelas no alto da parede */
+.habitat-garland {
+  position: absolute;
+  top: 7%;
+  left: 28%;
+  right: 28%;
+  height: 30px;
+  pointer-events: none;
+}
+.habitat-garland::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 1px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0),
+    rgba(255, 244, 222, 0.55) 20%,
+    rgba(255, 244, 222, 0.55) 80%,
+    rgba(255, 255, 255, 0));
+}
+.habitat-garland-star {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  color: #ffe08a;
+  font-size: 13px;
+  text-shadow: 0 0 9px rgba(255, 224, 138, 0.95);
+  animation: habitat-twinkle 3s ease-in-out infinite;
+}
+.habitat-garland-star:nth-child(1) { left: 8%;  top: 8px; animation-delay: 0s; }
+.habitat-garland-star:nth-child(2) { left: 30%; top: 16px; animation-delay: 0.6s; }
+.habitat-garland-star:nth-child(3) { left: 50%; top: 22px; animation-delay: 1.1s; }
+.habitat-garland-star:nth-child(4) { left: 70%; top: 14px; animation-delay: 0.3s; }
+.habitat-garland-star:nth-child(5) { left: 92%; top: 6px; animation-delay: 1.5s; }
+
+/* Arandela (luminária de parede) */
+.habitat-lamp {
+  position: absolute;
+  left: 47%;
+  top: 55%;
+  width: 6px;
+  height: 28px;
+  background: linear-gradient(180deg, rgba(255, 244, 222, 0.5), rgba(255, 244, 222, 0.12));
+  pointer-events: none;
+}
+.habitat-lamp::before {
+  content: '';
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 36%, #fff7dd, #ffe08a 55%, #e6a840);
+  box-shadow: 0 0 26px rgba(255, 224, 138, 0.7);
+  animation: habitat-twinkle 4.5s ease-in-out infinite;
+}
+
+/* Relógio de parede */
+.habitat-star-clock {
+  position: absolute;
+  right: 9%;
+  top: 22%;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 244, 222, 0.55);
+  background: linear-gradient(180deg, #2c1d54, #150f38);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+.habitat-star-clock::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(50% - 17px);
+  width: 3px;
+  height: 17px;
+  border-radius: 2px;
+  background: #ffe08a;
+  transform: rotate(24deg);
+  transform-origin: bottom center;
+}
+.habitat-star-clock::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(50% - 12px);
+  width: 2px;
+  height: 12px;
+  border-radius: 2px;
+  background: #fff;
+  transform: rotate(128deg);
+  transform-origin: bottom center;
+}
+.habitat-star-clock-star {
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  transform: translateX(-50%);
+  color: #ffe08a;
+  font-size: 10px;
+  animation: habitat-twinkle 3.2s ease-in-out infinite;
+}
+
+/* (quadros com estrela removidos a pedido do usuario) */
+.habitat-shelf {
+  position: absolute;
+  right: 8%;
+  top: 27%;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 0 6px 3px;
+  border-bottom: 6px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.25);
+}
+.habitat-pot { width: 24px; height: 22px; border-radius: 50%; }
+.habitat-pot-1 {
+  background: radial-gradient(circle at 34% 32%, #f6b26b, #c05a22 70%);
+  box-shadow: 0 0 18px rgba(246, 150, 90, 0.55);
+}
+.habitat-pot-2 {
+  width: 18px;
+  height: 18px;
+  background: radial-gradient(circle at 34% 32%, #7dd3fc, #2563eb 72%);
+  box-shadow: 0 0 16px rgba(120, 190, 255, 0.55);
+}
+
+/* Tapete estrelado: fixo no chao, embaixo de onde o gato fica em repouso */
+.habitat-rug {
+  position: absolute;
+  left: 0;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid rgba(190, 200, 255, 0.32);
+  background: radial-gradient(circle,
+    rgba(90, 100, 210, 0.5) 0%,
+    rgba(56, 42, 116, 0.32) 55%,
+    rgba(56, 42, 116, 0.14) 78%,
+    transparent 90%);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.habitat-rug::after {
+  content: '\2605';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 26px;
+  color: #ffe08a;
+  text-shadow: 0 0 12px rgba(255, 224, 138, 0.9), 0 0 26px rgba(255, 224, 138, 0.5);
+  animation: habitat-twinkle 4.5s ease-in-out infinite;
+}
+
+/* =====================================================================
+   CHÃO ESTRELADO — tapete com estrela central, tigela e bolinha-cosmos
+   ===================================================================== */
+.habitat-floor {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  pointer-events: none;
+}
+
+
+
+.habitat-bowl {
+  position: absolute;
+  left: 7%;
+  bottom: 6%;
+  width: 64px;
+  height: 28px;
+  border-radius: 0 0 38px 38px;
+  background: linear-gradient(180deg, #4a1d68, #24103a);
+  border: 2px solid rgba(190, 200, 255, 0.25);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
+}
+.habitat-food {
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  width: 46px;
+  height: 13px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 42% 36%, #ffe9a8, #e6a840 70%);
+  box-shadow: 0 0 12px rgba(255, 225, 140, 0.6);
+}
+.habitat-ball {
+  position: absolute;
+  right: 15%;
+  bottom: 8%;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 33% 30%, #fff9e0, #c084fc 68%);
+  box-shadow: 0 0 16px rgba(192, 132, 252, 0.65);
+  animation: habitat-roll 7s ease-in-out infinite;
+}
+@keyframes habitat-roll {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  50% { transform: translateX(28px) rotate(180deg); }
+}
+
+/* =====================================================================
+   CAMADA 5 (z-5) — CANVAS PARTÍCULAS MÍNIMAS
+   ===================================================================== */
+.habitat-particles-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* =====================================================================
+   CAMADA 10 (z-10) — CANVAS DO GATO (desenha o pet animado)
+   ===================================================================== */
+.habitat-cat-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* =====================================================================
+   CAMADA 10 (z-10) — PET VIRTUAL: Imagem PNG + CSS Animations
+   ===================================================================== */
+.habitat-cat-container {
+  position: absolute;
+  z-index: 10;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: left 0.15s ease-out, top 0.15s ease-out;
+}
+
+.habitat-cat-container.habitat-cat-dragging {
+  transition: none;
+}
+
+.habitat-cat-img {
+  width: 220px;
+  height: auto;
+  filter: drop-shadow(0 20px 30px rgba(0,0,0,0.5)) drop-shadow(0 0 30px rgba(139,92,246,0.3));
+  pointer-events: auto;
+  cursor: grab;
+  user-select: none;
+}
+
+.habitat-cat-img:active {
+  cursor: grabbing;
+}
+
+/* Sombra projetada no tapete (container) */
+.habitat-cat-shadow {
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 180px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.35), transparent 70%);
+  pointer-events: none;
+  filter: blur(4px);
+}
+
+/* Sombra projetada no chão (separada) */
+
+/* =====================================================================
+   ANIMAÇÕES DO GATINHO (CSS) — Substituem canvas drawing
+   ===================================================================== */
+
+/* Respiração idle */
+@keyframes habitat-cat-breathe {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.015) translateY(-2px); }
+}
+
+.habitat-cat-breathe {
+  animation: habitat-cat-breathe 3.5s ease-in-out infinite;
+}
+
+/* Comer */
+@keyframes habitat-cat-eat {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  25% { transform: translate(-50%, -50%) scale(0.98) translateY(4px) rotate(-3deg); }
+  50% { transform: translate(-50%, -50%) scale(1.02) translateY(-2px) rotate(2deg); }
+  75% { transform: translate(-50%, -50%) scale(0.99) translateY(3px) rotate(-2deg); }
+}
+
+.habitat-cat-eat {
+  animation: habitat-cat-eat 0.8s ease-in-out infinite;
+}
+
+/* Brincar */
+@keyframes habitat-cat-play {
+  0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  15% { transform: translate(-50%, -50%) scale(1.05) rotate(-8deg) translateX(-8px); }
+  30% { transform: translate(-50%, -50%) scale(1.02) rotate(8deg) translateX(8px); }
+  45% { transform: translate(-50%, -50%) scale(0.98) rotate(-5deg) translateX(-6px); }
+  60% { transform: translate(-50%, -50%) scale(1.03) rotate(6deg) translateX(6px); }
+  75% { transform: translate(-50%, -50%) scale(0.99) rotate(-4deg) translateX(-4px); }
+}
+
+.habitat-cat-play {
+  animation: habitat-cat-play 1.2s ease-in-out infinite;
+}
+
+/* Dormir */
+@keyframes habitat-cat-sleep {
+  0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+  50% { transform: translate(-50%, -50%) scale(1.01) rotate(1deg) translateY(1px); opacity: 0.95; }
+}
+
+.habitat-cat-sleep {
+  animation: habitat-cat-sleep 4s ease-in-out infinite;
+}
+
+/* Banho */
+@keyframes habitat-cat-bathe {
+  0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  20% { transform: translate(-50%, -50%) scale(0.98) rotate(-4deg) translateX(-4px); }
+  40% { transform: translate(-50%, -50%) scale(1.02) rotate(4deg) translateX(4px); }
+  60% { transform: translate(-50%, -50%) scale(0.99) rotate(-3deg) translateX(-3px); }
+  80% { transform: translate(-50%, -50%) scale(1.01) rotate(3deg) translateX(3px); }
+}
+
+.habitat-cat-bathe {
+  animation: habitat-cat-bathe 1.5s ease-in-out infinite;
+}
+
+/* Arrastando */
+.habitat-cat-draggable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.habitat-cat-draggable:active,
+.habitat-cat-dragging {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.02) !important;
+  filter: drop-shadow(0 24px 36px rgba(0,0,0,0.6)) drop-shadow(0 0 40px rgba(139,92,246,0.4)) !important;
+  z-index: 20;
+}
+
+/* =====================================================================
+   SOMBRA PROJETADA NO CHÃO (CSS)
+   ===================================================================== */
+
+/* =====================================================================
+   CAMADA 10 (z-10) — O PET VIRTUAL: mesmo gato da tela principal
+   ===================================================================== */
+.habitat-cat-stage {
+  position: absolute;
+  width: 0;
+  height: 0;
+  z-index: 10;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.habitat-cat-fit {
+  width: 0;
+  height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.habitat-cat-stage .pet {
+  pointer-events: auto;
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.35));
+}
+
+.habitat-cat-stage .pet-ground {
+  opacity: 0.7;
+  width: 72%;
+  height: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  filter: blur(1.5px);
+}
+
+/* =====================================================================
+   CAMADA 20 (z-20) — HUD TOPO: Glassmorphism
+   ===================================================================== */
+.habitat-hud-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 14px 8px;
+  background: linear-gradient(to bottom, rgba(12,10,28,0.85), transparent);
+}
+
+.habitat-btn-back {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(16,12,30,0.85);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.12s ease, background 0.2s;
+}
+.habitat-btn-back:hover { background: rgba(16,12,30,0.95); box-shadow: 0 0 20px rgba(255,255,255,0.25); }
+.habitat-btn-back:active { transform: scale(0.92); }
+
+.habitat-hud-id { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.habitat-hud-id b { font-size: 14px; color: #fff; letter-spacing: 0.3px; }
+.habitat-hud-id span { font-size: 11.5px; color: rgba(255,255,255,0.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.habitat-hud-right { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+.habitat-hud-subrow { display: flex; align-items: center; gap: 6px; }
+.habitat-shop-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 10px 14px; border: none; border-radius: 12px; cursor: pointer;
+  font-family: inherit; font-size: 13.5px; font-weight: 800; color: #3b2a00;
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+  box-shadow: 0 4px 16px rgba(245,158,11,0.45);
+  transition: transform 0.1s ease;
+}
+.habitat-shop-btn:hover { transform: scale(1.03); }
+.habitat-shop-btn:active { transform: scale(0.94); }
+.habitat-clock { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: #fff; padding: 5px 10px; border-radius: 999px; background: rgba(16,12,30,0.7); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.14); }
+.habitat-mood { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: #fff; background: color-mix(in srgb, var(--mc) 26%, rgba(16,12,30,0.75)); border: 1px solid color-mix(in srgb, var(--mc) 50%, transparent); box-shadow: 0 0 16px color-mix(in srgb, var(--mc) 30%, transparent); white-space: nowrap; }
+
+/* Action feedback toast */
+.habitat-toast {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 19;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: color-mix(in srgb, var(--ac) 32%, rgba(16,12,30,0.92));
+  border: 1px solid color-mix(in srgb, var(--ac) 55%, transparent);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--ac) 35%, transparent);
+  animation: habitat-toast-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.habitat-toast-emoji { font-size: 18px; }
+
+@keyframes habitat-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* =====================================================================
+   CAMADA 30 — STATS BAR (Glassmorphism pill)
+   ===================================================================== */
+.habitat-stats-bar {
+  position: absolute;
+  bottom: 94px;
+  left: 0; right: 0;
+  z-index: 30;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: center;
+  padding: 6px 14px; pointer-events: none;
+}
+
+.habitat-total { display: flex; flex-direction: column; gap: 1px; flex: none; padding-right: 12px; border-right: 1px solid rgba(255,255,255,0.1); }
+.habitat-total-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.5); }
+.habitat-total-value { font-size: 26px; font-weight: 700; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; text-shadow: 0 0 22px rgba(244,114,182,0.55); }
+
+.habitat-stats-inline { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; justify-content: center; }
+.habitat-stat-inline { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; max-width: 150px; }
+.habitat-stat-emoji { font-size: 16px; width: 22px; text-align: center; flex: none; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--sc) 65%, transparent)); }
+.habitat-stat-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.habitat-stat-top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.habitat-stat-label { font-size: 11px; color: rgba(255,255,255,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.habitat-stat-value { font-size: 13px; color: #fff; font-variant-numeric: tabular-nums; flex: none; }
+.habitat-bar-mini { display: block; height: 5px; border-radius: 999px; background: rgba(255,255,255,0.1); overflow: hidden; }
+.habitat-bar-mini .habitat-bar-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--sc), color-mix(in srgb, var(--sc) 40%, #ffffff)); box-shadow: 0 0 9px color-mix(in srgb, var(--sc) 60%, transparent); transition: width 0.4s cubic-bezier(0.2,0.8,0.2,1); }
+
+/* =====================================================================
+   BARRA DE AÇÕES ESTILO POU (z-30)
+   ===================================================================== */
+.habitat-action-bar {
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 30;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+  padding: 0 0 calc(env(safe-area-inset-bottom) + 2px);
+  background: linear-gradient(to top, rgba(18,14,36,0.98) 0%, rgba(22,18,40,0.9) 35%, rgba(28,22,50,0.6) 65%, transparent 100%);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  pointer-events: auto;
+}
+.habitat-action-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 4px 8px; border: none; border-right: 1px solid rgba(255,255,255,0.05); background: rgba(255,255,255,0.02); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); cursor: pointer; transition: background 0.1s ease, transform 0.08s ease, box-shadow 0.12s; min-width: 0; position: relative; border-radius: 16px 16px 0 0; margin: 2px; }
+.habitat-action-btn:last-child { border-right: none; }
+.habitat-action-btn:hover { background: rgba(255,255,255,0.08); box-shadow: 0 0 20px color-mix(in srgb, var(--ac) 40%, transparent); }
+.habitat-action-btn:active { transform: scale(0.92); }
+.habitat-action-emoji { font-size: 22px; line-height: 1; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--ac) 70%, transparent)); transition: transform 0.15s ease; }
+.habitat-action-btn:active .habitat-action-emoji { transform: scale(1.2); }
+.habitat-action-label { font-size: 9.5px; font-weight: 600; color: #fff; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+
+/* Pulse ativo */
+.habitat-action-pulse {
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--ac) 40%, transparent);
+  animation: habitat-pulse 0.8s ease-out infinite;
+  pointer-events: none;
+  border-radius: 18px;
+}
+@keyframes habitat-pulse {
+  0% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.15; transform: scale(1.08); }
+  100% { opacity: 0.4; transform: scale(1); }
+}
+
+/* =============================================================
+   TÍTULO DO CARD DO INÍCIO VIRA BOTÃO
+   ============================================================= */
+.pet-habitat-title-btn { display: inline-flex; align-items: center; gap: 6px; font-family: inherit; cursor: pointer; transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease; }
+.pet-habitat-title-btn svg { opacity: 0.75; transition: transform 0.14s ease; }
+.pet-habitat-title-btn:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(255,187,84,0.6); box-shadow: 0 0 18px rgba(255,187,84,0.28); }
+.pet-habitat-title-btn:hover:not(:disabled) svg { transform: translateX(2px); }
+.pet-habitat-title-btn:active:not(:disabled) { transform: translateY(0) scale(0.97); }
+.pet-habitat-title-btn:disabled { cursor: default; }
+
+/* =============================================================
+   DICA ROTATIVA
+   ===================================================================== */
+.habitat-tip {
+  position: absolute;
+  bottom: 94px;
+  left: 16px;
+  right: 16px;
+  z-index: 15;
+  margin: 0;
+  text-align: center;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.55);
+  animation: habitat-tip-in 0.5s ease;
+  pointer-events: none;
+  padding: 0 12px;
+}
+
+@keyframes habitat-tip-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* =============================================================
+   TOAST DE AÇÃO
+   ===================================================================== */
+.habitat-toast {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 19;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: color-mix(in srgb, var(--ac) 32%, rgba(16,12,30,0.92));
+  border: 1px solid color-mix(in srgb, var(--ac) 55%, transparent);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--ac) 35%, transparent);
+  animation: habitat-toast-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.habitat-toast-emoji { font-size: 18px; }
+
+@keyframes habitat-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* =====================================================================
+   RESPONSIVO
+   ===================================================================== */
+@media (max-width: 420px) {
+  .habitat-cat-img { width: 180px; }
+  .habitat-stats-bar { bottom: 88px; padding: 4px 10px; gap: 10px; }
+  .habitat-total { border-right: none; padding-right: 0; }
+  .habitat-total-value { font-size: 22px; }
+  .habitat-stats-inline { gap: 10px; }
+  .habitat-stat-inline { max-width: 110px; }
+  .habitat-action-btn { padding: 8px 2px 6px; border-radius: 12px 12px 0 0; }
+  .habitat-action-emoji { font-size: 19px; }
+  .habitat-action-label { font-size: 8.5px; }
+  .habitat-cat-img { width: 180px; }
+}
+
+@media (max-height: 660px) {
+  .habitat-stats-bar { bottom: 84px; }
+  .habitat-cat-img { width: 160px; }
+}
+
+.low-power .habitat-cat-img,
+.low-power .habitat-particles-canvas {
+  animation: none !important;
+  display: none;
+}
+
+
+/* --- Habitat: balão de fala com contraste contra a parede roxa --- */
+.habitat-cat-stage .pet-bubble {
+  background: rgba(11, 8, 30, 0.92);
+  color: #ffe9f5;
+  border: 1.5px solid rgba(255, 255, 255, 0.42);
+  border-radius: 14px;
+  padding: 6px 12px;
+  font-size: 12px;
+  max-width: 200px;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55),
+    0 0 0 1.5px rgba(190, 160, 255, 0.35),
+    0 0 18px rgba(120, 90, 220, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.habitat-cat-stage .pet-bubble::before {
+  border-top: 6px solid rgba(255, 255, 255, 0.42);
+}
+.habitat-cat-stage .pet-bubble::after {
+  border-top: 5px solid rgba(11, 8, 30, 0.92);
+}
+.habitat-cat-stage .pet-bubble-below::before {
+  border-top: none;
+  border-bottom: 6px solid rgba(255, 255, 255, 0.42);
+}
+.habitat-cat-stage .pet-bubble-below::after {
+  border-top: none;
+  border-bottom: 5px solid rgba(11, 8, 30, 0.92);
+}
+
+
+/* --- Habitat: economia dos botoes (cooldown, reacao, moedas) --- */
+
+/* Botao em cooldown: esmaecido com contador */
+.habitat-action-btn.is-cooling {
+  opacity: 0.45;
+  filter: grayscale(0.5) saturate(0.7);
+  transform: scale(0.94);
+}
+.habitat-action-btn.is-cooling:active { transform: scale(0.9); }
+.habitat-action-cd {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(10, 8, 30, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  padding: 1px 5px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* Moedas no HUD */
+.habitat-coins {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffe08a;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(16, 12, 30, 0.72);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 224, 138, 0.35);
+  box-shadow: 0 0 14px rgba(255, 224, 138, 0.25);
+  font-variant-numeric: tabular-nums;
+  animation: habitat-coin-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes habitat-coin-pop {
+  0% { transform: scale(0.5); }
+  100% { transform: scale(1); }
+}
+
+/* Toast de cooldown */
+.habitat-toast.is-cd { background: rgba(16, 12, 30, 0.9); border-color: rgba(255, 255, 255, 0.2); }
+
+/* Reacao emoji ao lado do gato */
+.habitat-reaction {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+.habitat-reaction[data-splash=''] { display: none; }
+.habitat-burst {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 24px;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  animation: habitat-burst-out 1.1s ease-out forwards;
+}
+.habitat-burst-0 { --bx: -10px; --by: -74px; font-size: 30px; }
+.habitat-burst-1 { --bx: 30px; --by: -48px; font-size: 22px; animation-delay: 0.08s; }
+.habitat-burst-2 { --bx: -38px; --by: -30px; font-size: 20px; animation-delay: 0.16s; }
+@keyframes habitat-burst-out {
+  0% { opacity: 0; transform: translate(calc(-50% + var(--bx, 0px) * 0.2), calc(-50% + var(--by, 0px) * 0.2)) scale(0.3); }
+  22% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--bx, 0px)), calc(-50% + var(--by, 0px))) scale(1.08); }
+}
+
+/* Tigela brilhando ao alimentar */
+.habitat-bowl.is-feeding {
+  animation: habitat-bowl-glow 1.1s ease-in-out 1;
+}
+.habitat-bowl.is-feeding .habitat-food {
+  filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.9));
+  animation: habitat-eat 0.55s ease-in-out 1;
+}
+@keyframes habitat-bowl-glow {
+  0%, 100% { box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4); }
+  50% { box-shadow: 0 0 34px rgba(251, 191, 36, 0.55); }
+}
+@keyframes habitat-eat {
+  0% { transform: translateX(-50%) scale(1); }
+  30% { transform: translateX(-50%) scale(0.6); }
+  70% { transform: translateX(-50%) scale(1.18); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+
+/* Bolinha quicando ao brincar */
+.habitat-ball.is-playing {
+  animation: habitat-ball-bounce 0.85s ease-in-out 1;
+}
+@keyframes habitat-ball-bounce {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  35% { transform: translateX(10px) translateY(-30px) rotate(160deg); }
+  65% { transform: translateX(0) rotate(0deg); }
+  85% { transform: translateY(-14px); }
+}
+
+
+/* --- Habitat: itens interativos (comida e bolinha estilo Pou) --- */
+.habitat-droppable {
+  position: absolute;
+  z-index: 15;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.habitat-food-item {
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.4));
+  animation: habitat-food-hover 2.4s ease-in-out infinite;
+}
+.habitat-food-item:active {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.15);
+}
+@keyframes habitat-food-hover {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+  50% { transform: translate(-50%, -50%) translateY(-7px); }
+}
+.habitat-ball-item {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.35));
+}
+.habitat-ball-item:active {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+/* Hint no topo */
+.habitat-toast.is-hint {
+  background: rgba(16, 12, 30, 0.92);
+  border-color: rgba(120, 200, 255, 0.35);
+  color: #bde4ff;
+}
+
+
+/* --- Habitat: olhar do gato ao segurar comida/bola, comer, orbe e moeda --- */
+
+/* Pupilas seguem o item segurado */
+.habitat-cat-stage.watch-l { --hx: -3px; }
+.habitat-cat-stage.watch-r { --hx: 3px; }
+.habitat-cat-stage.watch-d { --hy: 2.6px; }
+.habitat-cat-stage.is-watching .pet-eye {
+  transform: translate(var(--hx, 0px), var(--hy, 0px));
+  transition: transform 0.15s ease;
+}
+
+/* Comendo: pulinhos e "nhac" */
+.habitat-cat-stage.is-eating .habitat-cat-fit {
+  animation: habitat-eat-bounce 0.62s cubic-bezier(0.36, 0, 0.45, 1);
+}
+@keyframes habitat-eat-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  22% { transform: translateY(-16px) scale(0.92, 1.08); }
+  46% { transform: translateY(0) scale(1.06, 0.92); }
+  68% { transform: translateY(-8px) scale(0.96, 1.04); }
+  84% { transform: translateY(0) scale(1.02, 0.98); }
+}
+
+/* Orbe (bolinha de verdade, sem raquete) */
+.habitat-ball-orb {
+  position: relative;
+  display: block;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle at 32% 28%, #fff 4%, #ffc2d9 18%, #f0528f 48%, #9b1c5c 90%);
+  box-shadow:
+    0 8px 14px rgba(0, 0, 0, 0.4),
+    inset -5px -7px 12px rgba(0, 0, 0, 0.28),
+    inset 3px 3px 6px rgba(255, 255, 255, 0.55);
+}
+.habitat-ball-orb::before,
+.habitat-ball-orb::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  border: 2.5px solid rgba(255, 255, 255, 0.85);
+}
+.habitat-ball-orb::before {
+  width: 132%;
+  height: 34%;
+  left: -16%;
+  top: 31%;
+  transform: rotate(-12deg);
+}
+.habitat-ball-orb::after {
+  width: 36%;
+  height: 132%;
+  left: 30%;
+  top: -16%;
+  transform: rotate(-12deg);
+}
+.habitat-ball-item .is-rolling {
+  animation: habitat-orb-spin 0.42s linear infinite;
+}
+@keyframes habitat-orb-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Moeda coletada */
+.habitat-coin-pop {
+  position: absolute;
+  z-index: 22;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffe08a;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6), 0 0 12px rgba(255, 224, 138, 0.7);
+  pointer-events: none;
+  animation: habitat-coin-float 1.15s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.habitat-coin-pop-icon {
+  font-size: 18px;
+  filter: drop-shadow(0 0 8px rgba(255, 224, 138, 0.9));
+}
+@keyframes habitat-coin-float {
+  0% { opacity: 0; transform: translate(-50%, -50%) translateY(8px) scale(0.5); }
+  25% { opacity: 1; transform: translate(-50%, -50%) translateY(0) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -50%) translateY(-56px) scale(1); }
+}
+
+
+/* Itens interativos do dormir e banho */
+.habitat-pillow-item,
+.habitat-sponge-item {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.4));
+}
+.habitat-pillow-item:active,
+.habitat-sponge-item:active {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.15);
+}
+.habitat-pillow-item span,
+.habitat-sponge-emoji {
+  animation: habitat-food-hover 2.4s ease-in-out infinite;
+}
+
+/* Modo afago: aura suave ao redor do gatinho enquanto recebe carinho */
+.habitat-cat-stage.is-petting .habitat-cat-fit {
+  animation: habitat-pet-ring 1s ease-out infinite;
+}
+@keyframes habitat-pet-ring {
+  0% { box-shadow: 0 0 0 0 rgba(244, 114, 182, 0.55); }
+  100% { box-shadow: 0 0 0 26px rgba(244, 114, 182, 0); }
+}
+.habitat-cat-stage.is-petting .pet-eye {
+  transition: transform 0.12s ease;
+}
+
+/* Esponja: bolhinhas subindo enquanto esfrega + barra de progresso */
+.habitat-sponge-item {
+  position: relative;
+}
+.habitat-sponge-emoji {
+  position: relative;
+  z-index: 1;
+}
+.habitat-sponge-bubble {
+  position: absolute;
+  top: -10px;
+  right: -4px;
+  font-size: 16px;
+  opacity: 0;
+  pointer-events: none;
+}
+.habitat-sponge-item.is-rubbing .habitat-sponge-bubble {
+  animation: habitat-bubble-puff 0.6s ease-out infinite;
+}
+.habitat-sponge-item.is-rubbing .habitat-sponge-emoji {
+  filter: drop-shadow(0 4px 6px rgba(34, 211, 238, 0.7));
+}
+@keyframes habitat-bubble-puff {
+  0% { opacity: 0; transform: translateY(8px) scale(0.4); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-20px) scale(1.3); }
+}
+.habitat-sponge-progress {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 2px;
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(15, 23, 42, 0.4);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  pointer-events: none;
+}
+.habitat-sponge-progress i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #22d3ee, #a5f3fc);
+  transition: width 0.15s linear;
+}
+
+
+/* Durante o afago o gatinho fica intocável (fixo) */
+.habitat-cat-stage.is-petting {
+  pointer-events: none;
+}
+
+
+/* =============================================================
+   MENU DE COMIDAS (cards horizontais acima da barra de acoes)
+   ============================================================= */
+.habitat-food-menu {
+  position: absolute;
+  left: 10px; right: 10px;
+  bottom: calc(env(safe-area-inset-bottom) + 112px);
+  z-index: 40;
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  padding: 8px;
+  border-radius: 18px;
+  background: linear-gradient(to top, rgba(20,15,38,0.96), rgba(28,22,50,0.92));
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 14px 34px rgba(0,0,0,0.5);
+  scrollbar-width: none;
+  animation: habitat-menu-in 0.16s ease-out;
+}
+.habitat-food-menu::-webkit-scrollbar { display: none; }
+@keyframes habitat-menu-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.habitat-food-card {
+  flex: 0 0 auto;
+  width: 64px;
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgba(255,255,255,0.12), rgba(255,255,255,0.03));
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.12s ease, background 0.12s;
+}
+.habitat-food-card:hover { background: linear-gradient(160deg, rgba(255,220,160,0.22), rgba(255,255,255,0.06)); box-shadow: 0 0 16px rgba(255,187,84,0.35); }
+.habitat-food-card:active { transform: scale(0.9); }
+.habitat-food-card-emoji { font-size: 27px; line-height: 1; filter: drop-shadow(0 0 10px rgba(255,200,120,0.55)); }
+.habitat-food-card-name { font-size: 9px; font-weight: 600; color: #ffe9d2; white-space: nowrap; }
+
+/* Durante o afago: nada de scroll/arrasto nativo + gato intocável */
+.habitat-scene.is-petting { touch-action: none; }
+.habitat-cat-stage.is-petting {
+  pointer-events: none;
+}
+
+
+/* =============================================================
+   SISTEMA DE HUMORES — barra de necessidades do gatinho
+   ============================================================= */
+
+
+/* Barrinha de humor em cima de cada botão de ação */
+.habitat-action-moodbar {
+  position: absolute;
+  left: 16%; right: 16%;
+  top: 3px;
+  height: 3px;
+  border-radius: 99px;
+  background: rgba(255,255,255,0.14);
+  overflow: hidden;
+}
+.habitat-action-moodbar i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #34d399, #4ade80);
+  transition: width 0.35s ease;
+}
+.habitat-action-moodbar.is-low i {
+  background: linear-gradient(90deg, #f87171, #fbbf24);
+  animation: habitat-low-blink 1.2s ease-in-out infinite;
+}
+@keyframes habitat-low-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.habitat-action-pulse.is-need {
+  background: color-mix(in srgb, #f87171 55%, transparent);
+}
+
+
+/** =============================================================
+   BOLHAS DE SABÃO
+   ============================================================= */
+
+.habitat-bubbles {
+  position: absolute;
+  inset: 0 0 96px 0;
+  z-index: 15;
+  overflow: hidden;
+  pointer-events: auto;
+}
+.habitat-bubble {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 30%, rgba(255,255,255,0.85), rgba(148,220,255,0.25) 55%, rgba(120,190,255,0.18));
+  border: 1.5px solid rgba(255,255,255,0.5);
+  box-shadow: 0 0 8px rgba(140,200,255,0.4), inset 2px 2px 5px rgba(255,255,255,0.6);
+  cursor: pointer;
+  animation: habitat-bubble-glow 2.2s ease-in-out infinite;
+  pointer-events: auto;
+}
+@keyframes habitat-bubble-glow {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+
+/* Menu compacto de Brincar: 2 opções acima do botão 🎮 */
+/* Faixa cheia acima da barra de acoes: nunca corta item, rolagem na horizontal */
+.habitat-play-menu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 6px; right: 6px;
+  z-index: 45;
+  display: flex; gap: 8px;
+  padding: 8px;
+  border-radius: 16px;
+  background: rgba(20,16,42,0.96);
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  max-width: none;
+  overflow-x: auto; overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+.habitat-play-menu::-webkit-scrollbar { display: none; }
+.habitat-bath-menu { border-color: rgba(56,189,248,0.35); }
+.habitat-card-tag {
+  font-size: 8.5px; font-weight: 800; letter-spacing: 0.3px;
+  color: #4ade80; text-transform: none;
+}
+.habitat-sponge-name {
+  position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
+  font-size: 9px; font-weight: 700; color: rgba(255,255,255,0.75);
+  white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+}
+.habitat-spark {
+  position: absolute; z-index: 46; font-size: 40px; pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: habitat-spark-pop 1s ease-out forwards;
+  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.5));
+}
+@keyframes habitat-spark-pop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(-25deg); }
+  35% { opacity: 1; transform: translate(-50%, -80%) scale(1.25) rotate(8deg); }
+  100% { opacity: 0; transform: translate(-50%, -160%) scale(0.9) rotate(0deg); }
+}
+.habitat-play-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  flex: 0 0 auto; scroll-snap-align: center;
+  min-width: 78px; padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+  background: rgba(255,255,255,0.05); color: #fff; font-family: inherit;
+  cursor: pointer; transition: background 0.12s ease, transform 0.08s ease;
+}
+.habitat-play-btn:hover { background: rgba(255,255,255,0.12); }
+.habitat-play-btn:active { transform: scale(0.93); }
+.habitat-play-btn-emoji { font-size: 24px; line-height: 1; filter: drop-shadow(0 0 8px rgba(148,220,255,0.5)); }
+.habitat-play-btn-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(255,255,255,0.85); }
+
+/* Modal da Lojinha */
+.shop-modal { max-width: 400px; width: calc(100vw - 40px); }
+.shop-balance { margin: 4px 0 14px; color: rgba(255,255,255,0.75); }
+.shop-balance-value { color: #fbbf24; font-size: 17px; }
+.shop-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  max-height: 55vh; overflow-y: auto; padding: 2px 4px 4px 2px;
+}
+.shop-item {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 12px 10px; border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.05);
+  color: #fff; font-family: inherit; cursor: pointer;
+  transition: transform 0.1s ease, background 0.12s ease, opacity 0.12s ease;
+}
+.shop-item:hover { background: rgba(255,255,255,0.1); }
+.shop-item:active { transform: scale(0.95); }
+.shop-item.is-empty { opacity: 0.42; cursor: not-allowed; filter: grayscale(0.7); }
+.shop-item:disabled { pointer-events: auto; }
+.shop-item-emoji { font-size: 32px; line-height: 1; filter: drop-shadow(0 0 10px rgba(255,255,255,0.35)); }
+.shop-item-name { font-size: 13px; font-weight: 700; text-align: center; }
+.shop-item-mood {
+  display: flex; gap: 5px; flex-wrap: wrap; justify-content: center;
+  font-size: 10.5px; color: rgba(255,255,255,0.65);
+}
+.shop-item-mood span { padding: 1px 5px; border-radius: 999px; background: rgba(255,255,255,0.08); }
+.shop-item-price { margin-top: 2px; font-size: 12px; font-weight: 800; color: #fbbf24; }
+
+/* ================= LOJINHA ================= */
+.shop-modal {
+  max-width: 440px; width: calc(100vw - 24px);
+  max-height: min(86dvh, 720px);
+  display: flex; flex-direction: column; padding: 16px 14px 12px;
+  overflow: hidden;
+}
+.shop-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.shop-head .modal-title { margin: 0; }
+.shop-balance-value {
+  margin-left: auto; font-size: 15px; font-weight: 800; color: #fbbf24;
+  padding: 5px 12px; border-radius: 999px;
+  background: rgba(250,204,21,0.14); border: 1px solid rgba(250,204,21,0.35);
+}
+.shop-tabs {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  padding: 4px; border-radius: 999px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+}
+.shop-tab {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 7px 2px; border: none; border-radius: 999px;
+  background: transparent; color: rgba(255,255,255,0.65);
+  font-family: inherit; font-size: 9.5px; font-weight: 700; cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.shop-tab-icon { font-size: 17px; line-height: 1; filter: grayscale(0.5); transition: filter 0.15s ease; }
+.shop-tab.is-active {
+  background: linear-gradient(135deg, #f59e0b, #fbbf24); color: #3b2a00;
+  box-shadow: 0 3px 12px rgba(245,158,11,0.35);
+}
+.shop-tab.is-active .shop-tab-icon { filter: none; }
+
+/* corpo rolavel: no celular a lista nunca passa da tela */
+.shop-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  margin: 12px -4px 0; padding: 0 4px 4px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+/* a rolagem é do .shop-body (evita dois scroll grudados no celular) */
+.shop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: none; overflow: visible; }
+.shop-item {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 10px 6px; border-radius: 14px; min-width: 0;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.05);
+  color: #fff; font-family: inherit; cursor: pointer;
+  transition: transform 0.1s ease, background 0.12s ease;
+}
+.shop-item:active { transform: scale(0.95); }
+.shop-item:disabled { cursor: not-allowed; }
+.shop-item-emoji { font-size: 26px; line-height: 1.1; }
+.shop-item-name { font-size: 11.5px; font-weight: 700; text-align: center; }
+.shop-item-eff { font-size: 9.5px; color: rgba(255,255,255,0.55); text-align: center; line-height: 1.2; }
+.shop-item-own { font-size: 9px; font-weight: 700; color: #4ade80; }
+.shop-item-price { display: inline-flex; align-items: baseline; gap: 5px; margin-top: 2px; font-size: 11px; }
+.shop-item-price b { font-size: 12.5px; font-weight: 800; color: #fbbf24; }
+.shop-item-price s { color: rgba(255,255,255,0.35); font-size: 10px; }
+.shop-item-price em { font-style: normal; font-size: 9px; color: #fca5a5; }
+/* sem saldo: mostra o preco esmaecido + quanto falta (ainda da pra ler) */
+.shop-item.is-poor { opacity: 0.62; background: rgba(255,255,255,0.03); }
+.shop-item.is-poor .shop-item-price b { color: rgba(251,191,36,0.6); }
+.shop-item.is-owned {
+  border-color: rgba(74,222,128,0.5); background: rgba(74,222,128,0.08);
+  opacity: 1; cursor: default;
+}
+.shop-item.is-owned .shop-item-price { color: #4ade80; font-weight: 700; }
+.shop-offer {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px; border-radius: 16px;
+  border: 1.5px solid rgba(250,204,21,0.45);
+  background: linear-gradient(150deg, rgba(250,204,21,0.16), rgba(250,204,21,0.03));
+}
+.shop-offer-tag {
+  align-self: center; font-size: 9.5px; font-weight: 800; letter-spacing: 1px;
+  text-transform: uppercase; color: #facc15; padding: 3px 10px; border-radius: 999px;
+  background: rgba(250,204,21,0.14);
+}
+.shop-offer .shop-item { background: rgba(0,0,0,0.25); }
+.shop-foot { margin-top: 10px; padding: 0; }
+
+/* card de comida: quantidade no estoque */
+.habitat-food-card { position: relative; }
+.habitat-food-card-qty {
+  position: absolute; top: 4px; right: 5px; font-size: 9.5px; font-weight: 800;
+  color: #fff; padding: 1px 5px; border-radius: 999px;
+  background: rgba(250,204,21,0.85); color: #3b2a00;
+}
+.habitat-food-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  width: 100%; padding: 14px 18px; font-size: 13px; font-weight: 700; color: #fff;
+}
+.habitat-food-empty small { font-size: 10.5px; font-weight: 500; opacity: 0.7; }
+/* Oferta do dia na lojinha */
+.shop-offer {
+  display: flex; flex-direction: column; gap: 8px; align-items: stretch;
+  margin-bottom: 14px; padding: 12px;
+  border: 1.5px solid rgba(250,204,21,0.45);
+  border-radius: 18px;
+  background: linear-gradient(150deg, rgba(250,204,21,0.18), rgba(250,204,21,0.04));
+}
+.shop-offer-tag {
+  align-self: center; font-size: 11px; font-weight: 800; letter-spacing: 1px;
+  text-transform: uppercase; color: #facc15;
+  padding: 3px 10px; border-radius: 999px; background: rgba(250,204,21,0.14);
+}
+.shop-offer-item { width: 100%; }
+.shop-offer-price {
+  margin-top: 2px; font-size: 14px; font-weight: 800; color: #facc15;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.shop-offer-old { font-weight: 600; color: rgba(255,255,255,0.4); }
+.shop-section-title {
+  margin: 18px 2px 8px; font-size: 11.5px; font-weight: 800; letter-spacing: 1px;
+  text-transform: uppercase; color: rgba(255,255,255,0.55);
+}
+.shop-item.is-owned {
+  opacity: 0.82; cursor: default;
+  border-color: rgba(74,222,128,0.5);
+  background: rgba(74,222,128,0.08);
+}
+.shop-item.is-owned:disabled { pointer-events: auto; }
+.shop-item.is-owned .shop-item-price { color: #4ade80; }
+
+/* ================= MINIGAMES ================= */
+.habitat-btn-games { color: #4ade80; box-shadow: 0 0 18px rgba(74,222,128,0.35); }
+
+.mg-tela {
+  position: absolute; inset: 0; z-index: 90;
+  display: flex; flex-direction: column;
+  background: radial-gradient(120% 80% at 50% 0%, #241a44 0%, #120d26 55%, #0b0818 100%);
+  padding-top: env(safe-area-inset-top);
+  animation: mg-in 0.18s ease-out;
+}
+@keyframes mg-in { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+
+.mg-top {
+  display: flex; align-items: center; gap: 10px; flex: none;
+  padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.mg-top h2 { margin: 0; font-size: 17px; font-weight: 800; color: #fff; }
+.mg-back {
+  display: grid; place-items: center; width: 36px; height: 36px; flex: none;
+  border-radius: 50%; border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.07); color: #fff; cursor: pointer;
+}
+.mg-back:active { transform: scale(0.92); }
+.mg-coins {
+  margin-left: auto; font-size: 14px; font-weight: 800; color: #fbbf24;
+  padding: 5px 12px; border-radius: 999px;
+  background: rgba(250,204,21,0.14); border: 1px solid rgba(250,204,21,0.35);
+}
+.mg-top-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.mg-trof-btn {
+  width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.07); color: #fff; font-size: 16px; cursor: pointer;
+}
+.mg-trof-btn.is-on { border-color: #fde047; background: rgba(250,204,21,0.2); }
+.mg-trofeus {
+  position: absolute; inset: 0; z-index: 95; display: flex; flex-direction: column;
+  padding: 14px; background: rgba(10,8,22,0.96);
+  animation: mg-in 0.18s ease-out;
+}
+.mg-trof-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.mg-trof-top b { font-size: 17px; color: #fff; }
+.mg-trof-x {
+  width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.07); color: #fff; font-size: 18px; cursor: pointer;
+}
+.mg-trof-sub { margin: 0 0 10px; font-size: 12px; color: rgba(255,255,255,0.55); }
+.mg-trof-grid { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 8px; }
+.mg-trofeu {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);
+}
+.mg-trofeu.is-pronto { border-color: rgba(253,224,71,0.55); background: rgba(250,204,21,0.1); }
+.mg-trofeu.is-got { opacity: 0.55; }
+.mg-trof-ico { font-size: 22px; flex: none; }
+.mg-trof-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mg-trof-info b { font-size: 13px; color: #fff; }
+.mg-trof-info small { font-size: 11px; color: rgba(255,255,255,0.6); }
+.mg-trof-bar { height: 5px; border-radius: 4px; background: rgba(255,255,255,0.12); overflow: hidden; }
+.mg-trof-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #fbbf24, #fde047); }
+.mg-trof-prog { font-size: 11px; color: rgba(255,255,255,0.55); }
+.mg-trof-btn2 { flex: 0 0 auto; padding: 6px 12px; font-size: 13px; }
+.mg-trof-ok { flex: 0 0 auto; font-size: 15px; color: #4ade80; }
+
+
+.mg-lista {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.mg-sub { margin: 0 0 2px; font-size: 12px; color: rgba(255,255,255,0.6); text-align: center; }
+
+.mg-daily {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border-radius: 14px; margin: 2px 0 10px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+}
+.mg-daily.is-new { border-color: rgba(251,191,36,0.55); background: rgba(251,191,36,0.12); }
+.mg-daily.is-done { opacity: 0.75; }
+.mg-daily-txt { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.mg-daily-txt b { font-size: 13px; color: #fff; }
+.mg-daily-txt b b { color: #fde047; }
+.mg-daily-txt small { font-size: 11px; color: rgba(255,255,255,0.65); }
+.mg-daily-btn { flex: 0 0 auto; padding: 8px 14px; font-size: 13px; }
+
+.mg-card {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  padding: 12px; border-radius: 16px; font-family: inherit; color: #fff; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--gc) 45%, transparent);
+  background: linear-gradient(140deg, color-mix(in srgb, var(--gc) 18%, transparent), rgba(255,255,255,0.04));
+  transition: transform 0.1s ease;
+}
+.mg-card:active { transform: scale(0.97); }
+.mg-card-icon { font-size: 30px; line-height: 1; }
+.mg-card-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mg-card-info b { font-size: 14px; }
+.mg-card-info small { font-size: 11px; color: rgba(255,255,255,0.6); }
+.mg-card-best { font-size: 10.5px; color: var(--gc); font-weight: 700; }
+.mg-card-premio {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex: 0 0 auto; min-width: 52px; padding: 6px 8px; border-radius: 12px;
+  background: rgba(251,191,36,0.14); border: 1px solid rgba(251,191,36,0.32);
+}
+.mg-card-premio b { font-size: 15px; font-weight: 900; color: #fbbf24; line-height: 1.1; }
+.mg-card-premio small { font-size: 8.5px; color: rgba(255,255,255,0.55); text-transform: uppercase; letter-spacing: 0.05em; }
+.mg-card-go {
+  margin-left: auto; flex: none; font-size: 11.5px; font-weight: 800; color: var(--gc);
+  padding: 7px 11px; border-radius: 999px; background: rgba(255,255,255,0.07);
+}
+
+.mg-jogo { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 12px 14px 16px; }
+.mg-jogo { position: relative; }
+.mg-pausar {
+  position: absolute; top: 6px; right: 10px; z-index: 20;
+  width: 34px; height: 34px; border-radius: 50%; font-size: 14px;
+  border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.09);
+  color: #fff; cursor: pointer;
+}
+.mg-pausar:active { transform: scale(0.9); }
+.mg-pausa {
+  position: absolute; inset: 0; z-index: 97; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center;
+  background: rgba(10,8,22,0.95); animation: mg-in 0.18s ease-out;
+}
+.mg-pausa-emoji { font-size: 46px; line-height: 1; }
+.mg-pausa h3 { margin: 0; font-size: 20px; color: #fff; }
+.mg-pausa p { margin: 0; font-size: 13px; color: rgba(255,255,255,0.65); }
+.mg-pausa-botoes { display: flex; flex-direction: column; gap: 8px; width: min(220px, 80%); margin-top: 6px; }
+.mg-board.is-pausado .mg-bubble { animation-play-state: paused; }
+
+.mg-jogo-titulo { margin: 0 0 8px; font-size: 15px; font-weight: 800; color: #fff; text-align: center; }
+.mg-board {
+  position: relative; flex: 1 1 auto; min-height: 240px;
+  border-radius: 20px; overflow: hidden; touch-action: none; user-select: none;
+  background:
+    radial-gradient(120% 90% at 20% 0%, rgba(120,90,220,0.28), transparent 60%),
+    linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.mg-time {
+  position: absolute; left: 0; right: 0; top: 0; height: 4px;
+  background: rgba(0,0,0,0.3);
+}
+.mg-time i { display: block; height: 100%; background: linear-gradient(90deg, #34d399, #fbbf24); transition: width 0.9s linear; }
+.mg-time.is-urgent i { background: linear-gradient(90deg, #fb7185, #f43f5e); animation: mg-urgent 0.5s ease-in-out infinite; }
+.mg-time.is-urgent { box-shadow: 0 0 10px rgba(244,63,94,0.9); }
+@keyframes mg-urgent {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.mg-relogio { color: #fbbf24; font-variant-numeric: tabular-nums; }
+.mg-time.is-urgent ~ .mg-hint .mg-relogio { color: #fda4af; }
+.mg-hint {
+  position: absolute; left: 0; right: 0; top: 12px; text-align: center;
+  font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.8);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6); pointer-events: none;
+}
+.mg-start {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  padding: 14px 22px; border: none; border-radius: 999px; cursor: pointer;
+  font-family: inherit; font-size: 15px; font-weight: 800; color: #1b1030;
+  background: linear-gradient(135deg, #a78bfa, #c084fc);
+  box-shadow: 0 8px 24px rgba(167,139,250,0.45);
+}
+
+
+/* Faixa de "rodada concluida" — centralizada sobre o tabuleiro */
+.mg-faixa {
+  position: absolute; left: 50%; top: 50%; z-index: 9;
+  transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 16px 26px; border-radius: 18px; pointer-events: none;
+  text-align: center; white-space: nowrap;
+  background: rgba(27,16,48,0.82);
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  animation: mg-faixa-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+.mg-faixa b { font-size: 17px; font-weight: 900; color: #fff; letter-spacing: 0.3px; }
+.mg-faixa small { font-size: 12px; color: color-mix(in srgb, var(--gc, #34d399) 60%, #fff); font-weight: 700; }
+.mg-faixa.is-lose b { color: #fda4af; }
+.mg-faixa.is-win b { color: #fbbf24; }
+@keyframes mg-faixa-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.82); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.mg-rat {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 54px; height: 54px; border: none; background: transparent; cursor: pointer;
+  font-size: 38px; line-height: 1; padding: 0;
+  text-shadow: 0 3px 8px rgba(0,0,0,0.5);
+  will-change: transform;
+  touch-action: manipulation;
+}
+.mg-rat.is-hit { animation: mg-pop 0.3s ease-out; }
+.mg-rat.is-away { opacity: 0; }
+.mg-rat:active { scale: 0.82; }
+
+@keyframes mg-pop {
+  0% { scale: 1; }
+  35% { scale: 1.45; text-shadow: 0 0 16px #fde68a; }
+  100% { scale: 0.2; opacity: 0.4; }
+}
+
+.mg-notes {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  grid-template-columns: 1fr 1fr; gap: 14px; padding: 60px 24px 24px;
+}
+.mg-note {
+  aspect-ratio: 1; max-width: 130px; width: 100%; border: none; border-radius: 24px;
+  cursor: pointer; font-size: 40px; line-height: 1; padding: 0;
+  opacity: 0.72; transform: scale(1);
+  transition: transform 0.12s ease, opacity 0.12s ease, box-shadow 0.12s ease;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+}
+.mg-note.is-on { opacity: 1; transform: scale(1.12); box-shadow: 0 0 26px rgba(255,255,255,0.6); }
+.mg-note.is-want { outline: 3px solid rgba(255,255,255,0.85); outline-offset: 3px; }
+
+.mg-board.is-shake { animation: mg-shake 0.42s ease; }
+@keyframes mg-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-9px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(4px); }
+}
+
+.mg-target {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 74px; height: 74px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(52,211,153,0.45), rgba(52,211,153,0.08) 70%);
+  border: 2px dashed rgba(52,211,153,0.85);
+  will-change: transform;
+  animation: mg-target-pulse 1.6s ease-in-out infinite;
+}
+@keyframes mg-target-pulse {
+  0%, 100% { scale: 1; opacity: 0.9; }
+  50% { scale: 1.12; opacity: 1; }
+}
+.mg-yarn {
+  position: absolute; transform: translate(-50%, -50%);
+  font-size: 34px; pointer-events: none;
+  text-shadow: 0 3px 8px rgba(0,0,0,0.5);
+  will-change: transform;
+  animation: mg-yarn-wiggle 0.5s ease-in-out infinite alternate;
+}
+@keyframes mg-yarn-wiggle {
+  from { rotate: -7deg; }
+  to { rotate: 7deg; }
+}
+
+.mg-bubble {
+  position: absolute; transform: translate(-50%, -50%);
+  border-radius: 50%; border: none; padding: 0; cursor: pointer;
+  background: radial-gradient(circle at 32% 28%, rgba(255,255,255,0.85), rgba(56,189,248,0.35) 55%, rgba(56,189,248,0.12));
+  box-shadow: 0 0 12px rgba(56,189,248,0.4);
+  animation: mg-bubble-float 3.4s ease-in-out infinite;
+  will-change: transform; touch-action: manipulation;
+}
+.mg-bubble:active { transform: translate(-50%, -50%) scale(0.85); }
+@keyframes mg-bubble-float {
+  0%, 100% { translate: 0 0; }
+  50% { translate: var(--drift, 0) -12px; }
+}
+.mg-bubble:active { scale: 0.8; }
+
+.mg-dots {
+  position: absolute; left: 0; right: 0; top: 34px;
+  display: flex; justify-content: center; gap: 5px; pointer-events: none;
+}
+.mg-dots i {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(255,255,255,0.22); transition: background 0.18s ease, scale 0.18s ease;
+}
+.mg-dots i.is-on { background: #34d399; scale: 1.3; box-shadow: 0 0 8px rgba(52,211,153,0.8); }
+
+/* Dots de rodadas (cada rodada vira um quadradinho) */
+.mg-dots.mg-dots-round { gap: 6px; top: 40px; }
+.mg-dots.mg-dots-round i {
+  width: 20px; height: 20px; font-size: 10px; font-style: normal;
+  display: grid; place-items: center; font-weight: 800;
+  border-radius: 8px; background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.18); color: rgba(255,255,255,0.55);
+}
+.mg-dots.mg-dots-round i.is-full {
+  background: var(--gc, #34d399); color: #1b1030; border-color: transparent;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--gc, #34d399) 70%, transparent);
+}
+.mg-dots.mg-dots-round i.is-now {
+  background: #fbbf24; color: #1b1030; border-color: transparent;
+  box-shadow: 0 0 12px rgba(251,191,36,0.85); scale: 1.15;
+}
+
+/* Chuva de Moedas */
+.mg-moeda {
+  position: absolute; width: 44px; height: 44px; left: 0; top: 0;
+  border: none; cursor: pointer; padding: 0;
+  display: grid; place-items: center; pointer-events: auto;
+  will-change: transform; touch-action: manipulation;
+  border-radius: 50%;
+  /* moeda desenhada em CSS: funciona em qualquer aparelho, sem depender de emoji */
+  background: radial-gradient(circle at 32% 28%, #fef9c3, #fbbf24 55%, #d97706 96%);
+  border: 3px solid #b45309;
+  box-shadow: inset 3px 4px 6px rgba(255,255,255,0.6), inset -3px -4px 6px rgba(120,53,15,0.5), 0 3px 8px rgba(0,0,0,0.35);
+}
+.mg-moeda:after {
+  content: '₡'; /* cifrão-antigo: renderiza em qualquer fonte */
+  font-size: 22px; font-weight: 900; color: #92400e;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.7);
+}
+.mg-moeda.is-bomba {
+  background: radial-gradient(circle at 32% 28%, #9ca3af, #4b5563 55%, #111827 96%);
+  border: 3px solid #111827;
+  box-shadow: inset 3px 4px 6px rgba(255,255,255,0.35), inset -3px -4px 6px rgba(0,0,0,0.6), 0 3px 8px rgba(0,0,0,0.4);
+}
+.mg-moeda.is-bomba:after {
+  content: '✸'; /* estopim aceso */
+  font-size: 16px; font-weight: 900; color: #fde047;
+  text-shadow: 0 0 6px rgba(253,224,71,0.9);
+}
+.mg-moeda.is-bomba:before {
+  content: ''; position: absolute; top: -5px; right: 7px;
+  width: 6px; height: 11px; border-radius: 2px; background: #78350f;
+}
+.mg-moeda:active { scale: 0.82; }
+
+/* Pule os Espinhos */
+.mg-ceu {
+  position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+  background: linear-gradient(180deg, rgba(125,180,255,0.16), transparent 45%);
+}
+.mg-ceu:before { /* sol sempre visível */
+  content: ''; position: absolute; top: 16px; right: 20px; width: 42px; height: 42px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff7d6, #fbbf24 58%, #f59e0b);
+  box-shadow: 0 0 34px rgba(251,191,36,0.8), 0 0 12px rgba(251,191,36,0.6);
+  opacity: 0.92;
+}
+.mg-nuvem { /* nuvem de CSS puro: sempre renderiza, flutua no lugar */
+  position: absolute; pointer-events: none; z-index: 1;
+  width: 74px; height: 22px; border-radius: 999px;
+  background: rgba(255,255,255,0.88);
+  box-shadow:
+    20px 7px 0 -4px rgba(255,255,255,0.88),
+    -16px 9px 0 -6px rgba(255,255,255,0.82),
+    0 2px 14px rgba(255,255,255,0.14);
+  animation: mg-nuvem-flutua 6.5s ease-in-out infinite;
+}
+.mg-nuvem.n2 { width: 58px; height: 18px; opacity: 0.7; animation-duration: 8.2s; }
+.mg-nuvem.n3 { width: 44px; height: 14px; opacity: 0.55; animation-duration: 5.6s; box-shadow: 14px 5px 0 -3px rgba(255,255,255,0.82), -10px 6px 0 -5px rgba(255,255,255,0.75); }
+.mg-nuvem.n1 { top: 11%; left: 12%; }
+.mg-nuvem.n2 { top: 24%; left: 58%; }
+.mg-nuvem.n3 { top: 5%; left: 76%; }
+@keyframes mg-nuvem-flutua {
+  0%, 100% { transform: translate(-6px, 0); }
+  50% { transform: translate(6px, -7px); }
+}
+.mg-dunas {
+  position: absolute; left: 4%; right: 4%; bottom: 14px; height: 44px;
+  pointer-events: none; opacity: 0.8; overflow: hidden;
+}
+.mg-dunas-strip {
+  position: absolute; left: -540px; width: calc(100% + 1080px); height: 100%;
+  background:
+    radial-gradient(120px 46px at 8% 100%, rgba(74,222,128,0.38), transparent 72%),
+    radial-gradient(90px 38px at 30% 100%, rgba(148,200,255,0.32), transparent 72%),
+    radial-gradient(140px 54px at 58% 100%, rgba(74,222,128,0.35), transparent 72%),
+    radial-gradient(100px 44px at 84% 100%, rgba(148,200,255,0.3), transparent 72%),
+    radial-gradient(130px 50px at 105% 100%, rgba(74,222,128,0.34), transparent 72%);
+  background-repeat: repeat-x;
+  background-size: 540px 44px;
+  will-change: transform;
+}
+.mg-solo {
+  position: absolute; left: 7%; right: 7%; bottom: 5px; height: 6px;
+  border-radius: 4px; pointer-events: none; overflow: hidden;
+  box-shadow: 0 2px 10px rgba(74,222,128,0.3);
+  background-color: rgba(74,222,128,0.12);
+}
+.mg-solo-strip {
+  position: absolute; left: -30px; width: calc(100% + 60px); height: 100%;
+  background-image: repeating-linear-gradient(90deg, rgba(74,222,128,0.65) 0 12px, transparent 12px 30px);
+  will-change: transform;
+}
+.mg-gato {
+  position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none;
+  font-size: 44px; line-height: 1; text-shadow: 0 3px 8px rgba(0,0,0,0.5);
+  will-change: transform;
+}
+.mg-espinho {
+  position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none;
+  line-height: 1; display: block; text-align: center;
+  text-shadow: 0 3px 7px rgba(0,0,0,0.45);
+  will-change: transform;
+}
+.mg-espinho:before {
+  content: ''; position: absolute; left: 50%; bottom: -3px; width: 8px; height: 8px;
+  transform: translate(-50%, 0); border-radius: 50%;
+  background: rgba(74,222,128,0.5); box-shadow: 0 0 10px rgba(74,222,128,0.6);
+}
+
+.mg-corte { touch-action: none; user-select: none; cursor: crosshair; }
+.mg-slash {
+  position: absolute; left: 0; top: 0; z-index: 6; height: 5px; width: 0;
+  pointer-events: none; opacity: 0; border-radius: 5px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.2), rgba(255,255,255,0.95), rgba(255,255,255,0.2));
+  box-shadow: 0 0 12px rgba(255,255,255,0.85);
+  will-change: transform, opacity;
+}
+.mg-fruta {
+  position: absolute; left: 0; top: 0; z-index: 2;
+  font-size: 48px; line-height: 1; text-align: center; display: block;
+  pointer-events: none; text-shadow: 0 3px 7px rgba(0,0,0,0.45);
+  will-change: transform;
+}
+.mg-fruta.is-bomba { text-shadow: 0 3px 7px rgba(180,53,9,0.7); }
+
+
+.mg-fx { position: absolute; inset: 0; pointer-events: none; }
+.mg-fx-item {
+  position: absolute; display: grid; place-items: center;
+  transform: translate(-50%, -50%);
+}
+.mg-fx-item b { font-size: 22px; line-height: 1; animation: mg-fx-up 0.85s ease-out forwards; }
+.mg-fx-ring {
+  position: absolute; width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.9); animation: mg-fx-ring 0.85s ease-out forwards;
+}
+@keyframes mg-fx-up {
+  0% { opacity: 0; transform: translateY(6px) scale(0.6); }
+  25% { opacity: 1; transform: translateY(-4px) scale(1.15); }
+  100% { opacity: 0; transform: translateY(-38px) scale(1); }
+}
+@keyframes mg-fx-ring {
+  0% { opacity: 0.95; transform: scale(0.3); }
+  100% { opacity: 0; transform: scale(3.4); }
+}
+
+.mg-resultado {
+  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 24px; text-align: center;
+  animation: mg-res-in 0.32s ease-out;
+}
+@keyframes mg-res-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+.mg-res-msg { margin: 0; font-size: 13px; color: rgba(255,255,255,0.7); }
+.mg-resultado.is-win .mg-res-emoji { animation: mg-res-bounce 0.7s ease; }
+.mg-resultado.is-lose .mg-res-emoji { filter: grayscale(0.5); }
+@keyframes mg-res-bounce {
+  0% { transform: scale(0.3) rotate(-18deg); }
+  55% { transform: scale(1.25) rotate(6deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+.mg-res-emoji { font-size: 62px; line-height: 1; }
+.mg-resultado h3 { margin: 0; font-size: 21px; color: #fff; }
+.mg-res-placar { margin: 0; font-size: 14px; color: rgba(255,255,255,0.75); }
+.mg-res-placar b { color: #fbbf24; }
+.mg-res-placar em { font-style: normal; color: #34d399; font-weight: 800; }
+.mg-res-moedas { margin: 4px 0 4px; font-size: 20px; font-weight: 800; color: #fbbf24; }
+.mg-res-falta { margin: 0 0 14px; font-size: 12px; color: rgba(255,255,255,0.6); }
+.mg-resultado.is-win .mg-res-moedas { margin: 4px 0 16px; }
+.mg-res-botoes { display: flex; flex-direction: column; gap: 8px; width: min(100%, 280px); }
+.mg-btn {
+  padding: 13px 16px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.07); color: #fff; font-family: inherit;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.mg-btn.primary {
+  border: none; color: #1b1030;
+  background: linear-gradient(135deg, #34d399, #6ee7b7);
+  box-shadow: 0 8px 22px rgba(52,211,153,0.4);
+}
+.mg-resultado.is-win .mg-btn.primary {
+  background: linear-gradient(135deg, #fbbf24, #fde68a);
+  box-shadow: 0 8px 22px rgba(251,191,36,0.45);
+}
+.mg-btn.ghost { background: transparent; color: rgba(255,255,255,0.65); }
+.mg-btn:active { transform: scale(0.97); }
+
+/* ===================== CAPA / MENU DO JOGO ===================== */
+.mg-capa {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 10px 18px 22px; text-align: center;
+  animation: mg-capa-in 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+@keyframes mg-capa-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.mg-capa-top {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.mg-voltar {
+  width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.08); color: #fff; font-size: 16px; font-weight: 800;
+  cursor: pointer; line-height: 1; padding: 0;
+}
+.mg-voltar:active { transform: scale(0.9); }
+.mg-capa-best {
+  font-size: 11px; font-weight: 800; color: #fbbf24;
+  background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.3);
+  padding: 5px 10px; border-radius: 999px;
+}
+
+.mg-capa-arte {
+  position: relative; width: 122px; height: 122px;
+  display: grid; place-items: center; margin: 4px 0 8px;
+}
+.mg-capa-emoji {
+  position: relative; z-index: 2; font-size: 60px; line-height: 1;
+  text-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  animation: mg-capa-float 2.6s ease-in-out infinite;
+}
+@keyframes mg-capa-float {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-9px) rotate(3deg); }
+}
+.mg-orb {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle at 34% 30%, color-mix(in srgb, var(--gc) 70%, #fff), color-mix(in srgb, var(--gc) 35%, transparent));
+}
+.mg-orb.o1 { inset: 0; opacity: 0.34; animation: mg-orb 3.4s ease-in-out infinite; }
+.mg-orb.o2 { inset: 14px; opacity: 0.5; animation: mg-orb 2.7s ease-in-out infinite reverse; }
+.mg-orb.o3 { inset: 28px; opacity: 0.75; animation: mg-orb 2.1s ease-in-out infinite; }
+@keyframes mg-orb {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.11); }
+}
+
+.mg-capa-titulo {
+  margin: 0; font-size: 23px; font-weight: 900; color: #fff;
+  text-shadow: 0 2px 10px color-mix(in srgb, var(--gc) 60%, transparent);
+}
+.mg-capa-desc {
+  margin: 4px 0 12px; font-size: 13px; color: rgba(255,255,255,0.7);
+}
+
+.mg-capa-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 14px; }
+.mg-capa-tags span {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
+  padding: 6px 11px; border-radius: 999px;
+}
+.mg-capa-tags b { font-size: 12px; }
+
+.mg-capa-como {
+  width: min(100%, 330px); text-align: left;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px; padding: 12px 14px; margin-bottom: 16px;
+}
+.mg-capa-como > b {
+  display: block; font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--gc); margin-bottom: 8px; font-weight: 800;
+}
+.mg-capa-como ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
+.mg-capa-como li {
+  display: flex; align-items: flex-start; gap: 9px;
+  font-size: 12.5px; color: rgba(255,255,255,0.82); line-height: 1.35;
+}
+.mg-capa-como li span {
+  flex: 0 0 19px; height: 19px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 10.5px; font-weight: 900;
+  color: #1b1030; background: var(--gc);
+}
+
+.mg-capa-botoes { display: flex; flex-direction: column; gap: 8px; width: min(100%, 300px); }
+.mg-capa-botoes .mg-btn.primary {
+  background: linear-gradient(135deg, var(--gc), color-mix(in srgb, var(--gc) 45%, #fff));
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--gc) 45%, transparent);
+  font-size: 15.5px; padding: 15px 16px;
+}
+.mg-capa-botoes .mg-btn.ghost { font-size: 12.5px; padding: 10px 16px; }
+
+/* ===================== CONTAGEM 3-2-1 ===================== */
+.mg-conta {
+  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px;
+  background:
+    radial-gradient(120% 90% at 50% 20%, color-mix(in srgb, var(--gc) 40%, transparent), transparent 62%),
+    rgba(10, 6, 24, 0.55);
+}
+.mg-conta-n {
+  font-size: 96px; font-weight: 900; line-height: 1; color: #fff;
+  text-shadow: 0 0 40px color-mix(in srgb, var(--gc) 90%, transparent);
+  animation: mg-conta-pop 0.62s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+@keyframes mg-conta-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  45% { opacity: 1; transform: scale(1.18); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.mg-conta-t { margin: 0; font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.75); }
+
+/* ================= DORMINDO ================= */
+.habitat-cat-stage.is-sleeping .habitat-cat-fit {
+  animation: habitat-sleep-breathe 2.6s ease-in-out infinite;
+}
+.habitat-cat-stage.is-sleeping .pet-eye { animation: none; transform: scaleY(0.1); }
+.habitat-cat-stage.is-sleeping .pet-mouth-w { opacity: 1; }
+.habitat-cat-stage.is-sleeping .pet-eyes-happy,
+.habitat-cat-stage.is-sleeping .pet-eyes-angry,
+.habitat-cat-stage.is-sleeping .pet-eyes-scared,
+.habitat-cat-stage.is-sleeping .pet-eyes-sad { opacity: 0; }
+@keyframes habitat-sleep-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(2px) scale(1.025, 0.985); }
+}
+
+.habitat-zzz {
+  position: absolute; left: 62%; top: -2%; z-index: 6;
+  width: 0; height: 0; pointer-events: none;
+}
+.habitat-zzz span {
+  position: absolute; font-weight: 800; color: rgba(226,232,255,0.9);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+  animation: habitat-zzz-up 2.8s ease-out infinite;
+}
+.habitat-zzz span:nth-child(1) { font-size: 12px; left: 0; bottom: 0; }
+.habitat-zzz span:nth-child(2) { font-size: 17px; left: 10px; bottom: 12px; animation-delay: 0.9s; }
+.habitat-zzz span:nth-child(3) { font-size: 22px; left: 22px; bottom: 26px; animation-delay: 1.8s; }
+@keyframes habitat-zzz-up {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translate(16px, -46px) scale(1.15); }
+}
+
+/* Botao com a barra cheia: o pet recusa, mas o card ainda abre */
+.habitat-action-btn.is-full .habitat-action-moodbar i { background: linear-gradient(90deg, #4ade80, #86efac); }
+.habitat-action-btn.is-full { background: rgba(74,222,128,0.07); }
+.habitat-action-full {
+  position: absolute; top: 5px; right: 7px;
+  width: 15px; height: 15px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 9px; font-weight: 900; color: #063;
+  background: #4ade80; box-shadow: 0 0 10px rgba(74,222,128,0.7);
+}

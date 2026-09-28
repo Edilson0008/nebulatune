@@ -23,3 +23,54 @@ export function greetingForHour(hour) {
   if (hour >= 18) return 'Boa noite'
   return 'Boa madrugada'
 }
+
+// Comidas: catálogo compartilhado entre a lojinha e o card do botão Comida.
+// full = quanto a barra de fome sobe quando o gato come.
+// kind: 'food' = vai pro estoque e some quando acaba.
+export const FOOD_CATALOG = [
+  { key: 'frango', name: 'Frango', emoji: '🍗', price: 0, full: 26, happy: 5, kind: 'food' },
+  { key: 'pizza', name: 'Pizza', emoji: '🍕', price: 0, full: 30, happy: 8, kind: 'food' },
+  { key: 'leite', name: 'Leitinho', emoji: '🥛', price: 0, full: 14, happy: 8, kind: 'food' },
+  { key: 'cenoura', name: 'Cenoura', emoji: '🥕', price: 12, full: 18, happy: 4, kind: 'food' },
+  { key: 'maçã', name: 'Maçã', emoji: '🍎', price: 18, full: 20, happy: 5, kind: 'food' },
+  { key: 'banana', name: 'Banana', emoji: '🍌', price: 20, full: 22, happy: 7, kind: 'food' },
+  { key: 'donut', name: 'Donut', emoji: '🍩', price: 25, full: 24, happy: 10, kind: 'food' },
+  { key: 'uvinha', name: 'Uvinhas', emoji: '🍇', price: 28, full: 22, happy: 9, kind: 'food' },
+  { key: 'morango', name: 'Morango', emoji: '🍓', price: 30, full: 18, happy: 12, kind: 'food' },
+  { key: 'melancia', name: 'Melancia', emoji: '🍉', price: 32, full: 26, happy: 11, kind: 'food' },
+  { key: 'macarrao', name: 'Macarrão', emoji: '🍝', price: 35, full: 32, happy: 6, kind: 'food' },
+  { key: 'burguer', name: 'Burguer', emoji: '🍔', price: 40, full: 38, happy: 12, kind: 'food' },
+  { key: 'coxinha', name: 'Coxinha', emoji: '🥐', price: 45, full: 30, happy: 15, kind: 'food' },
+  { key: 'pizza-grande', name: 'Pizza Gigante', emoji: '🍕', price: 50, full: 48, happy: 14, kind: 'food' },
+  { key: 'bife', name: 'Bife', emoji: '🍖', price: 55, full: 45, happy: 8, kind: 'food' },
+  { key: 'costela', name: 'Costelinha', emoji: '🍖', price: 60, full: 50, happy: 10, kind: 'food' },
+  { key: 'sashimi', name: 'Sashimi', emoji: '🍣', price: 65, full: 42, happy: 18, kind: 'food' },
+  { key: 'salmão', name: 'Salmão', emoji: '🐟', price: 70, full: 40, happy: 16, kind: 'food' },
+  { key: 'atum', name: 'Atum', emoji: '🐠', price: 75, full: 46, happy: 15, kind: 'food' },
+  { key: 'peixinho', name: 'Peixinho', emoji: '🐠', price: 80, full: 44, happy: 14, kind: 'food' },
+  { key: 'caviar', name: 'Caviar', emoji: '🥚', price: 120, full: 40, happy: 30, kind: 'food' },
+]
+
+// Brinquedos: comprados uma vez viram permanentes e aparecem no card do botão Brincar.
+export const TOY_CATALOG = [
+  { key: 'balão', name: 'Balão', emoji: '🎈', price: 25, happy: 14, kind: 'toy' },
+  { key: 'pipa', name: 'Pipa', emoji: '🪁', price: 35, happy: 18, kind: 'toy' },
+  { key: 'pato', name: 'Pato de Borracha', emoji: '🦆', price: 50, happy: 22, kind: 'toy' },
+  { key: 'boliche', name: 'Boliche', emoji: '🎳', price: 60, happy: 26, kind: 'toy' },
+  { key: 'roda-giro', name: 'Roda-giro', emoji: '🎡', price: 75, happy: 30, kind: 'toy' },
+  { key: 'novelo', name: 'Novelo', emoji: '🧶', price: 90, happy: 36, kind: 'toy' },
+]
+
+// Banho: cada item comprado tem um número limitado de usos.
+// A Esponjinha (key 'esponja') é a padrão, não se acaba.
+export const BATH_CATALOG = [
+  { key: 'esponja', name: 'Esponjinha', emoji: '🧽', price: 0, clean: 26, happy: 6, uses: 0, kind: 'bath' },
+  { key: 'sabão', name: 'Sabonete', emoji: '🧼', price: 20, clean: 32, happy: 5, uses: 10, kind: 'bath' },
+  { key: 'escova', name: 'Escovinha', emoji: '🪥', price: 28, clean: 26, happy: 8, uses: 12, kind: 'bath' },
+  { key: 'shampoo', name: 'Shampoo', emoji: '🧴', price: 40, clean: 42, happy: 6, uses: 8, kind: 'bath' },
+  { key: 'bálmamo', name: 'Bálmamo', emoji: '💧', price: 55, clean: 38, happy: 18, uses: 6, kind: 'bath' },
+  { key: 'secador', name: 'Secador', emoji: '💨', price: 70, clean: 30, happy: 24, uses: 5, kind: 'bath' },
+]
+
+// Estoque inicial: o gato sempre começa com o essencial pra não ficar sem comer.
+export const START_INVENTORY = { frango: 3, pizza: 2, leite: 2 }

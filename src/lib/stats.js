@@ -26,7 +26,8 @@ export const PERIOD_LABELS = [
   ['all', 'Tudo'],
 ]
 
-export function getAchievements(library, touches) {
+export function getAchievements(library, touches, extra) {
+  const { buys = 0, toys = 0, baths = 0 } = extra || {}
   const list = Array.isArray(library) ? library : []
   const totalPlaysAll = list.reduce((acc, t) => acc + (t.plays || 0), 0)
   const favCount = list.filter((t) => t.fav).length
@@ -41,6 +42,12 @@ export function getAchievements(library, touches) {
     { id: 'fav10', icon: '❤️', name: '10 favoritas', color: '#f87171', need: 10, have: favCount },
     { id: 'days7', icon: '📅', name: '7 dias com música', color: '#facc15', need: 7, have: daySet.size },
     { id: 'pet50', icon: '🐾', name: '50 toques no gatinho', color: '#34d399', need: 50, have: touches || 0 },
+    { id: 'loja1', icon: '🛍️', name: 'Primeira compra', color: '#fbbf24', need: 1, have: buys },
+    { id: 'loja10', icon: '🏦', name: 'Freguês da lojinha', color: '#fde047', need: 10, have: buys },
+    { id: 'toy1', icon: '🎈', name: 'Primeiro brinquedo', color: '#c084fc', need: 1, have: toys },
+    { id: 'toy3', icon: '🎠', name: 'Sala de brincadeiras', color: '#f472b6', need: 3, have: toys },
+    { id: 'bath1', icon: '🧼', name: 'Primeira loção', color: '#38bdf8', need: 1, have: baths },
+    { id: 'bath3', icon: '🛁', name: 'Spa do gatinho', color: '#22d3ee', need: 3, have: baths },
   ]
   return defs.map((a) => ({
     ...a,

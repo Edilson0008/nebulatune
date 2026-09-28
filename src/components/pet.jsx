@@ -614,7 +614,7 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
   )
 }
 
-export function PetHabitatCard({ greeting, greetMs = 4800, stats, onShowProfile = null, userName = '', ...pet }) {
+export function PetHabitatCard({ greeting, greetMs = 4800, stats, onShowProfile = null, onOpenHabitat = null, userName = '', ...pet }) {
   const fmtNum = (n) => {
     const v = n || 0
     if (v >= 100000) return `${(v / 1000).toFixed(0)}k`
@@ -643,7 +643,18 @@ export function PetHabitatCard({ greeting, greetMs = 4800, stats, onShowProfile 
     <div className="pet-habitat">
       <div className="pet-habitat-glow" />
       <div className="pet-habitat-head">
-        <span className="pet-habitat-title">✦ PET HABITAT</span>
+        <button
+          className="pet-habitat-title pet-habitat-title-btn"
+          onClick={onOpenHabitat}
+          title="Abrir o Habitat do gatinho"
+          aria-label="Abrir o Habitat do gatinho"
+          disabled={!onOpenHabitat}
+        >
+          ✦ PET HABITAT
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+            <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
         <div className="pet-habitat-pills">
           <span className="pet-pill">
             <span className="pill-glyph">⸗</span>

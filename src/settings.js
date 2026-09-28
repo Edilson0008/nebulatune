@@ -3,6 +3,12 @@ import { readLocal, writeLocal } from './localstore'
 
 const PSTAT_DEFAULTS = { touches: 0, hearts: 0, sleeps: 0, scares: 0, meows: 0, coins: 0 }
 
+// Sistema de humores do gatinho: barras de necessidade que caem com o tempo
+export const MOOD_DEFAULTS = { full: 100, happy: 85, sleep: 90, clean: 90 }
+export const MOOD_KEYS = ['full', 'happy', 'sleep', 'clean']
+// Quanto cada barra cai por hora (%, ponto flutuante)
+const MOOD_DECAY = { full: 9, happy: 6, sleep: 8, clean: 11 }
+
 export const ACCENTS = {
   violet: { name: 'Violeta', accent: '#8b5cf6', accent2: '#c084fc' },
   pink: { name: 'Rosa', accent: '#ec4899', accent2: '#f472b6' },
@@ -98,6 +104,8 @@ export function useSettings() {
 export function usePetStats() {
   const [petStats, setPetStats] = useState(() => ({
     ...PSTAT_DEFAULTS,
+    ...MOOD_DEFAULTS,
+    lt: 0,
     ...(readLocal('nt.petstats') || {}),
   }))
 
@@ -110,19 +118,67 @@ export function usePetStats() {
     [],
   )
 
+  // Recarrega barra(s) de humor (0..100) e marca o horário do último carinho/atividade
+  const settlePet = useMemo(
+    () => (meters = {}) =>
+      setPetStats((s) => {
+        const next = { ...s }
+        for (const k of MOOD_KEYS) {
+          const cur = typeof s[k] === 'number' ? s[k] : MOOD_DEFAULTS[k]
+          const add = Number(meters[k]) || 0
+          next[k] = Math.max(0, Math.min(100, cur + add))
+        }
+        next.lt = Date.now()
+        return next
+      }),
+    [],
+  )
+
+  // Decaimento por tempo real: persiste mesmo com o app fechado.
+  // lt == 0 (save antigo) apenas inicializa o relógio, sem jogar barras em 0.
+  useEffect(() => {
+    const decay = () => {
+      const nowV = Date.now()
+      setPetStats((s) => {
+        const lt = Number(s.lt) || nowV
+        if (!s.lt) return { ...s, lt: nowV }
+        const hours = Math.max(0, (nowV - lt) / 3.6e6)
+        if (hours < 0.02) return s
+        const next = { ...s, lt: nowV }
+        for (const k of MOOD_KEYS) {
+          const cur = typeof s[k] === 'number' ? s[k] : MOOD_DEFAULTS[k]
+          const v = cur - hours * MOOD_DECAY[k]
+          const rounded = Math.round(v * 10) / 10
+          if (Math.abs(rounded - cur) > 0.001) next[k] = Math.max(0, rounded)
+        }
+        return next
+      })
+    }
+    decay()
+    const id = setInterval(decay, 60000)
+    const onVis = () => {
+      if (document.visibilityState === 'visible') decay()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [])
+
   // Aplica pontuações salvas (backup) sem nunca diminuir os contadores:
   // cada aparelho contribui com os seus toques/corações e o total só cresce.
   const applyPetStats = useMemo(
     () => (value) => {
       if (!value || typeof value !== 'object') return
       setPetStats((s) => {
-        const keys = ['touches', 'hearts', 'sleeps', 'scares', 'meows', 'coins']
+        const keys = ['touches', 'hearts', 'sleeps', 'scares', 'meows', 'coins', ...MOOD_KEYS, 'lt']
         const merged = { ...s }
         for (const k of keys) {
           const v = Number(value[k]) || 0
           if (v > (Number(s[k]) || 0)) merged[k] = v
         }
-        return { ...PSTAT_DEFAULTS, ...merged }
+        return { ...PSTAT_DEFAULTS, ...MOOD_DEFAULTS, ...merged }
       })
     },
     [],
@@ -133,11 +189,11 @@ export function usePetStats() {
   const restorePetStats = useMemo(
     () => (value) => {
       if (!value || typeof value !== 'object') return
-      const next = { ...PSTAT_DEFAULTS, ...value }
+      const next = { ...PSTAT_DEFAULTS, ...MOOD_DEFAULTS, ...value }
       setPetStats((s) => ({ ...s, ...next }))
     },
     [],
   )
 
-  return { petStats, bumpPet, applyPetStats, restorePetStats }
+  return { petStats, bumpPet, settlePet, applyPetStats, restorePetStats }
 }

@@ -79,3 +79,20 @@ self.addEventListener('fetch', (event) => {
     }),
   )
 })
+
+/* Tocar na notificacao do gatinho abre o app */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const alvo = event.notification.data?.url || './'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((lista) => {
+      for (const c of lista) {
+        if ('focus' in c) {
+          c.navigate(alvo)
+          return c.focus()
+        }
+      }
+      return self.clients.openWindow(alvo)
+    }),
+  )
+})

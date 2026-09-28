@@ -7,9 +7,9 @@ import { blobToDataUrl, dataUrlToBlob } from './backup'
 import { COVERS, featuredCovers } from './data/tracks'
 import { deleteMediaBlobs, loadAllMediaBlobs, mediaStorageInfo, purgeOrphanMedia, readLocal, saveMediaBlobs, writeLocal } from './localstore'
 import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
-import { pickPetNudge } from './petNudges'
+import { PET_NEEDS_INFO, pickNeedNudge, pickPetNudge } from './petNudges'
 import { ProgressProvider } from './progress'
-import { usePetStats, useSettings } from './settings'
+import { MOOD_KEYS, usePetStats, useSettings } from './settings'
 import { APK_URL, fetchLatestVersion, installUpdate, isNewer, markUpdatePrompted, notifyUpdateAvailable, requestNotificationsPermission, wasUpdatePrompted } from './updater'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { Cover } from './components/Cover.jsx'
@@ -32,7 +32,8 @@ import { IS_NATIVE } from './lib/env.js'
 import { AUDIO_RE, IMAGE_RE, baseName, cleanArtist, cleanTitle, extFromType, parseFileName } from './lib/filename.js'
 import { fmtBytes, formatTime, hashStr } from './lib/format.js'
 import { LYRICS_CACHE_MAX, buildLyrics, fetchLyrics, searchLyrics } from './lib/lyrics.js'
-import { PET_GREETINGS, greetingForHour, random } from './lib/pet.js'
+import { BATH_CATALOG, FOOD_CATALOG, PET_GREETINGS, START_INVENTORY, TOY_CATALOG, greetingForHour, random } from './lib/pet.js'
+import { setMusicPlaying, sfxCoin, sfxSpawn } from './lib/sfx.js'
 import { shareBlobNative } from './lib/share.js'
 import { sleepNativeCancel, sleepNativeStart } from './lib/sleep-native.js'
 import { getAchievements } from './lib/stats.js'
@@ -49,6 +50,54 @@ const OnlineView = lazy(() =>
 const SettingsView = lazy(() =>
   import('./components/settings-view.jsx').then((m) => ({ default: m.SettingsView })),
 )
+const PetHabitatView = lazy(() =>
+  import('./components/pet-habitat-view.jsx').then((m) => ({ default: m.PetHabitatView })),
+)
+
+const SHOP_TABS = [
+  { id: 'comida', label: 'Comida', icon: '🍗' },
+  { id: 'brinquedo', label: 'Brinquedos', icon: '🎈' },
+  { id: 'banho', label: 'Banho', icon: '🛁' },
+  { id: 'mimo', label: 'Mimos', icon: '💗' },
+]
+// Comidas com preço (as básicas já vêm no estoque inicial)
+const SHOP_FOOD = FOOD_CATALOG.filter((f) => f.price > 0)
+// Brinquedos: comprados viram permanentes e vão pro card do botão Brincar
+const SHOP_TOYS = TOY_CATALOG.filter((t) => t.price > 0)
+// Banho: cada um tem usos limitados (a Esponjinha é a padrão, não se acaba)
+const SHOP_BATH = BATH_CATALOG.filter((b) => b.price > 0)
+const SHOP_MIMOS = [
+  { id: 'carinho', name: 'Carinho Extra', emoji: '💗', desc: 'mimos que não acaba', price: 45, mood: { happy: 30 } },
+  { id: 'sono', name: 'Boa Noite', emoji: '🌙', desc: 'soninho dos deuses', price: 55, mood: { sleep: 40, happy: 5 } },
+  { id: 'banho-relampago', name: 'Banho Relâmpago', emoji: '⚡', desc: 'limpo num piscar', price: 60, mood: { clean: 45, happy: 4 } },
+  { id: 'festa', name: 'Festa', emoji: '🎉', desc: 'festa de animate com ele', price: 80, mood: { happy: 45, full: 10 } },
+]
+const SHOP_CONSUMABLES = [...SHOP_FOOD, ...SHOP_TOYS, ...SHOP_BATH, ...SHOP_MIMOS]
+const SHOP_BY_TAB = { comida: SHOP_FOOD, brinquedo: SHOP_TOYS, banho: SHOP_BATH, mimo: SHOP_MIMOS }
+const MOOD_OF = { full: '🍗', happy: '💗', sleep: '😴', clean: '🫧' }
+
+// Chamada do gatinho: barra baixa vira notificação pedindo pra entrar no app
+const MOOD_LOW_NOTIF = 40
+const MOOD_URGENT_NOTIF = 18
+const NEED_COOLDOWN_MS = 3 * 3600 * 1000 // 3h sem repetir a mesma necessidade
+const NEED_GAP_MS = 60 * 60 * 1000 // 1h entre duas chamadas quaisquer
+
+// No navegador usa o Service Worker (funciona com o app em segundo plano)
+function notificarWeb(title, body) {
+  if (typeof window === 'undefined' || !('Notification' in window)) return
+  if (Notification.permission !== 'granted') return
+  try {
+    const reg = navigator.serviceWorker?.ready
+    if (reg) {
+      reg.then((r) => r.showNotification(title, { body, icon: './icons/icon-192.png', tag: 'pet-need', renotify: false }))
+        .catch(() => new Notification(title, { body, icon: './icons/icon-192.png', tag: 'pet-need' }))
+      return
+    }
+    new Notification(title, { body, icon: './icons/icon-192.png', tag: 'pet-need' })
+  } catch {
+    /* notificação indisponível */
+  }
+}
 
 /* Enquanto o pedaço não chega, mostra um espaço do mesmo tamanho (sem
    "pulo" de layout) em vez de tela branca. */
@@ -63,6 +112,35 @@ function App() {
   const [cacheCleanMsg, setCacheCleanMsg] = useState('')
   const [freeSpaceMsg, setFreeSpaceMsg] = useState('')
   const [view, setView] = useState('inicio')
+  const [shopOpen, setShopOpen] = useState(false)
+  const [shopTab, setShopTab] = useState('comida')
+  const [inv, setInv] = useState(() => {
+    const s = readLocal('nt.inv')
+    return s && typeof s === 'object' && Object.keys(s).length ? s : { ...START_INVENTORY }
+  })
+
+  useEffect(() => {
+    writeLocal('nt.inv', inv)
+  }, [inv])
+  // Brinquedos comprados: permanentes, ficam no card do botão Brincar
+  const [toys, setToys] = useState(() => {
+    const s = readLocal('nt.toys')
+    return Array.isArray(s) ? s : []
+  })
+  // Itens de banho comprados: { chave: usos restantes }
+  const [bath, setBath] = useState(() => {
+    const s = readLocal('nt.bath')
+    return s && typeof s === 'object' ? s : {}
+  })
+
+  useEffect(() => {
+    writeLocal('nt.toys', toys)
+  }, [toys])
+
+  useEffect(() => {
+    writeLocal('nt.bath', bath)
+  }, [bath])
+
   const [libMoreOpen, setLibMoreOpen] = useState(false)
   const [achSeen, setAchSeen] = useState(() => readLocal('nt.achSeen') || [])
   const [achQueue, setAchQueue] = useState([])
@@ -199,18 +277,138 @@ function App() {
     setPetGreet(nextPetGreet(appSettings.userName || '', library.length === 0 && !loadingLib))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, loadingLib, library.length, appSettings.userName])
-  const { petStats, bumpPet, restorePetStats } = usePetStats()
+  const { petStats, bumpPet, settlePet, restorePetStats } = usePetStats()
+
+  // Permissão de notificação (uma vez só): o gatinho precisa dela pra chamar de volta
+  useEffect(() => {
+    if (!IS_NATIVE) return undefined
+    if (readLocal('nt.notifAsked')) return undefined
+    writeLocal('nt.notifAsked', 1)
+    const t = setTimeout(() => requestNotificationsPermission(), 2500)
+    return () => clearTimeout(t)
+  }, [])
+
+  // ---------- Chamada do gatinho quando uma barra fica baixa ----------
+  // O pet manda notificação pedindo pra pessoa entrar no app (tipo "tô com fome 🍗").
+  // Respeita um intervalo mínimo por necessidade pra não encher o celular de aviso.
+  const needNotifRef = useRef(readLocal('nt.petNotif') || {})
+  useEffect(() => {
+    const agora = Date.now()
+    const marca = { ...(needNotifRef.current || {}) }
+    let mudou = false
+    const baixa = MOOD_KEYS.filter((k) => {
+      const v = Number(petStats?.[k])
+      return Number.isFinite(v) && v < MOOD_LOW_NOTIF
+    }).sort((a, b) => (petStats[a] || 0) - (petStats[b] || 0))
+    if (!baixa.length) {
+      needNotifRef.current = marca
+      return
+    }
+    const key = baixa[0]
+    const info = PET_NEEDS_INFO[key]
+    if (!info) return
+    const valor = Number(petStats[key]) || 0
+    const urgente = valor < MOOD_URGENT_NOTIF
+    const ultima = Number(marca[key]) || 0
+    if (agora - ultima < NEED_COOLDOWN_MS) {
+      needNotifRef.current = marca
+      return
+    }
+    const qualquer = Math.max(0, ...Object.values(marca).map((n) => Number(n) || 0))
+    if (agora - qualquer < NEED_GAP_MS) {
+      needNotifRef.current = marca
+      return
+    }
+    const texto = pickNeedNudge(key, appSettings.userName, urgente)
+    // App aberto: mostra o lembrete na própria tela (notificação seria invisível)
+    if (document.visibilityState === 'visible') {
+      if (!document.hidden) {
+        setPetReminder({ id: agora, text: texto, need: key })
+        marca[key] = agora
+        mudou = true
+      }
+    } else {
+      const titulo = urgente ? `🚨 ${info.emoji} ${info.label} crítica!` : `${info.emoji} Vem ver o gatinho!`
+      if (IS_NATIVE) {
+        try {
+          LocalNotifications.createChannel({
+            id: 'pet',
+            name: 'Gatinho',
+            description: 'Chamadas do gatinho do NebulaTune',
+            importance: 4,
+          }).catch(() => {})
+          LocalNotifications.schedule({
+            notifications: [
+              {
+                id: 9100 + MOOD_KEYS.indexOf(key),
+                title: titulo,
+                body: texto,
+                channelId: 'pet',
+                smallIcon: 'ic_notification',
+                schedule: { at: new Date(agora + 60000) },
+              },
+            ],
+          }).catch(() => {})
+        } catch {
+          /* notificação indisponível */
+        }
+      } else {
+        notificarWeb(titulo, texto)
+      }
+      marca[key] = agora
+      mudou = true
+    }
+    if (mudou) {
+      needNotifRef.current = marca
+      writeLocal('nt.petNotif', marca)
+    }
+  }, [petStats, appSettings.userName])
+
+  // Quando a pessoa entra no app, desmarca as chamadas já respondidas
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return
+      needNotifRef.current = {}
+      writeLocal('nt.petNotif', {})
+      if (IS_NATIVE) {
+        try {
+          LocalNotifications.cancel({ notifications: MOOD_KEYS.map((_, i) => ({ id: 9100 + i })) }).catch(() => {})
+        } catch {
+          /* canal indisponível */
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
+
   const handlePetAction = useCallback(
-    (a) => {
-      const map = { touch: 'touches', heart: 'hearts', scared: 'scares', sleep: 'sleeps', meow: 'meows' }
-      const k = map[a]
-      if (k) {
-        bumpPet(k)
-        if (k === 'touches') bumpPet('coins', 2)
+    (a, extra) => {
+      const map = {
+        touch: { stat: 'touches', coins: 2, mood: { happy: 6 } },
+        heart: { stat: 'hearts', coins: 1, mood: { happy: 14 } },
+        scared: { stat: 'scares', coins: 0, mood: {} },
+        sleep: { stat: 'sleeps', coins: 1, mood: { sleep: 36, happy: 4 } },
+        meow: { stat: 'meows', coins: 0, mood: {} },
+        food: { stat: null, coins: 2, mood: { full: 28, happy: 6 } },
+        play: { stat: null, coins: 2, mood: { happy: 22, sleep: -5 } },
+        bath: { stat: null, coins: 2, mood: { clean: 34, happy: 4 } },
+        bubbles: { stat: null, coins: 1, mood: { happy: 18 } },
+      }
+      const def = map[a]
+      if (def) {
+        if (def.stat) bumpPet(def.stat, 1)
+        if (def.coins) bumpPet('coins', def.coins)
+        const mood = extra?.mood || def.mood
+        if (mood) settlePet(mood)
       }
     },
-    [bumpPet],
+    [bumpPet, settlePet],
   )
+  const shopCoins = Number(petStats?.coins) || 0
+  const shopAll = SHOP_CONSUMABLES
+  const dailyOffer = shopAll[Math.floor(Date.now() / 86400000) % shopAll.length]
+  const dailyPrice = dailyOffer ? Math.round(dailyOffer.price * 0.6) : 0
   const [cheer, setCheer] = useState(null)
   const cheerIdRef = useRef(0)
   const topSeenRef = useRef(null)
@@ -549,19 +747,24 @@ function App() {
   )
 
   useEffect(() => {
-    const done = getAchievements(library, petStats?.touches || 0).filter((a) => a.done)
-    const doneIds = done.map((a) => a.id)
+    const done = getAchievements(library, petStats?.touches || 0, {
+      buys: Number(petStats?.buys) || 0,
+      toys: toys.length,
+      baths: Object.values(bath).filter((n) => Number(n) > 0).length,
+    }).filter((a) => a.done)
+    const doneIds = new Set(done.map((a) => a.id))
+    const seenIds = new Set(achSeen)
     const fresh = done.filter(
-      (a) => !achSeen.includes(a.id) && !achQueueRef.current.some((q) => q.id === a.id),
+      (a) => !seenIds.has(a.id) && !achQueueRef.current.some((q) => q.id === a.id),
     )
     if (fresh.length) {
       achQueueRef.current = [...achQueueRef.current, ...fresh]
       setAchQueue(achQueueRef.current)
     }
-    if (doneIds.length !== achSeen.length || doneIds.some((id) => !achSeen.includes(id))) {
-      setAchSeen(doneIds)
-    }
-  }, [library, petStats, achSeen])
+    // “Visto” só cresce: junta os novos feitos com o histórico (nunca apaga no carregamento)
+    const merged = Array.from(new Set([...achSeen, ...doneIds]))
+    if (merged.length !== achSeen.length) setAchSeen(merged)
+  }, [library, petStats, achSeen, toys, bath])
   const favoriteTracks = useMemo(() => library.filter((t) => t.fav), [library])
   const queueTracks = useMemo(() => queue.map((id) => library.find((t) => t.id === id)).filter(Boolean), [queue, library])
   const [showQueue, setShowQueue] = useState(false)
@@ -577,6 +780,122 @@ function App() {
     clearTimeout(toastTimerRef.current)
     toastTimerRef.current = setTimeout(() => setToast(''), 2200)
   }, [])
+
+  const buyShopItem = useCallback(
+    (it, offerPrice) => {
+      const price = offerPrice ?? it.price
+      if ((Number(petStats?.coins) || 0) < price) return
+      if (it.kind === 'toy' && toys.includes(it.key)) return
+      if (it.kind === 'bath' && (bath[it.key] || 0) > 0) return
+      bumpPet('coins', -price)
+      bumpPet('buys', 1)
+      if (it.kind === 'food') {
+        // Comida vai pro estoque: só aparece no card do botão Comida depois de comprada
+        setInv((prev) => ({ ...prev, [it.key]: (prev[it.key] || 0) + 1 }))
+        showToast(`${it.emoji} ${it.name} no estoque!`)
+      } else if (it.kind === 'toy') {
+        // Brinquedo é permanente: fica no card do botão Brincar pra sempre
+        setToys((prev) => (prev.includes(it.key) ? prev : [...prev, it.key]))
+        showToast(`${it.emoji} ${it.name} é dele pra sempre!`)
+      } else if (it.kind === 'bath') {
+        // Item de banho: entra com o número de usos que veio no pacote
+        setBath((prev) => ({ ...prev, [it.key]: (prev[it.key] || 0) + (it.uses || 1) }))
+        showToast(`${it.emoji} ${it.name} ×${it.uses} usos!`)
+      } else {
+        settlePet(it.mood)
+        showToast(`${it.emoji} ${it.name}!`)
+      }
+      if (appSettings.petSound !== false) {
+        sfxCoin()
+        setTimeout(sfxSpawn, 260)
+      }
+    },
+    [petStats, toys, bath, bumpPet, settlePet, appSettings.petSound, showToast],
+  )
+
+// O gato comeu: tira 1 do estoque
+const onFoodEaten = useCallback((key) => {
+    setInv((prev) => {
+      const n = (prev[key] || 0) - 1
+      const next = { ...prev }
+      if (n > 0) next[key] = n
+      else delete next[key]
+      return next
+    })
+  }, [])
+
+// Usou um item de banho: gasta 1 uso (a Esponjinha é a padrão e nunca acaba)
+  const onBathUsed = useCallback((key) => {
+    if (!key) return
+    setBath((prev) => {
+      const n = (prev[key] || 0) - 1
+      const next = { ...prev }
+      if (n > 0) next[key] = n
+      else delete next[key]
+      return next
+    })
+  }, [])
+
+  // Fim de um minigame: moedas ganhas + quantas partidas foram jogadas
+  const onMinigame = useCallback(
+    ({ coins = 0, plays = 0 } = {}) => {
+      if (coins) bumpPet('coins', coins)
+      if (plays) bumpPet('minigames', plays)
+    },
+    [bumpPet],
+  )
+
+  const dailyCat = SHOP_TOYS.includes(dailyOffer)
+    ? 'brinquedo'
+    : SHOP_BATH.includes(dailyOffer)
+      ? 'banho'
+      : SHOP_MIMOS.includes(dailyOffer)
+        ? 'mimo'
+        : 'comida'
+
+  // Card minimalista da loja: preço sempre visível (mesmo sem saldo) + quanto falta
+  const shopItemCard = (it, { offer = false, owned = false, qty = 0, uses = 0 } = {}) => {
+    const price = offer ? dailyPrice : it.price
+    const missing = Math.max(0, price - shopCoins)
+    return (
+      <button
+        className={`shop-item${owned ? ' is-owned' : missing > 0 ? ' is-poor' : ''}`}
+        disabled={owned || missing > 0}
+        onClick={() => buyShopItem(it, offer ? dailyPrice : undefined)}
+        title={it.desc || it.name}
+      >
+        <span className="shop-item-emoji">{it.emoji}</span>
+        <span className="shop-item-name">{it.name}</span>
+        <span className="shop-item-eff">
+          {it.kind === 'food'
+            ? `${MOOD_OF.full} +${it.full}${it.happy ? ` · ${MOOD_OF.happy} +${it.happy}` : ''}`
+            : it.kind === 'toy'
+              ? `${MOOD_OF.happy} +${it.happy} · permanente`
+              : it.kind === 'bath'
+                ? `${MOOD_OF.clean} +${it.clean} · ${it.uses} usos`
+                : it.mood
+                  ? Object.keys(it.mood)
+                      .filter((k) => it.mood[k] > 0)
+                      .map((k) => `${MOOD_OF[k]} +${it.mood[k]}`)
+                      .join(' · ')
+                  : it.desc}
+        </span>
+        {it.kind === 'food' && qty > 0 && <span className="shop-item-own">no estoque: {qty}</span>}
+        {it.kind === 'bath' && uses > 0 && <span className="shop-item-own">resta {uses} usos</span>}
+        <span className="shop-item-price">
+          {owned ? (
+            it.kind === 'toy' ? '✓ dele' : `✓ ${uses} usos`
+          ) : (
+            <>
+              {offer && <s>{it.price} 🪙</s>}
+              <b>{price} 🪙</b>
+              {missing > 0 && <em>faltam {missing}</em>}
+            </>
+          )}
+        </span>
+      </button>
+    )
+  }
 
   const genTopMonth = useCallback(() => {
     const now = new Date()
@@ -648,6 +967,8 @@ function App() {
   useEffect(() => {
     liveRef.current = { playing, onlineActive }
   })
+  // Sons mais altos quando não há música tocando (avisado no lib/sfx.js)
+  useEffect(() => { setMusicPlaying(playing) }, [playing])
 
   const stopSleepTimer = useCallback(() => {
     setSleepMode(null)
@@ -1418,7 +1739,7 @@ setInstallEvt(null)
           ) : (
             <>
               <div className="topbar-buttons">
-                <button className="icon-btn nav-arrow" aria-label="Voltar">
+                <button className="icon-btn nav-arrow" onClick={() => setView('inicio')} aria-label="Voltar">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M15 18l-6-6 6-6" /></svg>
                 </button>
                 <button className="icon-btn nav-arrow" aria-label="Avançar">
@@ -1515,7 +1836,11 @@ setInstallEvt(null)
                 }
                 const lastAchId = achSeen[achSeen.length - 1]
                 const lastAch = lastAchId
-                  ? getAchievements(library, petStats?.touches || 0).find((a) => a.id === lastAchId)
+                  ? getAchievements(library, petStats?.touches || 0, {
+                    buys: Number(petStats?.buys) || 0,
+                    toys: toys.length,
+                    baths: Object.values(bath).filter((n) => Number(n) > 0).length,
+                  }).find((a) => a.id === lastAchId)
                   : null
                 if (lastAch) {
                   items.push({
@@ -1614,6 +1939,7 @@ setInstallEvt(null)
               greetMs={!loadingLib && library.length === 0 ? 0 : 4800}
               stats={petStats}
               onShowProfile={() => setView('perfil')}
+              onOpenHabitat={() => setView('habitat')}
               playing={!!playing}
               eqEnabled={eq.settings.enabled}
               eqPreset={eq.settings.preset}
@@ -1877,6 +2203,35 @@ onPetAction={handlePetAction}
             )}
           </section>
         )}
+      {view === 'habitat' && (
+          <Suspense fallback={<TelaCarregando />}>
+            <PetHabitatView
+            onBack={() => setView('inicio')}
+            stats={petStats}
+            inv={inv}
+            toys={toys}
+            bath={bath}
+            onFoodEaten={onFoodEaten}
+            onBathUsed={onBathUsed}
+            onMinigame={onMinigame}
+            onOpenShop={() => setShopOpen(true)}
+            playing={!!playing}
+            eqEnabled={eq.settings.enabled}
+            eqPreset={eq.settings.preset}
+            favPing={favPing}
+            shuffle={shuffle}
+            trackId={track?.id || null}
+            sleepMode={sleepMode}
+            sleepRemaining={sleepRemaining}
+            soundOn={appSettings.petSound !== false}
+            cheer={cheer}
+            idleSinceRef={idleSinceRef}
+            onPetAction={handlePetAction}
+            mood={mood}
+            userName={appSettings.userName}
+          />
+          </Suspense>
+        )}
       {view === 'perfil' && (
           <Suspense fallback={<TelaCarregando />}>
             <Profile settings={appSettings} api={settingsApi} library={library} onPlay={playById} petStats={petStats} />
@@ -2062,6 +2417,65 @@ onPetAction={handlePetAction}
       />
 
       {changelogOpen && <ChangelogModal onClose={() => setChangelogOpen(false)} />}
+
+      {shopOpen && (
+        <div className="modal-overlay" onClick={() => setShopOpen(false)}>
+          <div className="modal shop-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="shop-head">
+              <h3 className="modal-title">🛍️ Lojinha</h3>
+              <span className="shop-balance-value">{shopCoins} 🪙</span>
+            </div>
+
+            <div className="shop-tabs" role="tablist">
+              {SHOP_TABS.map((t) => (
+                <button
+                  key={t.id}
+                  role="tab"
+                  aria-selected={shopTab === t.id}
+                  className={`shop-tab${shopTab === t.id ? ' is-active' : ''}`}
+                  onClick={() => setShopTab(t.id)}
+                >
+                  <span className="shop-tab-icon">{t.icon}</span>
+                  <span className="shop-tab-label">{t.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="shop-body">
+              {dailyCat === shopTab && (
+                <div className="shop-offer">
+                  <span className="shop-offer-tag">⚡ Oferta do dia</span>
+                  {shopItemCard(dailyOffer, {
+                    offer: true,
+                    qty: dailyOffer.kind === 'food' ? inv[dailyOffer.key] || 0 : 0,
+                    uses: dailyOffer.kind === 'bath' ? bath[dailyOffer.key] || 0 : 0,
+                    owned:
+                      (dailyOffer.kind === 'toy' && toys.includes(dailyOffer.key)) ||
+                      (dailyOffer.kind === 'bath' && (bath[dailyOffer.key] || 0) > 0),
+                  })}
+                </div>
+              )}
+              <div className="shop-grid">
+                {(SHOP_BY_TAB[shopTab] || []).map((it) =>
+                  shopItemCard(it, {
+                    qty: it.kind === 'food' ? inv[it.key] || 0 : 0,
+                    uses: it.kind === 'bath' ? bath[it.key] || 0 : 0,
+                    owned:
+                      (it.kind === 'toy' && toys.includes(it.key)) ||
+                      (it.kind === 'bath' && (bath[it.key] || 0) > 0),
+                  }),
+                )}
+              </div>
+            </div>
+
+            <div className="modal-actions shop-foot">
+              <button className="btn-ghost" onClick={() => setShopOpen(false)}>
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {playlistPickerTrack && (
         <PlaylistPicker
