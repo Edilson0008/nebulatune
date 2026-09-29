@@ -2180,6 +2180,8 @@ button {
   z-index: 200;
   width: 212px;
   min-width: 212px;
+  max-height: calc(100dvh - 12px);
+  overflow-y: auto;
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -2226,6 +2228,33 @@ button {
 
 .row-menu button.danger:hover {
   background: rgba(248, 113, 113, 0.12);
+}
+
+.row-menu button.row-menu-title {
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.row-menu button.row-menu-sub .row-menu-sub-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.row-menu button.row-menu-sub .row-menu-label {
+  font-weight: 500;
+  font-size: 13px;
+  white-space: normal;
+}
+
+.row-menu button.row-menu-sub .row-menu-desc {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-3);
+  white-space: normal;
 }
 
 .modal-overlay {

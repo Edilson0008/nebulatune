@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://edilson0008.github.io/nebulatune/sitemap.xml

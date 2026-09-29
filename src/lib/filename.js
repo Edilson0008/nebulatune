@@ -41,3 +41,11 @@ export function extFromType(type) {
   if (t.includes('mpeg')) return 'mp3'
   return 'mp3'
 }
+
+export function extFromImageType(type) {
+  const t = (type || '').split(';')[0].toLowerCase()
+  if (t.includes('png')) return 'png'
+  if (t.includes('webp')) return 'webp'
+  if (t.includes('gif')) return 'gif'
+  return 'jpg'
+}

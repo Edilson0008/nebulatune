@@ -29,12 +29,13 @@ import { useOnlinePlayer } from './hooks/use-online-player.js'
 import { usePlayer } from './hooks/use-player.js'
 import { fetchItunesCover, makeThumb } from './lib/cover.js'
 import { IS_NATIVE } from './lib/env.js'
-import { AUDIO_RE, IMAGE_RE, baseName, cleanArtist, cleanTitle, extFromType, parseFileName } from './lib/filename.js'
+import { AUDIO_RE, IMAGE_RE, baseName, cleanArtist, cleanTitle, extFromImageType, extFromType, parseFileName } from './lib/filename.js'
 import { fmtBytes, formatTime, hashStr } from './lib/format.js'
 import { LYRICS_CACHE_MAX, buildLyrics, fetchLyrics, searchLyrics } from './lib/lyrics.js'
 import { BATH_CATALOG, FOOD_CATALOG, PET_GREETINGS, START_INVENTORY, TOY_CATALOG, greetingForHour, random } from './lib/pet.js'
 import { setMusicPlaying, sfxCoin, sfxSpawn } from './lib/sfx.js'
-import { shareBlobNative } from './lib/share.js'
+import { shareBlobNative, shareFilesNative } from './lib/share.js'
+import { makeShareCard } from './lib/share-card.js'
 import { sleepNativeCancel, sleepNativeStart } from './lib/sleep-native.js'
 import { getAchievements } from './lib/stats.js'
 
@@ -1338,27 +1339,31 @@ setInstallEvt(null)
     [queueAdd, showToast],
   )
 
-  const shareTrack = useCallback(
+const shareTrack = useCallback(
     async (t) => {
-      const text = `${t.title} — ${t.artist}${t.album ? ` (${t.album})` : ''}`
-      const title = `${t.title} — ${t.artist}`
       try {
+        const text = `${t.title} — ${t.artist}${t.album ? ` (${t.album})` : ''}`
+        const title = `${t.title} — ${t.artist}`
+        const files = []
         if (t.audioBlob) {
-          const fileName = `${t.title} - ${t.artist}.${extFromType(t.audioBlob.type)}`
-          if (IS_NATIVE) {
-            await shareBlobNative(t.audioBlob, fileName, {
-              title,
-              text,
-              dialogTitle: 'Compartilhar música',
-            })
+          files.push({ blob: t.audioBlob, name: `${t.title} - ${t.artist}.${extFromType(t.audioBlob.type)}` })
+        }
+        if (t.coverBlob) {
+          files.push({ blob: t.coverBlob, name: `${t.title} - ${t.artist}.${extFromImageType(t.coverBlob.type)}` })
+        }
+        if (IS_NATIVE && files.length) {
+          const done = await shareFilesNative(files, {
+            title,
+            text,
+            dialogTitle: 'Compartilhar música',
+          })
+          if (done) return
+        }
+        if (!IS_NATIVE && files.length && navigator.share && navigator.canShare) {
+          const webFiles = files.map((f) => new File([f.blob], f.name, { type: f.blob.type }))
+          if (navigator.canShare({ files: webFiles })) {
+            await navigator.share({ files: webFiles, title, text })
             return
-          }
-          if (navigator.share && navigator.canShare) {
-            const file = new File([t.audioBlob], fileName, { type: t.audioBlob.type })
-            if (navigator.canShare({ files: [file] })) {
-              await navigator.share({ files: [file], title, text })
-              return
-            }
           }
         }
         const data = { title, text }
@@ -1371,6 +1376,43 @@ setInstallEvt(null)
           await navigator.clipboard.writeText(url ? `${text}\n${url}` : text)
           showToast('Copiado!')
         }
+      } catch {
+        /* usuário cancelou ou compartilhamento indisponível */
+      }
+    },
+    [showToast],
+  )
+
+  const shareTrackCard = useCallback(
+    async (t) => {
+      try {
+        const text = `${t.title} — ${t.artist}${t.album ? ` (${t.album})` : ''}`
+        const card = await makeShareCard(t)
+        if (!card) {
+          showToast('Não deu pra criar o cartão')
+          return
+        }
+        if (IS_NATIVE) {
+          const done = await shareFilesNative([card], {
+            title: text,
+            text,
+            dialogTitle: 'Cartão da música',
+          })
+          if (done) return
+        }
+        if (!IS_NATIVE && navigator.share && navigator.canShare) {
+          const file = new File([card.blob], card.name, { type: card.blob.type })
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: text, text })
+            return
+          }
+        }
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(`${text} — cartão gerado no NebulaTune`)
+          showToast('Copiado!')
+          return
+        }
+        showToast('Não deu pra compartilhar aqui')
       } catch {
         /* usuário cancelou ou compartilhamento indisponível */
       }
@@ -1929,7 +1971,7 @@ setInstallEvt(null)
               <>
                 <h2 className="section-title">Resultados</h2>
                 {results.length ? (
-                  <TrackList tracks={results} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onOpenSource={openExternal} onAddToPlaylist={setPlaylistPickerTrack} />
+                  <TrackList tracks={results} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onShareCard={shareTrackCard} onOpenSource={openExternal} onAddToPlaylist={setPlaylistPickerTrack} />
                 ) : (
                   <p className="empty">Nenhuma música encontrada para “{query}”.</p>
                 )}
@@ -1992,7 +2034,7 @@ onPetAction={handlePetAction}
 
                 <div className="section">
                   <h2 className="section-title">Todas as músicas</h2>
-<TrackList tracks={library} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onOpenSource={openExternal} onAddToPlaylist={setPlaylistPickerTrack} />
+<TrackList tracks={library} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onShareCard={shareTrackCard} onOpenSource={openExternal} onAddToPlaylist={setPlaylistPickerTrack} />
                 </div>
               </>
             )}
@@ -2056,7 +2098,7 @@ onPetAction={handlePetAction}
                         onQueueAdd={queueAddLocal}
                         onSearchOnline={searchTrackOnline}
                         onEdit={setEditingTrack}
-                        onShare={shareTrack}
+                        onShare={shareTrack} onShareCard={shareTrackCard}
                         onOpenSource={openExternal}
                       />
                     )}
@@ -2152,7 +2194,7 @@ onPetAction={handlePetAction}
                     </button>
                   </div>
                 ) : (
-                  <TrackList tracks={library} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onOpenSource={openExternal} onAddToPlaylist={setPlaylistPickerTrack} />
+                  <TrackList tracks={library} currentId={track?.id} onSelect={playById} onRemove={removeTrack} onToggleFavorite={toggleFavorite} onQueueNext={queueNextLocal} onQueueAdd={queueAddLocal} onSearchOnline={searchTrackOnline} onEdit={setEditingTrack} onShare={shareTrack} onShareCard={shareTrackCard} onOpenSource={openExternal} onAddToPlaylist={setPlaylistPickerTrack} />
                 )}
               </>
             )}
@@ -2198,7 +2240,7 @@ onPetAction={handlePetAction}
                 onQueueAdd={queueAddLocal}
                 onSearchOnline={searchTrackOnline}
                 onEdit={setEditingTrack}
-                onShare={shareTrack}
+                onShare={shareTrack} onShareCard={shareTrackCard}
                 onOpenSource={openExternal}
                 onAddToPlaylist={setPlaylistPickerTrack}
               />

@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Cover } from './Cover.jsx'
 import { formatTime } from '../lib/format.js'
@@ -14,37 +14,64 @@ export const TrackList = memo(function TrackList({
   onSearchOnline,
   onEdit,
   onShare,
+  onShareCard,
   onOpenSource,
   onAddToPlaylist,
 }) {
   const [openMenu, setOpenMenu] = useState(null)
+  const [shareOpen, setShareOpen] = useState(false)
   const [menuPos, setMenuPos] = useState(null)
   const menuRef = useRef(null)
 
   useEffect(() => {
     if (!openMenu) return undefined
     const onDown = (e) => {
-      if (!menuRef.current?.contains(e.target)) setOpenMenu(null)
+      if (!menuRef.current?.contains(e.target)) {
+        setOpenMenu(null)
+        setShareOpen(false)
+      }
     }
     document.addEventListener('pointerdown', onDown)
     return () => document.removeEventListener('pointerdown', onDown)
   }, [openMenu])
 
-  const closeMenu = () => setOpenMenu(null)
+  // Posiciona o menu DENTRO da tela: mede o próprio tamanho, escolhe abrir
+  // pra cima ou pra baixo e nunca deixa a borda passar do limite.
+  useLayoutEffect(() => {
+    if (!openMenu || !menuPos) return
+    const el = menuRef.current
+    if (!el) return
+    const vw = window.innerWidth || 0
+    const vh = window.innerHeight || 0
+    const mw = el.offsetWidth
+    const mh = el.offsetHeight
+    const anchorTop = menuPos.anchorTop
+    const anchorBottom = menuPos.anchorBottom
+    const left = Math.max(8, Math.min(menuPos.left, vw - mw - 8))
+    const fitsDown = anchorBottom + 4 + mh <= vh - 8
+    const fitsUp = anchorTop - 4 - mh >= 8
+    const up = fitsDown ? false : (fitsUp ? true : anchorBottom + 4 + mh > vh - 8)
+    const top = up ? Math.max(8, anchorTop - 4 - mh) : Math.min(vh - mh - 8, anchorBottom + 4)
+    el.style.left = `${left}px`
+    el.style.top = `${top}px`
+    el.classList.remove('up')
+  }, [openMenu, menuPos, shareOpen])
+
+  const closeMenu = () => {
+    setOpenMenu(null)
+    setShareOpen(false)
+  }
   const toggleMenu = (t, e) => {
     if (openMenu === t) {
-      setOpenMenu(null)
+      closeMenu()
       return
     }
     const r = e?.currentTarget?.getBoundingClientRect()
     if (r) {
-      const vw = window.innerWidth || 0
-      const vh = window.innerHeight || 0
-      const up = r.bottom + 4 + 300 > vh
       setMenuPos({
-        left: Math.max(8, Math.min(r.right - 4, vw - 230)),
-        top: up ? Math.max(8, r.top - 4) : r.bottom + 4,
-        up,
+        anchorTop: r.top,
+        anchorBottom: r.bottom,
+        left: r.right - 4,
       })
     } else {
       setMenuPos(null)
@@ -150,24 +177,77 @@ export const TrackList = memo(function TrackList({
             menuPos &&
             createPortal(
               <div
-                className={`row-menu ${menuPos.up ? 'up' : ''}`}
-                style={{ left: menuPos.left, top: menuPos.top }}
+                className="row-menu"
+                style={{ left: menuPos.left, top: (menuPos.anchorBottom || 0) + 4 }}
                 ref={menuRef}
               >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  closeMenu()
-                  onShare?.(t)
-                }}
-              >
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
-                  <path d="m16 6-4-4-4 4" />
-                  <path d="M12 2v13" />
-                </svg>
-                Compartilhar
-              </button>
+              {!shareOpen && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShareOpen(true)
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
+                    <path d="m16 6-4-4-4 4" />
+                    <path d="M12 2v13" />
+                  </svg>
+                  Compartilhar
+                </button>
+              )}
+              {shareOpen && (
+                <>
+                  <button
+                    className="row-menu-title row-menu-back"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShareOpen(false)
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M19 12H5" />
+                      <path d="m12 19-7-7 7-7" />
+                    </svg>
+                    Voltar
+                  </button>
+                  <button
+                    className="row-menu-sub"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      closeMenu()
+                      onShare?.(t)
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                    <span className="row-menu-sub-text">
+                      <span className="row-menu-label">Enviar a música</span>
+                      <span className="row-menu-desc">arquivo com a capa junto</span>
+                    </span>
+                  </button>
+                  <button
+                    className="row-menu-sub"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      closeMenu()
+                      onShareCard?.(t)
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 5h18v14H3z" />
+                      <path d="M3 9h18M8 13h6" />
+                    </svg>
+                    <span className="row-menu-sub-text">
+                      <span className="row-menu-label">Enviar cartão</span>
+                      <span className="row-menu-desc">imagem com a capa e o nome</span>
+                    </span>
+                  </button>
+                </>
+              )}
+              {!shareOpen && (
+              <>
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -266,6 +346,8 @@ export const TrackList = memo(function TrackList({
                   </svg>
                   Remover da biblioteca
                 </button>
+              )}
+              </>
               )}
               </div>,
               document.body,
