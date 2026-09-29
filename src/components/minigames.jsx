@@ -1207,7 +1207,7 @@ function EspinhosGame({ onDone, sfx, pausado = false }) {
       setTimeout(() => finish(total, true), 420)
       return
     }
-    mostrar(`rodada ${rodada + 1} completa! 🌵`, 'espinhos mais rápidos ⚡')
+    mostrar(`rodada ${rodada + 1} completa!`, 'espinhos mais rápidos ⚡')
     const b = tabuleiro.box.current
     proxSpawnX.current = b.hw + Math.max(0, b.w - b.hw * 2) + 20
     setN(0)
@@ -1239,7 +1239,7 @@ function EspinhosGame({ onDone, sfx, pausado = false }) {
   return (
     <div className="mg-board" ref={tabuleiro.ref} onPointerDown={pular}>
       <span className="mg-hint">
-        rodada <b>{rodada + 1}/{RODADAS_ESPINHOS.length}</b> · desviou {n}/{cfg.alvo} 🌵
+        rodada <b>{rodada + 1}/{RODADAS_ESPINHOS.length}</b> · desviou {n}/{cfg.alvo} cactos
       </span>
       <span className="mg-dots mg-dots-round">
         {RODADAS_ESPINHOS.map((r, i) => (
@@ -1259,10 +1259,21 @@ function EspinhosGame({ onDone, sfx, pausado = false }) {
         <span
           key={ob.id}
           className="mg-espinho"
-          style={{ width: ob.largura, fontSize: Math.round(ob.largura * 1.35), left: 0, top: 0 }}
+          style={{ width: ob.largura, left: 0, top: 0 }}
           data-id={ob.id}
           ref={setObEl}
-        >🌵</span>
+        >
+          <svg viewBox="0 0 56 78" aria-hidden="true">
+            <g stroke="#14532d" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="34" width="12" height="24" rx="6" fill="#16a34a" />
+              <rect x="40" y="26" width="12" height="20" rx="6" fill="#16a34a" />
+              <rect x="13" y="6" width="30" height="60" rx="15" fill="#22c55e" />
+            </g>
+            <circle cx="24" cy="32" r="2.2" fill="#14532d" />
+            <circle cx="32" cy="32" r="2.2" fill="#14532d" />
+            <path d="M20 5v5M28 3v6M36 5v5" stroke="#14532d" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          </svg>
+        </span>
       ))}
       <Faixa f={faixa} />
       <Fx fx={fx} />
@@ -1583,7 +1594,7 @@ const MINIGAMES = [
     ],
   },
   {
-    id: 'espinhos', name: 'Pule os Espinhos', icon: '🌵', tone: '#4ade80',
+    id: 'espinhos', name: 'Pule os Espinhos', icon: '▲', tone: '#4ade80',
     desc: '3 rodadas, espinhos mais velozes e mais largos',
     semTempo: true,
     objetivo: 'Desviar dos espinhos', rodadas: 3, tempo: 24, max: 24, recompensa: 40, Play: EspinhosGame,

@@ -9438,6 +9438,11 @@ button.pet-pill {
   background: rgba(74,222,128,0.5); box-shadow: 0 0 10px rgba(74,222,128,0.6);
 }
 
+.mg-espinho svg {
+  display: block; width: 100%; height: auto;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45));
+}
+
 .mg-corte { touch-action: none; user-select: none; cursor: crosshair; }
 .mg-slash {
   position: absolute; left: 0; top: 0; z-index: 6; height: 5px; width: 0;
