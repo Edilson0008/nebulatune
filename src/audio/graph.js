@@ -145,17 +145,24 @@ export function applySettings(s = {}) {
 }
 
 function ensureDepthChain() {
-  if (panner || !master || !comp) return
   const c = getContext()
-  panner = c.createPanner()
-  panner.panningModel = 'HRTF'
-  panner.distanceModel = 'inverse'
-  panner.refDistance = 1
-  panner.rolloffFactor = 0.05
-  panner.maxDistance = 10000
-  master.disconnect(comp)
-  master.connect(panner)
-  panner.connect(comp)
+  if (panner || !master || !comp || !c || typeof c.createPanner !== 'function') return
+  // panningModel 'HRTF' trava (tela preta/crash) em vários WebViews do Android.
+  // 'equalpower' gira igual (3D/8D continuam funcionando) e roda em qualquer aparelho.
+  try {
+    panner = c.createPanner()
+    panner.panningModel = 'equalpower'
+    panner.distanceModel = 'inverse'
+    panner.refDistance = 1
+    panner.rolloffFactor = 0.05
+    panner.maxDistance = 10000
+    master.disconnect(comp)
+    master.connect(panner)
+    panner.connect(comp)
+  } catch {
+    panner = null
+    try { master.connect(comp) } catch { /* já está ligado */ }
+  }
 }
 
 function spinFrame(ts) {
@@ -168,34 +175,39 @@ function spinFrame(ts) {
   const speed = depthMode === '8d' ? 1.6 : 0.55
   const radius = depthMode === '8d' ? 2.4 : 1.8
   const ang = t * speed
-  panner.positionX.value = radius * Math.cos(ang)
-  panner.positionY.value = depthMode === '3d' ? 0.5 * Math.sin(ang * 0.5) : 0
-  panner.positionZ.value = radius * Math.sin(ang)
+  try {
+    panner.positionX.value = radius * Math.cos(ang)
+    panner.positionY.value = depthMode === '3d' ? 0.5 * Math.sin(ang * 0.5) : 0
+    panner.positionZ.value = radius * Math.sin(ang)
+  } catch { depthRaf = 0; return }
   depthRaf = requestAnimationFrame(spinFrame)
 }
 
 export function setDepth(mode = '') {
-  depthMode = mode === '3d' || mode === '8d' ? mode : ''
-  if (depthMode) {
-    ensureDepthChain()
-    if (panner && ctx) {
+  const wants = mode === '3d' || mode === '8d'
+  depthMode = wants ? mode : ''
+  try {
+    if (wants) {
+      ensureDepthChain()
+      if (panner && ctx) {
+        const t = ctx.currentTime
+        panner.positionX.setTargetAtTime(0, t, 0.05)
+        panner.positionY.setTargetAtTime(0, t, 0.05)
+        panner.positionZ.setTargetAtTime(0, t, 0.05)
+      }
+      spinStart = performance.now()
+      if (!depthRaf) depthRaf = requestAnimationFrame(spinFrame)
+    } else if (panner && ctx) {
       const t = ctx.currentTime
       panner.positionX.setTargetAtTime(0, t, 0.05)
       panner.positionY.setTargetAtTime(0, t, 0.05)
       panner.positionZ.setTargetAtTime(0, t, 0.05)
+      if (depthRaf) {
+        cancelAnimationFrame(depthRaf)
+        depthRaf = 0
+      }
     }
-    spinStart = performance.now()
-    if (!depthRaf) depthRaf = requestAnimationFrame(spinFrame)
-  } else if (panner && ctx) {
-    const t = ctx.currentTime
-    panner.positionX.setTargetAtTime(0, t, 0.05)
-    panner.positionY.setTargetAtTime(0, t, 0.05)
-    panner.positionZ.setTargetAtTime(0, t, 0.05)
-    if (depthRaf) {
-      cancelAnimationFrame(depthRaf)
-      depthRaf = 0
-    }
-  }
+  } catch { /* nunca derruba o app */ }
 }
 
 export function getDepth() {
