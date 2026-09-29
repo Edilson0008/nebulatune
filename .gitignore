@@ -14,3 +14,6 @@ android/app/src/main/assets/capacitor.plugins.json
 android/keystore/
 *.jks
 *.keystore
+
+# backups locais
+nebulatune-projeto*.zip

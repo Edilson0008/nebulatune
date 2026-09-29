@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '3.0.1',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'A barra de baixo (Início, Biblioteca...) não cobre mais os botões do habitat do gatinho: ela some enquanto o habitat está aberto.' },
+      { type: 'correcao', text: 'Os cactos do minigame "Pule os Espinhos" agora aparecem de verdade: antes ficavam invisíveis em alguns aparelhos.' },
+      { type: 'correcao', text: 'Som 3D/8D corrigido — não causa mais tela preta ao ligar.' },
+    ],
+  },
+  {
     version: '3.0.0',
     date: 'Setembro de 2026',
     items: [
