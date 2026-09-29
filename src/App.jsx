@@ -1869,25 +1869,27 @@ setInstallEvt(null)
           )}
         </header>
 
-        <div className={`mobile-tabs ${IS_NATIVE ? 'app-bottom-nav' : ''}`}>
-          {[
-            ['inicio', 'Início', 'home'],
-            ['online', 'Online', 'online'],
-            ['favoritas', 'Favoritas', 'heart'],
-            ['biblioteca', 'Biblioteca', 'library'],
-            ['equalizador', 'EQ', 'eq'],
-            ['configuracoes', 'Ajustes', 'gear'],
-          ].map(([id, label, icon]) => (
-            <button
-              key={id}
-              className={`mobile-tab ${view === id ? 'active' : ''}`}
-              onClick={() => setView(id)}
-            >
-              {IS_NATIVE && <NavIcon name={icon} />}
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
+        {view !== 'habitat' && (
+          <div className={`mobile-tabs ${IS_NATIVE ? 'app-bottom-nav' : ''}`}>
+            {[
+              ['inicio', 'Início', 'home'],
+              ['online', 'Online', 'online'],
+              ['favoritas', 'Favoritas', 'heart'],
+              ['biblioteca', 'Biblioteca', 'library'],
+              ['equalizador', 'EQ', 'eq'],
+              ['configuracoes', 'Ajustes', 'gear'],
+            ].map(([id, label, icon]) => (
+              <button
+                key={id}
+                className={`mobile-tab ${view === id ? 'active' : ''}`}
+                onClick={() => setView(id)}
+              >
+                {IS_NATIVE && <NavIcon name={icon} />}
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {view === 'inicio' && (
           <section className="view">
