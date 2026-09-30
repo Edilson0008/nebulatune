@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '3.1.3',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'correcao', text: 'Os cactos do minigame "Pule os Espinhos" aparecem de verdade agora. O problema era de posicionamento (o espinho ficava invisível, mas a colisão continuava ativa), não do desenho.' },
+    ],
+  },
+  {
     version: '3.1.2',
     date: 'Setembro de 2026',
     items: [

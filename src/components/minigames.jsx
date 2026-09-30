@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { readLocal, writeLocal } from '../localstore'
 import { setSfxEnabled, sfxBounce, sfxCoin, sfxHeart, sfxNota, sfxPop, sfxWeak } from '../lib/sfx.js'
+import { novoEspinhoId } from '../lib/espinho-id.js'
 
 const rnd = (a, b) => a + Math.random() * (b - a)
 const clamp01 = (v) => Math.max(0, Math.min(1, v))
@@ -1046,7 +1047,11 @@ function EspinhosGame({ onDone, sfx, pausado = false }) {
   const obsEls = useRef(new Map()) // id -> elemento
   const setObEl = useCallback((el) => {
     if (!el) return
-    const id = Number(el.dataset.id)
+    // O id do espinho é uma STRING (Math.random().toString(36)); os outros
+    // minijogos usam número, por isso o `Number()` aqui fazia o mapa de
+    // elementos virar NaN e o espinho nunca era posicionado nem movido
+    // (ficava invisível, mas a colisão continuava ativa).
+    const id = el.dataset.id
     obsEls.current.set(id, el)
     const pr = obsPos.current.get(id)
     if (pr) el.style.transform = `translate(-50%, -50%) translate(${pr.x.toFixed(1)}px, ${soloY.current.toFixed(1)}px)`
@@ -1142,7 +1147,7 @@ function EspinhosGame({ onDone, sfx, pausado = false }) {
         let maisD = -1e9
         obsPos.current.forEach((po) => { if (po.x > maisD) maisD = po.x })
         if (maisD <= proxSpawnX.current) {
-          const id = Math.random().toString(36).slice(2)
+          const id = novoEspinhoId()
           obsPos.current.set(id, { x: right + 40 })
           setObs((l) => [...l, { id, largura: cfg.largura }])
           proxSpawnX.current = right + 40 - sorteiaEspaco(cfg)
