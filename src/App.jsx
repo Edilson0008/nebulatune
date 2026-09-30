@@ -38,6 +38,9 @@ import { shareBlobNative, shareFilesNative } from './lib/share.js'
 import { makeShareCard } from './lib/share-card.js'
 import { sleepNativeCancel, sleepNativeStart } from './lib/sleep-native.js'
 import { getAchievements } from './lib/stats.js'
+import { getRecovery, onAccount, restoreSession, getSession } from './lib/account.js'
+import { ensureSids, idsToSids } from './lib/sid.js'
+import { applyExtras, applyLibrary, applyPlaylists, collectLocal, mergeAll, mergeCounters, mergeStrings, syncNow, takePendingSync, watchCloud } from './lib/sync.js'
 
 /* Telas que o usuário quase sempre NÃO abre na primeira visita: entram no
    pacote só na hora de abrir. Deixa a abertura do app mais leve em aparelhos
@@ -53,6 +56,9 @@ const SettingsView = lazy(() =>
 )
 const PetHabitatView = lazy(() =>
   import('./components/pet-habitat-view.jsx').then((m) => ({ default: m.PetHabitatView })),
+)
+const AccountModal = lazy(() =>
+  import('./components/account-modal.jsx').then((m) => ({ default: m.AccountModal })),
 )
 
 const SHOP_TABS = [
@@ -110,6 +116,8 @@ function App() {
   const [library, setLibrary] = useState([])
   const [loadingLib, setLoadingLib] = useState(false)
   const [libraryHydrated, setLibraryHydrated] = useState(false)
+  const [account, setAccount] = useState(() => getSession())
+  const [accountOpen, setAccountOpen] = useState(false)
   const [cacheCleanMsg, setCacheCleanMsg] = useState('')
   const [freeSpaceMsg, setFreeSpaceMsg] = useState('')
   const [view, setView] = useState('inicio')
@@ -278,7 +286,7 @@ function App() {
     setPetGreet(nextPetGreet(appSettings.userName || '', library.length === 0 && !loadingLib))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, loadingLib, library.length, appSettings.userName])
-  const { petStats, bumpPet, settlePet, restorePetStats } = usePetStats()
+  const { petStats, bumpPet, settlePet, applyPetStats, restorePetStats } = usePetStats()
 
   // Permissão de notificação (uma vez só): o gatinho precisa dela pra chamar de volta
   useEffect(() => {
@@ -430,6 +438,18 @@ function App() {
     libraryRef.current = library
   }, [library])
 
+  // Conta opcional: acompanha login/logout em tempo real (AccountModal emite).
+  useEffect(() => {
+    const off = onAccount((s) => {
+      setAccount(s)
+      // Veio pelo link do e-mail de recuperação: abre a tela de nova senha.
+      if (getRecovery()) setAccountOpen(true)
+    })
+    restoreSession()
+    if (getRecovery()) setAccountOpen(true)
+    return off
+  }, [])
+
   // Hidrata a biblioteca 100% local: metadados do localStorage + áudio/capa do
   // IndexedDB. O app abre direto na tela principal, sem login.
   useEffect(() => {
@@ -473,7 +493,7 @@ function App() {
         }
       }
       if (!alive) return
-      setLibrary(hydrated)
+      setLibrary(ensureSids(hydrated))
       setLibraryHydrated(true)
       finish()
     })()
@@ -495,6 +515,7 @@ function App() {
         .filter((x) => x && x.id)
         .map((x) => ({
           id: x.id,
+          sid: x.sid || '',
           title: x.title || '',
           artist: x.artist || '',
           album: x.album || '',
@@ -521,6 +542,22 @@ function App() {
     }, 600)
     return () => clearTimeout(t)
   }, [library, libraryHydrated])
+
+  // Migração única: recentes antigos (ids aleatórios) → sids estáveis.
+  useEffect(() => {
+    if (!libraryHydrated) return undefined
+    if (!library.length || readLocal('nt.sidMigrated')) return undefined
+    const idToSid = {}
+    for (const t of libraryRef.current) if (t && t.sid) idToSid[t.id] = t.sid
+    const recent = readLocal('nt.playedRecent')
+    if (Array.isArray(recent) && recent.length) {
+      const next = idsToSids(recent, idToSid)
+      writeLocal('nt.playedRecent', next)
+      setPlayedRecent(next)
+    }
+    writeLocal('nt.sidMigrated', true)
+    return undefined
+  }, [libraryHydrated, library.length])
 
   useEffect(() => {
     const mark = () => {
@@ -682,8 +719,120 @@ function App() {
 
   const pushPlayedRecent = useCallback((id) => {
     if (!id) return
-    setPlayedRecent((prev) => [id, ...prev.filter((x) => x !== id)].slice(0, 10))
+    const t = (libraryRef.current || []).find((x) => x.id === id)
+    const key = t && t.sid ? t.sid : id
+    setPlayedRecent((prev) => [key, ...prev.filter((x) => x !== key)].slice(0, 10))
   }, [])
+
+  // Aplica um merge sincronizado no estado do app. Uniões são idempotentes, e
+  // a biblioteca local mantém a própria ordem (as novidades entram no fim).
+  const syncApply = useCallback(
+    (merged) => {
+      if (!merged || typeof merged !== 'object') return
+      if (merged.settings) settingsApi.setAll(merged.settings)
+      if (merged.petstats) applyPetStats(merged.petstats)
+      if (merged.inv) setInv((cur) => mergeCounters(cur, merged.inv))
+      if (merged.toys) setToys((cur) => mergeStrings(cur, merged.toys))
+      if (merged.bath) setBath((cur) => mergeCounters(cur, merged.bath))
+      if (merged.achSeen) setAchSeen((cur) => mergeStrings(cur, merged.achSeen))
+      if (merged.playlists) setPlaylists((cur) => applyPlaylists(cur, merged.playlists))
+      if (merged.playedRecent) {
+        setPlayedRecent((cur) => mergeStrings(cur, merged.playedRecent).slice(0, 10))
+      }
+      if (merged.library) setLibrary((cur) => applyLibrary(cur, merged.library))
+      // Recordes dos minijogos, diário, equalizador... ficam guardados direto no
+      // storage e aparecem na hora em que cada tela for aberta.
+      if (merged.extras) applyExtras(merged.extras)
+    },
+    [settingsApi, applyPetStats],
+  )
+
+  // Aplica no estado qualquer sync pendente (resultado salvo por syncNow).
+  useEffect(() => {
+    if (!libraryHydrated) return undefined
+    const pending = takePendingSync()
+    if (pending) syncApply(pending.merged)
+    return undefined
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [libraryHydrated])
+
+  // Ao entrar (ou ao abrir o app já logado), sincroniza uma vez.
+  const accountUserId = account && account.user ? account.user.id : null
+  useEffect(() => {
+    if (!accountUserId || !libraryHydrated) return undefined
+    let alive = true
+    const timer = setTimeout(() => {
+      syncNow()
+        .then((res) => {
+          if (!alive || !res.ok || !res.result) return
+          syncApply(res.result.merged)
+        })
+        .catch(() => {})
+    }, 500)
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
+  }, [accountUserId, libraryHydrated, syncApply])
+
+  // Tempo real: com a conta conectada, o que o outro aparelho salva chega aqui
+  // sozinho — sem apertar o botão.
+  useEffect(() => {
+    if (!accountUserId) return undefined
+    const stop = watchCloud((dados) => {
+      if (!dados) return
+      syncApply(mergeAll(collectLocal(), dados))
+    })
+    return stop
+  }, [accountUserId, syncApply])
+
+  // Sobe as mudanças para a nuvem sem travar o app: qualquer alteração (favorita,
+  // play, gatinho, moedas) agenda uma sincronização; ao voltar para o app também.
+  const syncDirtyRef = useRef(false)
+  const syncAgendarRef = useRef(null)
+  useEffect(() => {
+    if (!accountUserId) return
+    syncDirtyRef.current = true
+    // Chamado pelo efeito acima logo depois: agenda o envio rápido.
+    if (syncAgendarRef.current) syncAgendarRef.current()
+  }, [library, playlists, playedRecent, inv, toys, bath, achSeen, petStats, appSettings, accountUserId])
+
+  useEffect(() => {
+    if (!accountUserId) return undefined
+    let alive = true
+    const run = () => {
+      if (!alive || !syncDirtyRef.current) return
+      syncDirtyRef.current = false
+      syncNow()
+        .then((res) => {
+          if (!alive || !res.ok || !res.result) return
+          syncApply(res.result.merged)
+        })
+        .catch(() => {
+          syncDirtyRef.current = true
+        })
+    }
+    // Assim que a pessoa muda alguma coisa, sobe em ~2 s: é o que faz o outro
+    // aparelho receber rápido. O intervalo maior é só a rede de segurança.
+    let rapido = null
+    const agendar = () => {
+      if (rapido) clearTimeout(rapido)
+      rapido = setTimeout(run, 2000)
+    }
+    const timer = setInterval(run, 45000)
+    syncAgendarRef.current = agendar
+    const onVis = () => {
+      if (document.visibilityState === 'visible') run()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      alive = false
+      clearInterval(timer)
+      if (rapido) clearTimeout(rapido)
+      syncAgendarRef.current = null
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [accountUserId, syncApply])
 
   const [deviceMusic, setDeviceMusic] = useState(null)
   const [deviceImportOpen, setDeviceImportOpen] = useState(false)
@@ -743,7 +892,13 @@ function App() {
   const displayToggle = onlineActive ? toggleOnline : toggle
   const displaySeek = onlineActive ? seekOnline : seek
   const recentRow = useMemo(
-    () => playedRecent.map((id) => library.find((t) => t.id === id)).filter(Boolean),
+    () =>
+      playedRecent
+        .map(
+          (key) =>
+            library.find((t) => t.sid && t.sid === key) || library.find((t) => t.id === key),
+        )
+        .filter(Boolean),
     [playedRecent, library],
   )
 
@@ -2318,6 +2473,8 @@ onPetAction={handlePetAction}
             onFreeSpace={freeSpace}
             freeSpaceMsg={freeSpaceMsg}
             onOpenChangelog={() => setChangelogOpen(true)}
+            account={account}
+            onOpenAccount={() => setAccountOpen(true)}
             petStats={petStats}
             playlists={playlists}
             lyricSync={syncOffsets}
@@ -2461,6 +2618,11 @@ onPetAction={handlePetAction}
       />
 
       {changelogOpen && <ChangelogModal onClose={() => setChangelogOpen(false)} />}
+      {accountOpen && (
+        <Suspense fallback={null}>
+          <AccountModal onClose={() => setAccountOpen(false)} />
+        </Suspense>
+      )}
 
       {shopOpen && (
         <div className="modal-overlay" onClick={() => setShopOpen(false)}>

@@ -1,5 +1,16 @@
 export const CHANGELOG = [
   {
+    version: '3.1.0',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'Conta (opcional): entre em Configurações › Minha conta. Tudo continua funcionando sem entrar — o app segue 100% no seu aparelho.' },
+      { type: 'novo', text: 'Sincronização automática: com a conta conectada, o que você muda num celular aparece no outro sozinho — músicas, favoritas, reproduções, playlists, moedas do gatinho, recordes dos minijogos, nome e tema.' },
+      { type: 'novo', text: 'A música em si (o arquivo de áudio) NUNCA sai do seu aparelho. No outro aparelho a faixa aparece marcada como "sem áudio" até você importar o arquivo de novo.' },
+      { type: 'novo', text: 'Esqueceu a senha? Agora dá para criar uma nova pelo link que chega no e-mail.' },
+      { type: 'correcao', text: 'A busca por versão nova voltou a funcionar: ela estava travada na 1.9.28 e não avisava das últimas versões.' },
+    ],
+  },
+  {
     version: '3.0.1',
     date: 'Setembro de 2026',
     items: [

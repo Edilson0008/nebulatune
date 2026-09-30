@@ -79,20 +79,64 @@ export function useSettings() {
     writeLocal('nt.settings', settings)
   }, [settings])
 
+  // Todo ajuste que a PESSOA muda carimba a hora. É isso que faz "mudei o nome
+  // aqui e mudou lá": o relógio mais novo ganha, sem depender de qual aparelho
+  // fala por último.
+  const carimba = () => writeLocal('nt.settingsAt', Date.now())
+
   const api = useMemo(
     () => ({
-      set: (key, value) => setSettings((s) => ({ ...s, [key]: value })),
-      setAccent: (value) => setSettings((s) => ({ ...s, accent: value })),
-      setCustomAccent: (value) => setSettings((s) => ({ ...s, customAccent: value, accent: 'custom' })),
-      setUserName: (value) => setSettings((s) => ({ ...s, userName: value })),
-      setBio: (value) => setSettings((s) => ({ ...s, bio: value })),
-      setSpeed: (value) => setSettings((s) => ({ ...s, speed: value })),
-      setFetchCovers: (value) => setSettings((s) => ({ ...s, fetchCovers: value })),
-      setAvatar: (value) => setSettings((s) => ({ ...s, avatar: value })),
-      setBgAnimated: (value) => setSettings((s) => ({ ...s, bgAnimated: value })),
-      setCosmosAnimated: (value) => setSettings((s) => ({ ...s, cosmosAnimated: value })),
-      setPetSound: (value) => setSettings((s) => ({ ...s, petSound: value })),
-      setLowPower: (value) => setSettings((s) => ({ ...s, lowPower: value })),
+      set: (key, value) => {
+        carimba()
+        setSettings((s) => ({ ...s, [key]: value }))
+      },
+      setAccent: (value) => {
+        carimba()
+        setSettings((s) => ({ ...s, accent: value }))
+      },
+      setCustomAccent: (value) => {
+        carimba()
+        setSettings((s) => ({ ...s, customAccent: value, accent: 'custom' }))
+      },
+      setUserName: (value) => {
+        carimba()
+        setSettings((s) => ({ ...s, userName: value }))
+      },
+      setBio: (value) => {
+        carimba()
+        setSettings((s) => ({ ...s, bio: value }))
+      },
+      setSpeed: (value) => {
+        carimba()
+        setSettings((s) => ({ ...s, speed: value }))
+      },
+      setFetchCovers: (value) => {
+        carimba()
+        setSettings((s) => ({ ...s, fetchCovers: value }))
+      },
+      setAvatar: (value) => {
+        carimba()
+        setSettings((s) => ({ ...s, avatar: value }))
+      },
+      setBgAnimated: (value) => {
+        carimba()
+        setSettings((s) => ({ ...s, bgAnimated: value }))
+      },
+      setCosmosAnimated: (value) => {
+        carimba()
+        setSettings((s) => ({ ...s, cosmosAnimated: value }))
+      },
+      setPetSound: (value) => {
+        carimba()
+        setSettings((s) => ({ ...s, petSound: value }))
+      },
+      setLowPower: (value) => {
+        carimba()
+        setSettings((s) => ({ ...s, lowPower: value }))
+      },
+      // Usado pela sincronização: aplicar o que veio do outro aparelho NÃO é uma
+      // edição da pessoa, então não carimba nada (senão o aparelho "antigo" se
+      // firmaria como o mais novo e o cambio nunca entraria).
       setAll: (value) => setSettings((s) => ({ ...s, ...(value || {}) })),
     }),
     [],

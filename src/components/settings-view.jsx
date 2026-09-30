@@ -38,7 +38,7 @@ export function ApkDownloadButton() {
   )
 }
 
-export function SettingsView({ settings, api, library, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onOpenChangelog, onClearCache, cacheCleanMsg, onFreeSpace, freeSpaceMsg, petStats, playlists, lyricSync }) {
+export function SettingsView({ settings, api, library, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onOpenChangelog, onClearCache, cacheCleanMsg, onFreeSpace, freeSpaceMsg, petStats, playlists, lyricSync, account, onOpenAccount }) {
   const [storage, setStorage] = useState(null)
   const [exported, setExported] = useState(false)
   const [imported, setImported] = useState(false)
@@ -223,6 +223,27 @@ export function SettingsView({ settings, api, library, isIOS, isAppInstalled, in
   return (
     <section className="view">
       <h1 className="greeting">Configurações</h1>
+
+      <div className="settings-card">
+        <h2 className="section-title">Minha conta</h2>
+        <div className="settings-row">
+          <div className="settings-info">
+            <span className="settings-label">
+              {account && account.user ? `Conectado como ${account.user.email}` : 'Entrar para sincronizar'}
+            </span>
+            <span className="settings-desc">
+              {account && account.user
+                ? 'Suas favoritas, mais ouvidas, gatinho e moedas ficam iguais em todos os aparelhos. As músicas continuam em cada aparelho.'
+                : 'No mesmo aparelho ou em outro, entre com sua conta para não perder nada entre os aparelhos.'}
+            </span>
+          </div>
+          <div className="settings-actions">
+            <button className="btn-ghost" onClick={onOpenAccount}>
+              {account && account.user ? 'Conta' : 'Entrar'}
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div className="settings-card">
         <h2 className="section-title">Aparência</h2>
