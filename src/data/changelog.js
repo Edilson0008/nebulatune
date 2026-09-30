@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '3.1.2',
+    date: 'Setembro de 2026',
+    items: [
+      { type: 'novo', text: 'O backup agora é só de músicas. Exportar guarda suas músicas COM o som e a capa num arquivo só — é como elas passam de aparelho (na nuvem elas nunca sobem).' },
+      { type: 'novo', text: 'Importar backup adiciona as músicas do arquivo e não mexe mais em configurações, gatinho nem playlists: esses vêm pela sua conta.' },
+      { type: 'novo', text: 'Ao importar o backup, as estatísticas (plays e favorita) já combinam com a conta na hora.' },
+      { type: 'correcao', text: 'Músicas sem arquivo de som no aparelho ficam de fora do backup com um aviso, em vez de saírem mudas no arquivo.' },
+    ],
+  },
+  {
     version: '3.1.1',
     date: 'Setembro de 2026',
     items: [

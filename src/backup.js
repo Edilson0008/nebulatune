@@ -21,3 +21,11 @@ export function dataUrlToBlob(data) {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
   return new Blob([bytes], { type: mime })
 }
+
+// O backup é só de MÚSICAS (o áudio não sobe para a nuvem, então o arquivo é o
+// jeito de levar as músicas de aparelho). O que sobrar no JSON (antigas
+// configurações, gatinho, playlists) é ignorado — isso passa pela conta.
+export function pickRestorableTracks(data) {
+  if (!data || data.app !== 'NebulaTune' || !Array.isArray(data.tracks)) return null
+  return data.tracks.filter((t) => t && typeof t === 'object' && t.audioData)
+}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { APP_VERSION, SITE_URL } from '../app-config'
-import { blobToDataUrl, dataUrlToBlob } from '../backup'
+import { blobToDataUrl, dataUrlToBlob, pickRestorableTracks } from '../backup'
 import { APK_URL, fetchLatestVersion, installUpdate, isNewer } from '../updater'
 import { fmtBytes } from '../lib/format.js'
 
@@ -38,7 +38,7 @@ export function ApkDownloadButton() {
   )
 }
 
-export function SettingsView({ settings, api, library, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onOpenChangelog, onClearCache, cacheCleanMsg, onFreeSpace, freeSpaceMsg, petStats, playlists, lyricSync, account, onOpenAccount }) {
+export function SettingsView({ settings, api, library, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onOpenChangelog, onClearCache, cacheCleanMsg, onFreeSpace, freeSpaceMsg, account, onOpenAccount }) {
   const [storage, setStorage] = useState(null)
   const [exported, setExported] = useState(false)
   const [imported, setImported] = useState(false)
@@ -109,9 +109,15 @@ export function SettingsView({ settings, api, library, isIOS, isAppInstalled, in
     setExporting(true)
     try {
       const items = []
+      let semAudio = 0
       for (const t of library) {
+        if (!t.audioBlob) {
+          semAudio += 1
+          continue
+        }
         items.push({
           id: t.id,
+          sid: t.sid || '',
           title: t.title,
           artist: t.artist,
           album: t.album,
@@ -119,22 +125,23 @@ export function SettingsView({ settings, api, library, isIOS, isAppInstalled, in
           cover: t.cover,
           fav: t.fav === true,
           plays: t.plays || 0,
+          playDays: t.playDays || {},
           addedAt: t.addedAt || Date.now(),
           audioData: await blobToDataUrl(t.audioBlob),
           coverData: await blobToDataUrl(t.coverBlob),
           coverRemote: t.coverRemote || null,
         })
       }
+      if (!items.length) {
+        window.alert('Não dá para exportar: nenhuma música tem o arquivo de som neste aparelho. Importe as músicas de novo e tente novamente.')
+        return
+      }
       const data = {
         app: 'NebulaTune',
-        type: 'backup-completo',
+        type: 'backup-musicas',
         exportedAt: new Date().toISOString(),
         count: items.length,
         tracks: items,
-        settings: settings || null,
-        petStats: petStats || null,
-        playlists: Array.isArray(playlists) ? playlists : [],
-        lyricSync: lyricSync || null,
       }
       const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
@@ -147,6 +154,9 @@ export function SettingsView({ settings, api, library, isIOS, isAppInstalled, in
       setTimeout(() => URL.revokeObjectURL(url), 4000)
       setExported(true)
       setTimeout(() => setExported(false), 3500)
+      if (semAudio > 0) {
+        window.alert(`${semAudio} ${semAudio === 1 ? 'música ficou' : 'músicas ficaram'} de fora (sem arquivo de som neste aparelho). Exportadas: ${items.length}.`)
+      }
     } finally {
       setExporting(false)
     }
@@ -161,24 +171,19 @@ export function SettingsView({ settings, api, library, isIOS, isAppInstalled, in
     reader.onload = async () => {
       try {
         const data = JSON.parse(reader.result)
-        if (!data || data.app !== 'NebulaTune' || !Array.isArray(data.tracks)) {
-          window.alert('Este arquivo não parece ser um backup do NebulaTune.')
+        const tracks = pickRestorableTracks(data)
+        if (!tracks) {
+          window.alert('Este arquivo não parece ser um backup do NebulaTune (músicas com som).')
           return
         }
         const now = Date.now()
-        const hasConfig = !!(
-          data.settings ||
-          data.petStats ||
-          (Array.isArray(data.playlists) && data.playlists.length) ||
-          data.lyricSync
-        )
-        const tracks = data.tracks
-          .filter((t) => t && t.audioData)
+        const restored = tracks
           .map((t, i) => {
             const audioBlob = dataUrlToBlob(t.audioData)
             const coverBlob = dataUrlToBlob(t.coverData)
             return {
               id: typeof t.id === 'string' && t.id ? t.id : `restore-${now}-${i}`,
+              sid: typeof t.sid === 'string' && t.sid ? t.sid : '',
               title: t.title || 'Sem título',
               artist: t.artist || 'Desconhecido',
               album: t.album || '',
@@ -186,6 +191,7 @@ export function SettingsView({ settings, api, library, isIOS, isAppInstalled, in
               cover: Array.isArray(t.cover) ? t.cover : null,
               fav: t.fav === true,
               plays: t.plays || 0,
+              playDays: t.playDays || {},
               addedAt: t.addedAt || now + i,
               audioBlob,
               coverBlob,
@@ -194,16 +200,12 @@ export function SettingsView({ settings, api, library, isIOS, isAppInstalled, in
               coverUrl: coverBlob ? URL.createObjectURL(coverBlob) : t.coverRemote || null,
             }
           })
-        if (!tracks.length && !hasConfig) {
-          window.alert('Este backup não tem músicas nem configurações para restaurar.')
+          .filter((t) => t.audioBlob)
+        if (!restored.length) {
+          window.alert('Este backup não tem músicas para restaurar (nenhuma faixa com arquivo de som).')
           return
         }
-        onImport(tracks, {
-          settings: data.settings || null,
-          petStats: data.petStats || null,
-          playlists: Array.isArray(data.playlists) ? data.playlists : [],
-          lyricSync: data.lyricSync || null,
-        })
+        onImport(restored, null)
         setImported(true)
         setTimeout(() => setImported(false), 3500)
         refreshStorage()
@@ -349,8 +351,8 @@ export function SettingsView({ settings, api, library, isIOS, isAppInstalled, in
             <span className="settings-label">Exportar backup</span>
             <span className="settings-desc">
               {library.length
-                ? `TUDO num arquivo só: ${library.length} ${library.length === 1 ? 'música' : 'músicas'} (com som e capa), suas configurações, o gatinho (toques e moedas), as playlists e a sincronia das letras.`
-                : 'Nenhuma música para exportar (ainda assim o backup guarda configurações, gatinho e playlists).'}
+                ? `Suas ${library.length} ${library.length === 1 ? 'música' : 'músicas'} num arquivo só, COM o som e a capa. É assim que elas viajam de aparelho (na nuvem elas nunca sobem). Configurações, gatinho e playlists não entram — esses vão pela sua conta.`
+                : 'Nenhuma música para exportar ainda.'}
             </span>
           </div>
           <div className="settings-actions">
@@ -363,7 +365,7 @@ export function SettingsView({ settings, api, library, isIOS, isAppInstalled, in
           <div className="settings-info">
             <span className="settings-label">Importar backup</span>
             <span className="settings-desc">
-              Restaura tudo do arquivo: músicas novas são adicionadas às que já existem, e configurações, gatinho, playlists e letras voltam a valer.
+              Adiciona as músicas do arquivo (COM o som e a capa) às que já existem. Configurações, gatinho e playlists não são tocados aqui — vêm pela sua conta.
             </span>
           </div>
           <div className="settings-actions">

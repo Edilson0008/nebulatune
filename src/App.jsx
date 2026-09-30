@@ -1441,7 +1441,7 @@ setInstallEvt(null)
     if (tracks && tracks.length) {
       setLibrary((prev) => {
         const byId = new Set(prev.map((t) => t.id))
-        const fresh = tracks.filter((t) => !byId.has(t.id))
+        const fresh = ensureSids(tracks.filter((t) => !byId.has(t.id)))
         return fresh.length ? [...prev, ...fresh] : prev
       })
     }
