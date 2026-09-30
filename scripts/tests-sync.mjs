@@ -78,18 +78,15 @@ test('mergeLibrary: junta pelo sid, plays crescem, sem duplicar', () => {
   const cloudOnly = out.find((r) => r.sid === cloud[1].sid)
   assert.equal(cloudOnly.audioMissing, true)
 })
-test('applyLibrary: aparelho novo recebe tudo da nuvem como "sem áudio"', () => {
+test('applyLibrary: aparelho novo NÃO recebe músicas da nuvem (sem áudio não aparece)', () => {
   const out = applyLibrary([], [
     { sid: 'sabc', title: 'A', artist: 'B', album: '', duration: 10, fav: true, plays: 4, audioMissing: false },
     { sid: 'sdef', title: 'C', artist: 'D', album: '', duration: 20 },
   ])
-  assert.equal(out.length, 2)
-  assert.ok(out.every((r) => r.audioMissing === true))
-  assert.equal(out.find((r) => r.sid === 'sabc').fav, true)
-  assert.equal(out.find((r) => r.sid === 'sabc').plays, 4)
+  assert.equal(out.length, 0)
 })
 
-test('applyLibrary: respeita o sid da nuvem e a ordem local', () => {
+test('applyLibrary: só atualiza estatísticas de música que existe aqui; as outras não entram', () => {
   const local = ensureSids([
     { id: 'l1', title: 'Minha', artist: 'A', album: '', duration: 30, plays: 2, fav: false, audioMissing: false },
   ])
@@ -98,14 +95,37 @@ test('applyLibrary: respeita o sid da nuvem e a ordem local', () => {
     { sid: local[0].sid, title: 'Minha', artist: 'A', album: '', duration: 30, plays: 9, fav: true },
     { sid: 'snova', title: 'Nova', artist: 'B', album: '', duration: 44, plays: 1, fav: false },
   ])
-  assert.equal(out.length, 2)
+  assert.equal(out.length, 1)
   assert.equal(out[0].sid, local[0].sid)
   assert.equal(out[0].plays, 9)
   assert.equal(out[0].fav, true)
   assert.equal(out[0].audioMissing, false)
   assert.ok(out[0].audioBlob instanceof Blob)
-  assert.equal(out[1].sid, 'snova')
-  assert.equal(out[1].audioMissing, true)
+})
+
+test('applyLibrary: ao importar o mesmo arquivo, as estatísticas da nuvem voltam', () => {
+  const importada = ensureSids([{ id: 'novo', title: 'Nova', artist: 'B', album: '', duration: 44, plays: 0, fav: false, audioMissing: false }])
+  const out = applyLibrary(importada, [
+    { sid: importada[0].sid, title: 'Nova', artist: 'B', album: '', duration: 44, plays: 12, fav: true, playDays: { '2026-09-30': 2 } },
+  ])
+  assert.equal(out.length, 1)
+  assert.equal(out[0].plays, 12)
+  assert.equal(out[0].fav, true)
+  assert.deepEqual(out[0].playDays, { '2026-09-30': 2 })
+})
+
+test('applyLibrary: remove linhas "sem áudio" deixadas por versões antigas', () => {
+  const local = ensureSids([{ id: 'real', title: 'Real', artist: 'A', album: '', duration: 30, plays: 1, audioMissing: false }])
+  local.push({
+    id: 'ghost', sid: 'sfantasma', title: 'Fantasma', artist: 'X', album: '', duration: 99, plays: 3, audioMissing: true,
+    src: null, audioBlob: null, coverBlob: null,
+  })
+  const out = applyLibrary(local, [
+    { sid: local[0].sid, plays: 2 },
+    { sid: 'sfantasma', title: 'Fantasma', plays: 3 },
+  ])
+  assert.equal(out.length, 1)
+  assert.equal(out[0].sid, local[0].sid)
 })
 
 test('applyLibrary: idempotente (rodar 2x não duplica)', () => {
@@ -113,7 +133,8 @@ test('applyLibrary: idempotente (rodar 2x não duplica)', () => {
   const cloud = [{ sid: local[0].sid, plays: 5 }, { sid: 'snova', title: 'Nova', plays: 1 }]
   const uma = applyLibrary(local, cloud)
   const duas = applyLibrary(uma, cloud)
-  assert.equal(duas.length, 2)
+  assert.equal(duas.length, 1)
+  assert.equal(duas[0].plays, 5)
 })
 
 test('applyPlaylists: junta sem repetir e nunca apaga', () => {

@@ -8,7 +8,6 @@
 
 import { readLocal, writeLocal } from '../localstore.js'
 import { accountConfigured, authedFetch, clearSession, getUserId } from './account.js'
-import { sidFor } from './sid.js'
 
 export const SYNC_TABLE = 'sync_profiles'
 const RESULT_KEY = 'nt.sync.merged'
@@ -306,78 +305,32 @@ export function mergeAll(a, b) {
 }
 
 // ── Aplicação do merge no app ────────────────────────────────────────────────
-// O que está no aparelho tem prioridade de ordem; o que chegou da nuvem entra no
-// fim, marcado como "sem áudio" (a música em si não sobe). Nada é apagado.
+// A música em si NUNCA sobe para a nuvem. Então uma faixa que só existe na
+// nuvem não entra na lista daqui: sem o arquivo ela não tem como tocar, e o
+// usuário deixou claro que não quer "lista fantasma" (música marcada como
+// "sem áudio"). O que a nuvem pode fazer é atualizar as estatísticas dos
+// arquivos que EXISTEM neste aparelho, reconhecidos pelo sid (título +
+// artista + álbum + duração). Assim, ao importar o mesmo arquivo aqui, os
+// plays, a favorita e os dias ouvidos voltam sozinhos. Linhas "sem áudio"
+// deixadas por versões antigas são removidas.
 
 export function applyLibrary(cur, mergedRows) {
   const cloudRows = Array.isArray(mergedRows) ? mergedRows : []
   if (!cloudRows.length) return cur
-  // Aparelho novo: entra tudo o que está na nuvem. O sid da nuvem é respeitado
-  // (é ele que amarra as estatísticas entre aparelhos) e o áudio vem sempre
-  // marcado como ausente, porque o arquivo não existe aqui.
-  if (!cur.length) {
-    return cloudRows
-      .filter((r) => r && typeof r === 'object')
-      .map((r) => ({
-        id: `sync-${r.sid || sidFor(r)}`,
-        sid: r.sid || sidFor(r),
-        title: r.title || 'Sem título',
-        artist: r.artist || 'Desconhecido',
-        album: r.album || '',
-        duration: r.duration || 0,
-        cover: r.cover || null,
-        coverRemote: r.coverRemote || null,
-        coverUrl: r.coverUrl || r.coverRemote || null,
-        addedAt: r.addedAt || Date.now(),
-        fav: r.fav === true,
-        plays: Number(r.plays) || 0,
-        playDays: r.playDays || {},
-        audioMissing: true,
-        audioBlob: null,
-        src: null,
-        coverBlob: null,
-      }))
-  }
-  const curBySid = new Map()
-  for (const row of cur) {
-    const sid = row.sid || row.id
-    if (sid) curBySid.set(sid, row)
-  }
-  const next = cur.map((row) => {
-    const sid = row.sid || row.id
-    const cloud = cloudRows.find((c) => c && c.sid === sid)
-    if (!cloud) return row
-    return {
-      ...row,
-      plays: Math.max(Number(row.plays) || 0, Number(cloud.plays) || 0),
-      fav: row.fav === true || cloud.fav === true,
-      playDays: { ...(row.playDays || {}), ...(cloud.playDays || {}) },
-    }
-  })
-  const added = []
-  for (const c of cloudRows) {
-    if (!c || !c.sid || curBySid.has(c.sid)) continue
-    added.push({
-      id: `sync-${c.sid}`,
-      sid: c.sid,
-      title: c.title || 'Sem título',
-      artist: c.artist || 'Desconhecido',
-      album: c.album || '',
-      duration: c.duration || 0,
-      cover: c.cover || null,
-      coverRemote: c.coverRemote || null,
-      addedAt: c.addedAt || Date.now(),
-      fav: c.fav === true,
-      plays: Number(c.plays) || 0,
-      playDays: c.playDays || {},
-      audioMissing: true,
-      audioBlob: null,
-      src: null,
-      coverBlob: null,
-      coverUrl: c.coverUrl || c.coverRemote || null,
+  return cur
+    .filter((row) => !(row.audioMissing === true && !row.src && !row.audioBlob))
+    .map((row) => {
+      const sid = row.sid || row.id
+      if (!sid) return row
+      const cloud = cloudRows.find((c) => c && c.sid === sid)
+      if (!cloud) return row
+      return {
+        ...row,
+        plays: Math.max(Number(row.plays) || 0, Number(cloud.plays) || 0),
+        fav: row.fav === true || cloud.fav === true,
+        playDays: { ...(row.playDays || {}), ...(cloud.playDays || {}) },
+      }
     })
-  }
-  return added.length ? [...next, ...added] : next
 }
 
 export function applyPlaylists(cur, merged) {

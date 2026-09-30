@@ -100,38 +100,39 @@ console.log('\n===== VEREDITO =====')
 const libA = a?.library || []
 const libB = b?.library || []
 const checks = [
-  ['todas as músicas do 1 chegaram no 2', libA.every((t) => libB.some((x) => x.sid === t.sid))],
-  ['a favorita do 1 chegou marcada no 2', libA.filter((t) => t.fav).every((t) => libB.find((x) => x.sid === t.sid)?.fav === true)],
+  ['o APARELHO 2 não ganhou lista fantasma (sem áudio não aparece)', libB.length === 0],
+  ['no aparelho 1 o áudio das músicas importadas NÃO foi perdido', ['smus1', 'smus2'].every((s) => libA.find((t) => t.sid === s)?.audioMissing === false)],
   ['as moedas do 1 chegaram no 2', (b?.petstats?.coins || 0) === (a?.petstats?.coins || 0) && (a?.petstats?.coins || 0) > 0],
   ['o NOME do perfil do 1 chegou no 2', b?.settings?.userName === 'Aparelho1'],
   ['a bio do 1 chegou no 2', b?.settings?.bio === 'meu bio'],
   ['a cor escolhida no 1 chegou no 2', b?.settings?.accent === 'pink'],
   ['as recentes do 1 chegaram no 2', (b?.playedRecent || []).includes('smus1')],
-  ['no 1 o áudio das músicas importadas NÃO foi perdido', ['smus1', 'smus2'].every((s) => libA.find((t) => t.sid === s)?.audioMissing === false)],
-  ['no 2 tudo veio marcado como sem áudio', libB.every((t) => t.audioMissing === true)],
 ]
 for (const [nome, passou] of checks) console.log(`  ${passou ? '✅' : '❌'} ${nome}`)
 const tudoOk = checks.every(([, p]) => p)
 console.log(tudoOk ? '\n✅ TUDO CERTO: entra, sai e nunca apaga.' : '\n❌ Ainda falta algo (veja as linhas acima).')
 
-// Ida e volta: o aparelho 2 soma e devolve; o 1 deve receber o total somado.
-console.log('\n===== IDA E VOLTA =====')
+// Ida e volta: o aparelho 2 importa o MESMO arquivo (mesmo sid) e precisa
+// receber as estatísticas que o 1 acumulou na nuvem.
+console.log('\n===== IDA E VOLTA (estatísticas seguem ao importar o arquivo) =====')
 trocarArmazenamento()
 if (a) {
-  store.set('nt.library', JSON.stringify([...a.library, {
-    id: 'f-3', sid: 'smus3', title: 'So No 2', artist: 'C', album: '', duration: 100, plays: 4, fav: true, playDays: {}, audioMissing: false,
-  }]))
   store.set('nt.petstats', JSON.stringify(a.petstats))
 }
+store.set('nt.library', JSON.stringify([{
+  id: 'nova-imp', sid: 'smus1', title: 'Minha Música', artist: 'Artista', album: '', duration: 200, plays: 0, fav: false, playDays: {}, audioMissing: false,
+}]))
 const r1 = await signIn(EMAIL, PASS)
-console.log('  aparelho 1 login:', r1.ok)
+console.log('  aparelho 2 login:', r1.ok)
 const s1 = await syncNow()
-console.log('  aparelho 1 sync:', s1.ok ? 'ok' : `FALHOU (${s1.reason})`)
+console.log('  aparelho 2 sync:', s1.ok ? 'ok' : `FALHOU (${s1.reason})`)
 const voltou = applyLibrary(collectLocal().library || [], s1.result.merged.library)
-console.log('  aparelho 1 recebeu a música do 2?', voltou.some((t) => t.sid === 'smus3') ? 'SIM ✅' : 'NÃO ❌')
-console.log('  total de músicas no 1:', voltou.length)
-const ordemPreservada = voltou.slice(0, 2).map((t) => t.title).join(' | ')
-console.log('  ordem local preservada:', ordemPreservada)
+const m1 = voltou.find((t) => t.sid === 'smus1')
+console.log('  plays do smus1 no 2 após importar:', m1?.plays, m1?.plays === 5 ? '✅' : '❌ (era 5 no aparelho 1)')
+console.log('  favorita no 2 após importar:', m1?.fav ? 'SIM ✅' : 'NÃO ❌')
+console.log('  música do 1 que o 2 não tem continua de fora da lista:', voltou.some((t) => t.sid === 'smus2') ? 'NÃO ❌' : 'SIM ✅')
+const conta = m1?.plays === 5 && m1?.fav === true && !voltou.some((t) => t.sid === 'smus2')
+console.log(conta ? '\n✅ IDA E VOLTA CERTA: arquivo importado local recupera as estatísticas.' : '\n❌ Ainda falta algo (veja as linhas acima).')
 console.log('  plays somados da nuvem (5 + 0 = 5):', voltou.find((t) => t.sid === 'smus1')?.plays)
 
 // Limpeza: apaga a linha de teste na nuvem.
