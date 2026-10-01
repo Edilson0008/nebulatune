@@ -41,17 +41,53 @@ jobs:
       - name: Incluir APK mais recente no site
         run: |
           set -euo pipefail
-          # Pega o nebulatune.apk da última Release do GitHub e coloca em dist/apk/,
-          # para o link /apk/nebulatune.apk do site sempre servir o APK novo.
-          URL=$(curl -fsSL "https://api.github.com/repos/${{ github.repository }}/releases/latest" \
-            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const r=JSON.parse(s);const a=(r.assets||[]).find(x=>x.name==='nebulatune.apk');console.log(a?a.browser_download_url:'')}catch{console.log('')}})")
-          if [ -n "$URL" ]; then
-            mkdir -p dist/apk
-            curl -fsSL "$URL" -o dist/apk/nebulatune.apk
-            echo "APK incluido no site: $URL"
-          else
-            echo "Nenhum APK em release ainda; site sem /apk/nebulatune.apk"
+          # Pega o APK desta VERSÃO e coloca em dist/apk/, para o link
+          # /apk/nebulatune.apk do site servir o APK novo.
+          #
+          # Antes pegava "a última release". Isso erra por ordem: o deploy roda no
+          # push em main e a release é publicada depois, então o site era
+          # construído enquanto a última release ainda era a ANTERIOR e saía
+          # servindo o APK velho. Aconteceu na 3.2.0 — o site anunciava 3.2.0 e
+          # entregava o APK da 3.1.3 (version.json dentro dele, 3.1.3).
+          #
+          # Agora a tag vem da própria versão do build. E, achando release
+          # nenhuma dessa tag, o build falha: publicar um site que mente sobre o
+          # APK é pior do que não publicar.
+          VERSAO=$(node --input-type=module -e "import {APP_VERSION} from './src/app-config.js'; process.stdout.write(String(APP_VERSION||''))")
+          TAG="v${VERSAO}"
+          # Espera o APK desta versao aparecer na release. O site dispara no push
+          # em main e o APK so e anexado quando o workflow roda por TAG — ou
+          # seja, a release nasce DEPOIS do deploy. Sem esta espera, o site era
+          # construido antes de o APK existir.
+          URL=""
+          for i in $(seq 1 40); do
+            # `|| true` proposital: sem a release a API responde 404, e sem isso o
+            # `set -e` derrubaria o script aqui — antes de esperar a release
+            # aparecer e antes da mensagem que diz o que aconteceu.
+            URL=$(curl -fsSL "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG}" 2>/dev/null \
+              | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const r=JSON.parse(s);const a=(r.assets||[]).find(x=>x.name==='nebulatune.apk');console.log(a?a.browser_download_url:'')}catch{console.log('')}})" || true)
+            [ -n "$URL" ] && break
+            echo "APK da ${TAG} ainda nao publicado (tentativa $i/40); esperando 15s"
+            sleep 15
+          done
+          if [ -z "$URL" ]; then
+            echo "::error::Nenhum APK na release ${TAG} depois de ~10 min. O site NAO sera publicado para nao servir um APK velho." >&2
+            exit 1
           fi
+          mkdir -p dist/apk
+          curl -fsSL "$URL" -o dist/apk/nebulatune.apk
+          # Confere que o APK baixado e mesmo desta versao. O APK traz o
+          # version.json do proprio app, entao da para ler de dentro do zip.
+          GRAVADO=$(unzip -p dist/apk/nebulatune.apk assets/public/version.json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{process.stdout.write(String(JSON.parse(s).version||''))}catch{process.stdout.write('')}})")
+          if [ -z "$GRAVADO" ]; then
+            echo "::error::Nao consegui ler a versao de dentro do APK. Nao publicar." >&2
+            exit 1
+          fi
+          if [ "$GRAVADO" != "$VERSAO" ]; then
+            echo "::error::O APK diz ${GRAVADO}, mas o site e da ${VERSAO}. Nao publicar." >&2
+            exit 1
+          fi
+          echo "APK incluido no site: ${URL} (versao ${GRAVADO})"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
