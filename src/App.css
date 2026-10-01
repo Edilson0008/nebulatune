@@ -323,7 +323,7 @@ button {
 
 .ach-toast {
   position: fixed;
-  top: 66px;
+  top: calc(66px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   z-index: 300;

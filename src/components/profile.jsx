@@ -62,7 +62,11 @@ export function Profile({ settings, api, library, onPlay, petStats }) {
   const totalPlaysPeriod = mostPlayed.reduce((acc, t) => acc + playsInPeriod(t, statsPeriod), 0)
 
   const [achOpen, setAchOpen] = useState(false)
-  const achievements = getAchievements(library, petStats?.touches || 0)
+  const achievements = getAchievements(library, petStats?.touches || 0, {
+    buys: Number(petStats?.buys) || 0,
+    toys: 0,
+    baths: Math.max(Number(petStats?.bathsFeitos) || 0, Number(petStats?.buysBath) || 0),
+  })
   const achUnlocked = achievements.filter((a) => a.done).length
 
   return (

@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '3.2.13',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'As conquistas no Perfil agora contam os números certos.' },
+      { type: 'correcao', text: 'Toast de conquista não cobre mais o topo com a barra de status.' },
+    ],
+  },
+  {
     version: '3.2.12',
     date: 'Outubro de 2026',
     items: [
