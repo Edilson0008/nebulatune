@@ -40,7 +40,7 @@ import { sleepNativeCancel, sleepNativeStart } from './lib/sleep-native.js'
 import { getAchievements } from './lib/stats.js'
 import { getRecovery, onAccount, restoreSession, getSession } from './lib/account.js'
 import { ensureSids, idsToSids } from './lib/sid.js'
-import { aplicarBiblioteca, applyExtras, applyPlaylists, collectLocal, donoDosDados, mergeAll, mergeCounters, mergeStrings, preservaEditionsRecentes, syncNow, takePendingSync, watchCloud } from './lib/sync.js'
+import { aplicarBiblioteca, applyExtras, applyPlaylists, collectLocal, donoDosDados, mergeAll, mergeCounters, mergeStrings, preservaEditionsRecentes, syncNow, takePendingSync, watchAmigos, watchCloud } from './lib/sync.js'
 import * as amigosMod from './lib/amigos.js'
 
 /* Telas que o usuário quase sempre NÃO abre na primeira visita: entram no
@@ -810,6 +810,27 @@ function App() {
     })
     return stop
   }, [accountUserId, syncApply])
+
+  // Pedidos de amizade chegando com a tela de Amigos FECHADA.
+  //
+  // Antes o vigia das amizades vivia dentro da tela de Amigos: sair da aba
+  // desligava ele, e o pedido que chegava nesse meio-tempo só aparecia quando
+  // a pessoa voltava à aba — ou seja, a pessoa ficava achando que o pedido
+  // não tinha chegado. Aqui o vigia fica ligado o tempo todo e o que muda é só
+  // um contador, que a tela usa para recarregar.
+  const [amigosSinal, setAmigosSinal] = useState(0)
+  useEffect(() => {
+    if (!accountUserId) return undefined
+    return watchAmigos(() => setAmigosSinal((n) => n + 1))
+  }, [accountUserId])
+
+  // "Online agora": enquanto o app estiver aberto, renova o visto de tempos em
+  // tempos. Sem isto, quem ficava com o app aberto mais de 5 min deixava de
+  // aparecer como online e o outro via "visto há 16 min".
+  useEffect(() => {
+    if (!accountUserId) return undefined
+    return amigosMod.iniciarBatimentoOnline()
+  }, [accountUserId])
 
   // O perfil público (nome, foto, bio) que os AMIGOS veem mora em outra tabela
   // da nuvem, e não no bloco de dados que a sincronização leva. Sem isto aqui, o
@@ -2593,6 +2614,7 @@ onPetAction={handlePetAction}
             <AmigosView
               account={account}
               settings={appSettings}
+              sinal={amigosSinal}
               onOpenAccount={() => setAccountOpen(true)}
               onToast={showToast}
             />

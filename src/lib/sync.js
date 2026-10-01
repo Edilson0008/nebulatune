@@ -510,6 +510,12 @@ export function applyPlaylists(cur, merged) {
 
 const WATCH_MS = 8000
 
+// A lista de amigos é uma tela que a pessoa fica OLHANDO (à espera de um
+// pedido), então 8 s de atraso era ela ficar encarando a tela sem acontecer
+// nada. É leitura barata (só o carimbo) e só roda com a tela aberta, então
+// pode ser bem mais fino. 3 s ainda é folgado para não martelar o banco.
+const WATCH_AMIGOS_MS = 3000
+
 export function watchCloud(onData) {
   if (!accountConfigured()) return () => {}
   let parado = false
@@ -605,7 +611,7 @@ export function carimboDePerfis(perfis) {
     .join('|')
 }
 
-export function watchAmigos(onMudou) {
+export function watchAmigos(onMudou, intervaloMs = WATCH_AMIGOS_MS) {
   if (!accountConfigured()) return () => {}
   let parado = false
   let carimbo = null
@@ -656,7 +662,7 @@ export function watchAmigos(onMudou) {
     }
   }
 
-  const timer = setInterval(tick, WATCH_MS)
+  const timer = setInterval(tick, intervaloMs)
   const onVis = () => {
     if (document.visibilityState === 'visible') tick()
   }
@@ -668,6 +674,10 @@ export function watchAmigos(onMudou) {
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVis)
   }
 }
+
+// O mesmo vigia, mas no ritmo da lista de amigos. Separate do `watchCloud` de
+// propósito: os dois observam coisas diferentes (a nuvem de dados e as
+// amizades) e cada um no seu tempo.
 
 // ── Envio/leitura no Supabase ────────────────────────────────────────────────
 

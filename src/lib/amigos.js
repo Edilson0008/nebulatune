@@ -114,13 +114,18 @@ export async function reenviarMeuPerfil({ name, bio, accent, avatar } = {}) {
 
 // Marca "entrou no app agora". Chamado uma vez quando o app abre com conta
 // logada, separado de garantirMeuPerfil (que só grava se algo mudou).
-export function avisarQueEntrou() {
+//
+// `forcar` ignora a janela de 5 min. Existe para o batimento: com a janela
+// valendo, quem deixasse o app aberto mais de 5 min sumia do "Online agora" e
+// o outro passou a ver "visto há 16 min" de alguém que estava com o app aberto
+// o tempo todo. O batimento renova antes da janela vencer.
+export function avisarQueEntrou({ forcar = false } = {}) {
   return enfileira(async () => {
     const uid = await getUserId()
     if (!uid) return
     const agora = Date.now()
     const anterior = ultimoAviso.get(uid) || 0
-    if (anterior && agora - anterior < AVISO_MS) return
+    if (!forcar && anterior && agora - anterior < AVISO_MS) return
     const { ok } = await authedFetch(`/rest/v1/${TAB}?uid=eq.${encodeURIComponent(uid)}`, {
       method: 'PATCH',
       headers: { Prefer: 'return=minimal' },
@@ -131,6 +136,40 @@ export function avisarQueEntrou() {
     // mesmo já online, e sem nenhuma indicação de que faltou.
     if (ok) ultimoAviso.set(uid, agora)
   })
+}
+
+// Batimento de "online": enquanto o app estiver aberto e logado, renova o
+// "visto" de tempos em tempos para o outro não ver a pessoa sumindo.
+//
+// O intervalo é menor que a janela de 5 min do `avisarQueEntrou`: assim, quem
+// ficou com o app aberto continua marcado como online, e quem saiu há pouco
+// também aparece. Custa uma escrita leve por minuto por pessoa com o app
+// aberto — o mesmo que já acontecia na troca de conta, só que cadência previsível.
+const BATIMENTO_MS = 60 * 1000
+
+export function iniciarBatimentoOnline() {
+  if (typeof window === 'undefined') return () => {}
+  let vivo = true
+  const bater = () => {
+    if (!vivo) return
+    getUserId().then((uid) => {
+      if (vivo && uid) avisarQueEntrou({ forcar: true })
+    })
+  }
+  const timer = setInterval(bater, BATIMENTO_MS)
+  const onVis = () => {
+    if (document.visibilityState === 'visible') bater()
+  }
+  document.addEventListener('visibilitychange', onVis)
+  // Ao voltar para o app, marca na hora: voltar do bloqueador é o momento em
+  // que mais importa dizer "voltou".
+  window.addEventListener('focus', bater)
+  return () => {
+    vivo = false
+    clearInterval(timer)
+    document.removeEventListener('visibilitychange', onVis)
+    window.removeEventListener('focus', bater)
+  }
 }
 
 async function salvarMeuPerfil({ name, bio, accent, avatar } = {}) {

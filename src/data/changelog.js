@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '3.2.1',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'O pedido de amizade aparece na hora, mesmo com a aba Amigos fechada. Antes o app só olhava os pedidos enquanto você estava NA tela de Amigos: saía da aba e o pedido ficava escondido até você voltar.' },
+      { type: 'correcao', text: 'Voltar para o app já mostra o que chegou enquanto você estava em outra tela. A lista de amigos também é atualizada sozinha a cada 3 segundos, em vez de 8.' },
+      { type: 'correcao', text: '"Online agora" para de sumir: com o app aberto, o status se renova sozinho a cada minuto. Antes, quem ficava 5 minutos com o app na mão aparecia como "visto há 16 min" — marcado como offline com o app aberto.' },
+    ],
+  },
+  {
     version: '3.2.0',
     date: 'Outubro de 2026',
     items: [

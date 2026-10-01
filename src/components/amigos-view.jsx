@@ -57,7 +57,7 @@ function CaixaMensagem({ valor, onChange, onCancelar, onEnviar, ocupado }) {
   )
 }
 
-export function AmigosView({ account, settings, onOpenAccount, onToast }) {
+export function AmigosView({ account, settings, sinal, onOpenAccount, onToast }) {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [codigo, setCodigo] = useState('')
@@ -134,6 +134,14 @@ export function AmigosView({ account, settings, onOpenAccount, onToast }) {
   // Enquanto a tela está aberta, fica de olho na lista: se a pessoa trocar a
   // foto, o nome, aceitar um pedido ou remover alguém, a lista se atualiza
   // sozinha — sem precisar sair e voltar na aba.
+  //
+  // Recarrega em três situações, porque são três jeitos de o pedido "chegar"
+  // sem a pessoa fazer nada:
+  //  - `sinal` mudou: o vigia do App (ligado mesmo com esta aba fechada) viu
+  //    que apareceu um pedido novo;
+  //  - a tela ganhou foco de novo: quem manda o pedido estava com o app aberto
+  //    ao lado, e voltar para cá tem que mostrar o que chegou nesse meio-tempo;
+  //  - a tela montou: o primeiro carregamento.
   useEffect(() => {
     if (!account?.user) return undefined
     return watchAmigos(() => {
@@ -145,6 +153,28 @@ export function AmigosView({ account, settings, onOpenAccount, onToast }) {
       if (alvo) amigos.verPerfilAmigo(alvo).then((d) => d && setDetalhe(d))
     })
   }, [account?.user, carregar, aberto?.uid])
+
+  useEffect(() => {
+    if (!account?.user) return
+    carregar()
+    // `sinal` é o aviso de que algo mudou no banco.
+  }, [sinal, account?.user, carregar])
+
+  useEffect(() => {
+    if (!account?.user || typeof window === 'undefined') return undefined
+    // Voltar para a aba recarrega: o pedido do outro chega enquanto a pessoa
+    // está em outra tela, e sem isto a lista ficaria parada esperando o próximo
+    // ciclo do vigia.
+    const onFoco = () => {
+      if (document.visibilityState === 'visible') carregar()
+    }
+    document.addEventListener('visibilitychange', onFoco)
+    window.addEventListener('focus', onFoco)
+    return () => {
+      document.removeEventListener('visibilitychange', onFoco)
+      window.removeEventListener('focus', onFoco)
+    }
+  }, [account?.user, carregar])
 
   // Abre o perfil de alguém. Se a RPC ainda não existir no banco (ou a pessoa
   // não for minha amiga), mostra o que já veio na lista em vez de tela vazia.
