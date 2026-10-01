@@ -774,3 +774,49 @@ test('applyPetStats não descarta contador que só cresce', () => {
     assert.ok(lista.includes(`'${k}'`), `applyPetStats precisa aceitar ${k}`)
   }
 })
+
+// ---------------------------------------------------------------------------
+// O APK não saía porque o Java tinha dois erros que só o compilador Android
+// acusa. Ambos quebraram a release e um deles (o do tipo do recurso) foi erro
+// meu já na 3.2.9. Estes testes existem para o build não voltar a quebrar em
+// silêncio.
+// ---------------------------------------------------------------------------
+
+const JAVA_ALARME = new URL(
+  '../android/app/src/main/java/br/com/nebulatune/app/PetAlarmReceiver.java',
+  import.meta.url,
+)
+const RECURSOS_ALARME = new URL(
+  '../android/app/src/main/res/values/pet_strings.xml',
+  import.meta.url,
+)
+
+test('o decaimento declara throws, senão o build do Android quebra', () => {
+  const java = readFileSync(JAVA_ALARME, 'utf8')
+  // org.json do Android lança JSONException, que é checked. Se put() ficar
+  // fora de try/catch, o método tem que declarar throws.
+  assert.ok(
+    /aplicarDecaimento\(Context context\) throws JSONException/.test(java),
+    'aplicarDecaimento precisa declarar throws JSONException',
+  )
+  const corpo = java.slice(java.indexOf('private void aplicarDecaimento'))
+  const puts = corpo.match(/state\.put\(/g) || []
+  assert.ok(puts.length >= 3, 'esperado os put() do lt e das barras')
+})
+
+test('cada R.array/R.string aponta para um recurso do tipo certo', () => {
+  const java = readFileSync(JAVA_ALARME, 'utf8')
+  const xml = readFileSync(RECURSOS_ALARME, 'utf8')
+  // <string-array> gera R.array.* e <string> gera R.string.*. Trocar um pelo
+  // outro compila no editor e só explode no build do APK.
+  const tipos = {}
+  for (const m of xml.matchAll(/<(string-array|string)\s+name="([^"]+)"/g)) {
+    tipos[m[2]] = m[1] === 'string-array' ? 'array' : 'string'
+  }
+  const usados = [...java.matchAll(/R\.(array|string)\.(\w+)/g)]
+  assert.ok(usados.length > 0, 'o Java usa recursos do bundle')
+  for (const [, tipo, nome] of usados) {
+    assert.ok(tipos[nome], `recurso ${nome} nao existe em pet_strings.xml`)
+    assert.equal(tipo, tipos[nome], `${nome} e' R.${tipos[nome]}, o Java pediu R.${tipo}`)
+  }
+})

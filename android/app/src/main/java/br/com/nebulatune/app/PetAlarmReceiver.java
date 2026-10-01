@@ -14,6 +14,7 @@ import android.content.pm.PackageManager;
 import android.util.Log;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
@@ -110,7 +111,10 @@ public class PetAlarmReceiver extends BroadcastReceiver {
      * O estado e o mesmo blob que a tela le (nt.petstats via WebView localStorage),
      * gravado aqui no SharedPreferences da app para nao depender do WebView.
      */
-    private void aplicarDecaimento(Context context) {
+    // throws JSONException: org.json do Android e' checked, e put() lancaria
+    // isso. O onReceive jaembrulha esta chamada em try/catch, entao declara e'
+    // o suficiente.
+    private void aplicarDecaimento(Context context) throws JSONException {
         SharedPreferences sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         String bruto = sp.getString("petstats", null);
         if (bruto == null || bruto.trim().isEmpty()) return;
@@ -160,8 +164,8 @@ public class PetAlarmReceiver extends BroadcastReceiver {
             if (k.isEmpty()) continue;
             int idx = indexOf(k);
             notificar(context, idx,
-                res(context, EMOJI_RES[idx]) + " " + LABELS[idx] + " " + res(context, R.array.pet_barra_baixa),
-                res(context, R.array.pet_barra_baixa_corpo));
+                res(context, EMOJI_RES[idx]) + " " + LABELS[idx] + " " + res(context, R.string.pet_barra_baixa),
+                res(context, R.string.pet_barra_baixa_corpo));
         }
     }
 
