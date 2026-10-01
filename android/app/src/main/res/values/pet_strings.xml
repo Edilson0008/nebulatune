@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Textos das chamadas do gatinho com o app fechado. Ficam aqui porque
+         caractere não-ASCII direto no .java depende do encoding do build e já
+         quebrou a compilação uma vez. -->
+    <string-array name="pet_emoji_fome">
+        <item>🍗</item>
+    </string-array>
+    <string-array name="pet_emoji_carinho">
+        <item>💗</item>
+    </string-array>
+    <string-array name="pet_emoji_sono">
+        <item>😴</item>
+    </string-array>
+    <string-array name="pet_emoji_banho">
+        <item>🫧</item>
+    </string-array>
+    <string name="pet_barra_baixa">está bem baixa!</string>
+    <string name="pet_barra_baixa_corpo">O gatinho precisa de você. Abra o NebulaTune.</string>
+    <string name="pet_canal_desc">Avisa quando o gatinho precisa de você, mesmo com o app fechado</string>
+</resources>

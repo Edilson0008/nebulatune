@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '3.2.9',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'A 3.2.8 nem chegou a sair, porque os textos do gatinho estavam escritos direto no código do Android e o build não aguentou. Agora estão no bundle e o aplicativo volta a instalar.' },
+      { type: 'correcao', text: 'As barrinhas não davam mais um salto para trás quando você abria o app: o aviso de fome/sono/banho agora é exatamente o mesmo número que a tela mostra.' },
+      { type: 'correcao', text: 'Cada aviso do gatinho agora tem um identificador próprio, então um não sobrescreve o outro na lista de notificações.' },
+    ],
+  },
+  {
     version: '3.2.8',
     date: 'Outubro de 2026',
     items: [

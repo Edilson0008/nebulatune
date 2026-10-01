@@ -14,19 +14,17 @@ import android.content.pm.PackageManager;
 import android.util.Log;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import org.json.JSONObject;
 
 /**
  * Chamadas do gatinho com o app FECHADO.
  *
- * O jeito antigo só avisava quando o app estava aberto, porque quem decidia era
- * o JavaScript da tela — e tela fechada não roda JavaScript. Aqui o Android
+ * O jeito antigo so avisava quando o app estava aberto, porque quem decidia era
+ * o JavaScript da tela -- e tela fechada nao roda JavaScript. Aqui o Android
  * acorda o app sozinho por alarme (funciona com o app morto, sem foreground
- * service e sem bateria gasta em série), e o próprio receiver aplica o mesmo
- * decaimento que a tela usa. Quando alguma barra cai para o nível crítico, ele
- * manda a notificação.
+ * service e sem bateria gasta em serie), e o proprio receiver aplica o mesmo
+ * decaimento que a tela usa. Quando alguma barra cai para o nivel critico, ele
+ * manda a notificacao.
  *
  * As taxas e o formato do estado precisam bater com src/lib/pet.js e com o
  * que o App grava em nt.petstats. Se um mudar, o outro tem que mudar junto.
@@ -38,7 +36,9 @@ public class PetAlarmReceiver extends BroadcastReceiver {
     private static final String CHANNEL = "pet_bg";
     private static final long INTERVAL_MS = 5L * 60 * 1000; // 5 min
     private static final int REQUEST_CODE = 4051;
-    /** Abaixo disso a barra é considerada urgente e vale um aviso. */
+    /** Base dos ids de notificacao; cada barra usa NOTIF_BASE + indice. */
+    private static final int NOTIF_BASE = 4052;
+    /** Abaixo disso a barra e considerada urgente e vale um aviso. */
     private static final double CRITICO = 18.0;
 
     /** As mesmas de MOOD_DECAY em src/lib/pet.js, por minuto. */
@@ -49,7 +49,9 @@ public class PetAlarmReceiver extends BroadcastReceiver {
 
     private static final String[] KEYS = {"full", "happy", "sleep", "clean"};
     private static final String[] LABELS = {"Fome", "Carinho", "Sono", "Banho"};
-    private static final String[] EMOJI = {"🍗", "💗", "😴", "🫧"};
+    // Sem emojis aqui de proposito: fonte Java com caractere nao-ASCII depende
+    // do encoding do gradle e ja falhou build antes. O emoji vem do bundle.
+    private static final int[] EMOJI_RES = {R.array.pet_emoji_fome, R.array.pet_emoji_carinho, R.array.pet_emoji_sono, R.array.pet_emoji_banho};
 
     /** Curva do decaimento: cheia perto de 100, full rate no meio, suave embaixo. */
     private static double taxa(double valor) {
@@ -65,7 +67,7 @@ public class PetAlarmReceiver extends BroadcastReceiver {
         return DECAY_CLEAN;
     }
 
-    /** Agenda o próximo alarme. Idempotente: não cria alarmes empilhados. */
+    /** Agenda o proximo alarme. Idempotente: nao cria alarmes empilhados. */
     public static void schedule(Context ctx) {
         if (ctx == null) return;
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
@@ -93,8 +95,8 @@ public class PetAlarmReceiver extends BroadcastReceiver {
             return;
         }
         if (!ACTION_CHECK.equals(action)) return;
-        // O próximo é agendado ANTES do trabalho: se este alarme morrer no meio,
-        // ainda existe um próximo e a cadeia não para.
+        // O proximo e agendado ANTES do trabalho: se este alarme morrer no meio,
+        // ainda existe um proximo e a cadeia nao para.
         schedule(context);
         try {
             aplicarDecaimento(context);
@@ -104,9 +106,9 @@ public class PetAlarmReceiver extends BroadcastReceiver {
     }
 
     /**
-     * Aplica o decaimento no estado salvo e avisa se alguma barra ficou crítica.
-     * O estado é o mesmo blob que a tela lê (nt.petstats via WebView localStorage),
-     * gravado aqui no SharedPreferences da app para não depender do WebView.
+     * Aplica o decaimento no estado salvo e avisa se alguma barra ficou critica.
+     * O estado e o mesmo blob que a tela le (nt.petstats via WebView localStorage),
+     * gravado aqui no SharedPreferences da app para nao depender do WebView.
      */
     private void aplicarDecaimento(Context context) {
         SharedPreferences sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
@@ -130,12 +132,14 @@ public class PetAlarmReceiver extends BroadcastReceiver {
         double minutos = Math.max(0.0, (agora - lt) / 60000.0);
         if (minutos < 0.01) return;
 
-        Map<String, Double> antes = new LinkedHashMap<>();
-        Map<String, Double> depois = new LinkedHashMap<>();
+        // Uma passada so: calculamos o novo valor e, se a barra cruzou o
+        // critico agora, ja avisamos. Assim nao precisa guardar o "antes" nem
+        // o "depois" em mapas so para comparar duas linhas depois.
+        StringBuilder paraAvisar = new StringBuilder();
         boolean mudou = false;
-        for (String k : KEYS) {
+        for (int idx = 0; idx < KEYS.length; idx++) {
+            String k = KEYS[idx];
             double cur = state.optDouble(k, 0.0);
-            antes.put(k, cur);
             double v = cur - minutos * decayOf(k) * taxa(cur);
             double arredondado = Math.round(v * 10.0) / 10.0;
             if (arredondado < 0.0) arredondado = 0.0;
@@ -143,21 +147,29 @@ public class PetAlarmReceiver extends BroadcastReceiver {
                 state.put(k, arredondado);
                 mudou = true;
             }
-            depois.put(k, arredondado);
+            // Avisa so o que cruzou o limite agora (nao repete a cada alarme).
+            if (arredondado <= CRITICO && cur > CRITICO) {
+                paraAvisar.append(k).append('|');
+            }
         }
         state.put("lt", agora);
         if (!mudou) return;
         sp.edit().putString("petstats", state.toString()).apply();
 
-        // Avisa só o que cruzou o limite agora (não repete a cada alarme).
-        for (String k : KEYS) {
-            double a = antes.get(k);
-            double d = depois.get(k);
-            if (d <= CRITICO && a > CRITICO) {
-                int idx = indexOf(k);
-                notificar(context, k, EMOJI[idx] + " " + LABELS[idx] + " está bem baixa!",
-                    "O gatinho precisa de você. Abra o NebulaTune.");
-            }
+        for (String k : paraAvisar.toString().split("\\|")) {
+            if (k.isEmpty()) continue;
+            int idx = indexOf(k);
+            notificar(context, idx,
+                res(context, EMOJI_RES[idx]) + " " + LABELS[idx] + " " + res(context, R.array.pet_barra_baixa),
+                res(context, R.array.pet_barra_baixa_corpo));
+        }
+    }
+
+    private static String res(Context context, int id) {
+        try {
+            return context.getResources().getString(id);
+        } catch (Exception e) {
+            return "";
         }
     }
 
@@ -168,7 +180,7 @@ public class PetAlarmReceiver extends BroadcastReceiver {
         return 0;
     }
 
-    private void notificar(Context context, String tag, String title, String body) {
+    private void notificar(Context context, int idx, String title, String body) {
         if (android.os.Build.VERSION.SDK_INT >= 33
             && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -181,15 +193,18 @@ public class PetAlarmReceiver extends BroadcastReceiver {
             NotificationChannel ch =
                 new NotificationChannel(CHANNEL, "Chamadas do gatinho",
                     NotificationManager.IMPORTANCE_HIGH);
-            ch.setDescription("Avisa quando o gatinho precisa de você, mesmo com o app fechado");
+            ch.setDescription(res(context, R.string.pet_canal_desc));
             nm.createNotificationChannel(ch);
         }
+        // O indice (0..3) vira o id: sempre positivo e estavel. Usar
+        // hashCode() seria perigoso, Math.abs(Integer.MIN_VALUE) continua
+        // negativo e a notificacao sairia com id invalido.
+        int notifId = NOTIF_BASE + idx;
         Intent tap = new Intent(context, MainActivity.class);
-        tap.putExtra("fromPetNotification", tag);
+        tap.putExtra("fromPetNotification", KEYS[idx]);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (android.os.Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
-        PendingIntent content = PendingIntent.getActivity(context,
-            4052 + Math.abs(tag.hashCode()), tap, flags);
+        PendingIntent content = PendingIntent.getActivity(context, notifId, tap, flags);
 
         Notification n = new NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
@@ -199,6 +214,6 @@ public class PetAlarmReceiver extends BroadcastReceiver {
             .setAutoCancel(true)
             .setContentIntent(content)
             .build();
-        nm.notify(4052 + Math.abs(tag.hashCode()), n);
+        nm.notify(notifId, n);
     }
 }

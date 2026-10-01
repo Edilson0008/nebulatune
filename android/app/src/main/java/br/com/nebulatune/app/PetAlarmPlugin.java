@@ -13,7 +13,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  *
  * A tela chama {@code PetAlarm.sync} para mandar o estado atual das barras.
  * O Android guarda isso e passa a mexer sozinho, com o app fechado. Sem isso a
- * única forma de notificar era a tela notar a barra baixa, o que só acontece
+ * unica forma de notificar era a tela notar a barra baixa, o que so acontece
  * com o app aberto.
  */
 @CapacitorPlugin(name = "PetAlarm")
@@ -38,6 +38,25 @@ public class PetAlarmPlugin extends Plugin {
         call.resolve(new JSObject());
     }
 
+    /**
+     * Devolve o estado que o alarme decaiu enquanto o app estava fechado.
+     *
+     * Sem isto o native e a tela teriam dois numeros diferentes para a mesma
+     * barra: quem abriu o app veria o valor antigo e pularia de um lado para o
+     * outro. A tela chama isto na abertura e adota o que for mais recente.
+     */
+    @PluginMethod
+    public void read(PluginCall call) {
+        Context ctx = getContext();
+        SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String bruto = sp.getString("petstats", null);
+        JSObject out = new JSObject();
+        if (bruto != null && !bruto.trim().isEmpty()) {
+            out.put("petstats", bruto);
+        }
+        call.resolve(out);
+    }
+
     /** Reprograma o alarme sem mexer no estado (usado ao abrir o app). */
     @PluginMethod
     public void schedule(PluginCall call) {
@@ -45,7 +64,7 @@ public class PetAlarmPlugin extends Plugin {
         call.resolve(new JSObject());
     }
 
-    /** Cancela o alarme (usado quando a pessoa não quer ser perturbada). */
+    /** Cancela o alarme (usado quando a pessoa nao quer ser perturbada). */
     @PluginMethod
     public void cancel(PluginCall call) {
         Context ctx = getContext();
@@ -65,7 +84,7 @@ public class PetAlarmPlugin extends Plugin {
 
     @Override
     public void load() {
-        // App abrindo: garante o alarme rodando, mesmo depois de um "forçar
+        // App abrindo: garante o alarme rodando, mesmo depois de um "forcar
         // parada" que o Android pode ter feito para economizar bateria.
         PetAlarmReceiver.schedule(getContext());
     }

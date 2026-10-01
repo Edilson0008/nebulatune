@@ -11,7 +11,7 @@ import { PET_NEEDS_INFO, pickNeedNudge, pickPetNudge } from './petNudges'
 import { ProgressProvider } from './progress'
 import { MOOD_KEYS, corPublicavel, usePetStats, useSettings } from './settings'
 import { APK_URL, fetchLatestVersion, installUpdate, isNewer, markUpdatePrompted, notifyUpdateAvailable, requestNotificationsPermission, wasUpdatePrompted } from './updater'
-import { sincronizaAlarmeDoGatinho } from './pet-alarm'
+import { leEstadoDoAlarme, sincronizaAlarmeDoGatinho } from './pet-alarm'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { Cover } from './components/Cover.jsx'
 import { BackgroundFX } from './components/background.jsx'
@@ -321,7 +321,7 @@ function App() {
     setPetGreet(nextPetGreet(appSettings.userName || '', library.length === 0 && !loadingLib))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, loadingLib, library.length, appSettings.userName])
-  const { petStats, bumpPet, settlePet, applyPetStats, restorePetStats } = usePetStats()
+  const { petStats, bumpPet, settlePet, applyPetStats, restorePetStats, adotePetStats } = usePetStats()
   // Saldo de moedas = total ganho menos total gasto (ver lib/pet.js). Fica
   // depois do hook porque é petStats que carrega os dois valores.
   const moedas = Math.max(
@@ -355,6 +355,26 @@ function App() {
     const t = setTimeout(() => sincronizaAlarmeDoGatinho(petStats), 1500)
     return () => clearTimeout(t)
   }, [petStats])
+
+  // App abrindo: adota o que o alarme decaiu com o app fechado. Sem isso a
+  // tela mostraria o valor antigo e as barras dariam um salto para tras.
+  useEffect(() => {
+    if (!IS_NATIVE) return undefined
+    let vivo = true
+    leEstadoDoAlarme().then((nativo) => {
+      if (!vivo || !nativo) return
+      const local = readLocal('nt.petstats') || {}
+      const ltLocal = Number(local.lt) || 0
+      const ltNativo = Number(nativo.lt) || 0
+      // Só entra o que for mesmo mais recente, senão um estado velho sobrescreve.
+      if (ltNativo <= ltLocal) return
+      writeLocal('nt.petstats', { ...local, ...nativo })
+      adotePetStats(nativo)
+    })
+    return () => {
+      vivo = false
+    }
+  }, [])
 
   // ---------- Chamada do gatinho quando uma barra fica baixa ----------
   // O pet manda notificação pedindo pra pessoa entrar no app (tipo "tô com fome 🍗").

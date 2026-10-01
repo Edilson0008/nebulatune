@@ -235,7 +235,13 @@ export function usePetStats() {
     () => (value) => {
       if (!value || typeof value !== 'object') return
       setPetStats((s) => {
-        const keys = ['touches', 'hearts', 'sleeps', 'scares', 'meows', 'coins', 'coinsGastos', ...MOOD_KEYS, 'lt']
+        // Lista de tudo que pode crescer. Antes faltavam bathsFeitos, buys e
+        // minigames: eles chegavam da nuvem e eram descartados aqui, então a
+        // conquista contava no aparelho que fez e sumia no outro.
+        const keys = [
+          'touches', 'hearts', 'sleeps', 'scares', 'meows', 'buys', 'minigames',
+          'bathsFeitos', 'coins', 'coinsGastos', ...MOOD_KEYS, 'lt',
+        ]
         const merged = { ...s }
         for (const k of keys) {
           const v = Number(value[k]) || 0
@@ -270,5 +276,16 @@ export function usePetStats() {
     [],
   )
 
-  return { petStats, bumpPet, settlePet, applyPetStats, restorePetStats }
+  // Adota um estado vindo de fora (hoje: o alarme nativo, que decays as
+  // barras com o app fechado). Mantem os defaults para nao perder campo se o
+  // estado de origem for parcial.
+  const adotePetStats = useMemo(
+    () => (value) => {
+      if (!value || typeof value !== 'object') return
+      setPetStats((s) => ({ ...s, ...value }))
+    },
+    [],
+  )
+
+  return { petStats, bumpPet, settlePet, applyPetStats, restorePetStats, adotePetStats }
 }

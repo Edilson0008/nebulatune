@@ -723,3 +723,54 @@ test('o alarme do gatinho continua agendado depois de reiniciar o aparelho', () 
   assert.ok(manifest.includes('PetAlarmReceiver'), 'o receiver precisa estar no manifest')
   assert.ok(manifest.includes('PET_CHECK'), 'a ação do alarme precisa estar no manifest')
 })
+
+// ---------------------------------------------------------------------------
+// Tela e alarme nativo não podem discordar do mesmo número.
+//
+// O alarme tem contador próprio (é ele que roda com o app fechado). Se a tela
+// ignorasse o que ele mexeu, as barras pulariam para trás ao abrir o app.
+// Estes testes travam o contrato: só entra o estado nativo mais recente.
+// ---------------------------------------------------------------------------
+
+test('o alarme nativo tem um método para devolver o estado que decaiu', () => {
+  const java = readFileSync(
+    new URL('../android/app/src/main/java/br/com/nebulatune/app/PetAlarmPlugin.java', import.meta.url),
+    'utf8',
+  )
+  assert.ok(java.includes('public void read('), 'sem read() a tela nunca recupera o estado nativo')
+  assert.ok(java.includes('out.put("petstats"'), 'read() tem que devolver o petstats')
+})
+
+test('o id da notificação é sempre positivo e estável', () => {
+  const java = readFileSync(
+    new URL('../android/app/src/main/java/br/com/nebulatune/app/PetAlarmReceiver.java', import.meta.url),
+    'utf8',
+  )
+  // Math.abs(Integer.MIN_VALUE) continua negativo: usar hashCode() quebrava o id.
+  assert.ok(!java.includes('Math.abs(tag.hashCode())'), 'não pode derivar id de hashCode')
+  assert.ok(java.includes('NOTIF_BASE + idx'), 'o id tem que sair do índice (0..3)')
+})
+
+test('o alarme se refaz sozinho quando o aparelho reinicia', () => {
+  const java = readFileSync(
+    new URL('../android/app/src/main/java/br/com/nebulatune/app/PetAlarmReceiver.java', import.meta.url),
+    'utf8',
+  )
+  // O proximo precisa ser agendado ANTES do trabalho, senao um alarme que
+  // morre no meio deixa a cadeia parada para sempre.
+  const corpo = java.slice(java.indexOf('public void onReceive'))
+  const idxAgendar = corpo.indexOf('schedule(context)')
+  const idxTrabalho = corpo.indexOf('aplicarDecaimento(context)')
+  assert.ok(idxAgendar >= 0 && idxTrabalho >= 0, 'tem que agendar e fazer o trabalho')
+  assert.ok(idxAgendar < idxTrabalho, 'agendar precisa vir antes do trabalho')
+})
+
+test('applyPetStats não descarta contador que só cresce', () => {
+  const src = readFileSync(new URL('../src/settings.js', import.meta.url), 'utf8')
+  const bloco = src.slice(src.indexOf('const applyPetStats'))
+  const lista = bloco.slice(0, bloco.indexOf(']'))
+  // Estes tres crescem por evento e sumiam ao aplicar a copia da nuvem.
+  for (const k of ['bathsFeitos', 'buys', 'minigames']) {
+    assert.ok(lista.includes(`'${k}'`), `applyPetStats precisa aceitar ${k}`)
+  }
+})

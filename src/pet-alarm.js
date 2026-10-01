@@ -18,6 +18,24 @@ export function sincronizaAlarmeDoGatinho(petStats) {
   return PetAlarm.sync({ petstats: JSON.stringify(petStats) }).catch(() => {})
 }
 
+/**
+ * Lê o estado que o alarme decaiu enquanto o app estava fechado.
+ *
+ * O alarme nativo tem o seu proprio contador (é ele que roda sem o app). Se a
+ * tela ignorasse o que ele mexeu, os dois mostrariam numeros diferentes para a
+ * mesma barra. Devolve null quando ainda não há nada guardado.
+ */
+export async function leEstadoDoAlarme() {
+  if (Capacitor.getPlatform() !== 'android') return null
+  try {
+    const r = await PetAlarm.read()
+    if (!r || !r.petstats) return null
+    return JSON.parse(r.petstats)
+  } catch {
+    return null
+  }
+}
+
 /** Reprograma o alarme sem mexer no estado (app abrindo). */
 export function reagendaAlarmeDoGatinho() {
   if (Capacitor.getPlatform() !== 'android') return Promise.resolve()
