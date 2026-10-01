@@ -1430,18 +1430,31 @@ const onFoodEaten = useCallback((key) => {
     adjustSync(trackId, Math.round((liveProgressRef.current.elapsed - firstLineTime - syncOffset) * 10) / 10)
   }, [trackId, hasTimestamp, firstLineTime, syncOffset, adjustSync])
 
+  // Lápide: a biblioteca é união entre aparelho e nuvem, então só apagar da lista
+  // local não adianta — a faixa volta no próximo sync e os plays dela
+  // continuam contando no card do amigo. Guardar o sid como "apagada" é o que
+  // faz a remoção valer.
+  const marcarMusicaApagada = useCallback((sid) => {
+    if (!sid) return
+    const antes = readLocal('nt.libApagadas')
+    const lista = Array.isArray(antes) ? antes : []
+    if (lista.includes(sid)) return
+    writeLocal('nt.libApagadas', [...lista, sid].slice(-500))
+  }, [])
+
   const removeTrack = useCallback(
     (id) => {
       const t = library.find((x) => x.id === id)
       if (!t) return
       stopAndReset()
+      marcarMusicaApagada(t.sid || t.id)
       setLibrary((prev) => prev.filter((x) => x.id !== id))
       setPlaylists((prev) => prev.map((p) => ({ ...p, trackIds: p.trackIds.filter((x) => x !== id) })))
       if (t.src) URL.revokeObjectURL(t.src)
       if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl)
       deleteMediaBlobs(id)
     },
-    [library, stopAndReset],
+    [library, stopAndReset, marcarMusicaApagada],
   )
 
   const clearLibrary = useCallback(() => {
@@ -1450,9 +1463,10 @@ const onFoodEaten = useCallback((key) => {
     library.forEach((t) => {
       if (t.src) URL.revokeObjectURL(t.src)
       if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl)
+      marcarMusicaApagada(t.sid || t.id)
     })
     setLibrary([])
-  }, [library, stopAndReset])
+  }, [library, stopAndReset, marcarMusicaApagada])
 
   const results = useMemo(() => {
     if (!query) return []

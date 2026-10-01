@@ -86,6 +86,7 @@ function gravarSectionsDoCloud(cloud) {
     achSeen: 'nt.achSeen',
     playlists: 'nt.playlists',
     playedRecent: 'nt.playedRecent',
+    libApagadas: 'nt.libApagadas',
   }
   for (const [campo, chave] of Object.entries(secaoParaChave)) {
     const v = cloud[campo]
@@ -120,6 +121,7 @@ export function collectLocal() {
     playlists: readLocal('nt.playlists'),
     library: readLocal('nt.library'),
     playedRecent: readLocal('nt.playedRecent'),
+    libApagadas: readLocal('nt.libApagadas'),
     settingsAt: Number(readLocal('nt.settingsAt')) || 0,
     extras: collectExtras(),
   }
@@ -176,9 +178,23 @@ export function mergeStrings(a, b) {
   return out
 }
 
+// SIDs que a pessoa APAGOU da biblioteca. É uma lápide: a biblioteca é união
+// entre aparelho e nuvem, então sem isto a música apagada voltaria no próximo
+// sync — e, pior, os plays dela continuariam contando no perfil do amigo.
+export function mergeApagadas(a, b) {
+  return mergeStrings(a, b)
+}
+
+// Apagada vence: uma faixa nesta lista não volta, nem por union.
+export function semApagadas(rows, apagadas) {
+  const mortos = new Set(Array.isArray(apagadas) ? apagadas.filter(Boolean) : [])
+  if (!mortos.size) return Array.isArray(rows) ? rows : []
+  return (Array.isArray(rows) ? rows : []).filter((r) => !r || !(r.sid && mortos.has(r.sid)))
+}
+
 // Bibliotecas: união por sid; por faixa, plays = maior, favorita = qualquer,
 // playDays = união, metadados do lado que tiver (local ganha por ter áudio).
-export function mergeLibrary(a, b) {
+export function mergeLibrary(a, b, apagadas) {
   const bySid = new Map()
   const seed = (row, side) => {
     const sid = row.sid || ''
@@ -246,7 +262,7 @@ export function mergeLibrary(a, b) {
       coverUrl: r.coverUrl,
     }
   }
-  return [...bySid.keys()].map(toRow)
+  return semApagadas([...bySid.keys()].map(toRow), apagadas)
 }
 
 // Playlists: união por id; trackIds vira união ordenada.
@@ -309,7 +325,7 @@ export function mergeSettings(a, b, aAt = 0, bAt = 0) {
 const SECOES = [
   'nt.settings', 'nt.petstats', 'nt.inv', 'nt.toys', 'nt.bath',
   'nt.achSeen', 'nt.playlists', 'nt.library', 'nt.playedRecent',
-  'nt.settingsAt',
+  'nt.settingsAt', 'nt.libApagadas',
 ]
 
 // Nunca vai para a nuvem: a sessão, o estado do próprio sync, e avisos que
@@ -455,7 +471,8 @@ export function mergeAll(a, b) {
     bath: mergeCounters(local.bath, nuvem.bath),
     achSeen: mergeStrings(local.achSeen, nuvem.achSeen),
     playlists: mergePlaylists(local.playlists, nuvem.playlists),
-    library: mergeLibrary(local.library, nuvem.library),
+    library: mergeLibrary(local.library, nuvem.library, local.libApagadas || nuvem.libApagadas),
+    libApagadas: mergeApagadas(local.libApagadas, nuvem.libApagadas),
     playedRecent: mergeStrings(local.playedRecent, nuvem.playedRecent).slice(0, 10),
     extras: mergeExtras(local.extras, nuvem.extras),
   }
@@ -767,7 +784,14 @@ async function syncNowUmaVez() {
       // playDays dizem a quem a escuta foi. Se viessem junto, a conta nova
       // nasceria com as estatísticas da antiga — e era assim que as músicas e as
       // conquistas mudavam de um lado para o outro.
-      merged = mergeAll({ library: soCatalogoDaBiblioteca(local.library) }, cloud || {})
+      merged = mergeAll(
+        { library: soCatalogoDaBiblioteca(local.library) },
+        // Na troca, quem manda na lápide é a nuvem da conta que ENTROU: as
+        // lápides do aparelho são de quem saiu. Se fossem misturadas, as
+        // músicas apagadas na conta antiga sumiriam também das estatísticas da
+        // conta nova.
+        { ...(cloud || {}), libApagadas: (cloud && cloud.libApagadas) || [] },
+      )
       if (trocouComDono) {
         removerDadosDeContaAnterior()
         // nt.library sobrevive à limpeza (é do aparelho) — mas os números dela

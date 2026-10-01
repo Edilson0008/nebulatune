@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '3.2.4',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'Apagar uma música agora apaga de verdade. Antes ela voltava sozinha na sincronização seguinte, e as reproduções dela continuavam aparecendo no card do seu amigo — como se a música ainda estivesse lá.' },
+      { type: 'novo', text: 'A lista de músicas apagadas fica guardada na nuvem, então a limpeza vale em qualquer aparelho onde você entrar.' },
+    ],
+  },
+  {
     version: '3.2.3',
     date: 'Outubro de 2026',
     items: [

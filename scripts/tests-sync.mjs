@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { ensureSids } from '../src/lib/sid.js'
-import { applyExtras, applyLibrary, applyPlaylists, collectExtras, deepMerge, mergeAll, mergeCounters, mergeExtras, mergeLibrary, mergePlaylists, mergePetstats, mergeSettings, mergeStrings, novoTudoDoZero } from '../src/lib/sync.js'
+import { applyExtras, applyLibrary, applyPlaylists, collectExtras, deepMerge, mergeApagadas, mergeAll, mergeCounters, mergeExtras, mergeLibrary, mergePlaylists, mergePetstats, mergeSettings, mergeStrings, novoTudoDoZero } from '../src/lib/sync.js'
 
 test('ensureSids: mesma música gera o mesmo sid', () => {
   const a = ensureSids([{ id: 'x', title: 'Pra Você', artist: 'DJ Rafael', album: 'Tô Forte', duration: 214 }])
@@ -419,4 +419,38 @@ test('preservaEditionsRecentes: sem edição durante a sync, o resultado entra n
   const merged = preservaEditionsRecentes({ userName: 'Vovô', avatar: 'data:image/png;base64,VELHA', accent: 'green' }, base)
   assert.equal(merged.accent, 'green')
   assert.equal(merged.avatar, 'data:image/png;base64,VELHA')
+})
+
+// ── Música apagada ───────────────────────────────────────────────────────────
+// A biblioteca é UNIÃO entre aparelho e nuvem. Sem lápide, a faixa apagada voltaria
+// no próximo sync e os plays dela continuariam contando no card do amigo.
+test('música apagada na nuvem não volta para a biblioteca', () => {
+  const nuvem = [{ sid: 'a', title: 'A', plays: 9 }, { sid: 'b', title: 'B', plays: 4 }]
+  const local = [{ sid: 'b', title: 'B', plays: 4 }]
+  const m = mergeLibrary(local, nuvem, ['a'])
+  assert.deepEqual(m.map((x) => x.sid), ['b'], 'a lápide precisa vencer a união')
+})
+
+test('sem lápide, a união continua valendo (comportamento antigo)', () => {
+  const m = mergeLibrary([{ sid: 'b' }], [{ sid: 'a' }, { sid: 'b' }], [])
+  assert.deepEqual(m.map((x) => x.sid).sort(), ['a', 'b'])
+})
+
+test('lápides dos dois lados se juntam', () => {
+  assert.deepEqual(mergeApagadas(['a'], ['b', 'a']).sort(), ['a', 'b'])
+})
+
+test('lápide antiga de outra conta não some com a biblioteca do aparelho', () => {
+  const merged = mergeAll(
+    { library: [{ sid: 'x', title: 'X' }], libApagadas: [] },
+    { library: [{ sid: 'x', title: 'X', plays: 3 }], libApagadas: ['y'] },
+  )
+  assert.equal(merged.library.length, 1)
+  assert.deepEqual(merged.libApagadas, ['y'])
+})
+
+test('apagar todas as músicas zera as estatísticas que o amigo vê', () => {
+  const apagadas = mergeApagadas([], ['a', 'b'])
+  const m = mergeLibrary([], [{ sid: 'a', plays: 30 }, { sid: 'b', plays: 12 }], apagadas)
+  assert.equal(m.length, 0, 'sem músicas, não pode sobrar plays no perfil do amigo')
 })

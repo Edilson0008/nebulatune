@@ -66,7 +66,7 @@ console.log('\n== a música de A tem capa do ARQUIVO, sem link do iTunes ==')
 await signIn(emailA, SENHA)
 const uidA = (await import('../src/lib/account.js')).getUserId
 const euA = await uidA()
-store.set('nt.sync.owner', euA)
+store.set('nt.sync.owner', JSON.stringify(euA))
 store.set('nt.library', JSON.stringify([
   { id: 't1', sid: 't1', title: 'So Comigo', artist: 'Zeca', plays: 12, fav: false, coverShare: MIN, coverRemote: null, cover: ['#111', '#222'] },
 ]))
@@ -85,8 +85,27 @@ check('o perfil tem "mais tocadas"', top.length >= 1, `top=${top.length}`)
 const comCapa = top.find((t) => typeof t.capa === 'string' && t.capa.startsWith('data:'))
 check('a capa que aparece é uma miniatura', Boolean(comCapa), comCapa ? `${comCapa.capa.slice(0, 24)}…` : 'veio sem capa')
 
+// Apagar as músicas precisa zerar o que o amigo vê. Sem a lápide, a biblioteca
+// é união: a faixa voltaria da nuvem no próximo sync, com os plays, e o card
+// continuaria mostrando 12 reproduções de uma música que não existe mais.
+console.log('\n== apagando tudo, o card do amigo zera ==')
+await signIn(emailA, SENHA)
+store.set('nt.sync.owner', JSON.stringify(euA))
+store.set('nt.libApagadas', JSON.stringify(['t1']))
+store.set('nt.library', JSON.stringify([]))
+await syncNow()
+const depois = JSON.parse(store.get('nt.sync.merged') || '{}').merged?.library || []
+check('a biblioteca ficou vazia na nuvem', depois.length === 0, `linhas=${depois.length}`)
+
+await signIn(emailB, SENHA)
+const perfilDepois = await amigos.verPerfilAmigo(euA)
+const topDepois = perfilDepois?.estatisticas?.top || []
+const playsDepois = perfilDepois?.estatisticas?.plays ?? 0
+check('as estatísticas do amigo foram a zero', playsDepois === 0 && topDepois.length === 0,
+  `plays=${playsDepois} top=${topDepois.length}`)
+
 console.log(`\n${ok}/${ok + bad} verificações passaram`)
 console.log(bad === 0
-  ? '\n✅ A capa do arquivo aparece no perfil do amigo.'
-  : '\n❌ A capa ainda não aparece. Rode COLE-ISSO-NO-SUPABASE-4.txt no Supabase.')
+  ? '\n✅ A capa aparece no perfil do amigo e as estatísticas zeram quando as músicas são apagadas.'
+  : '\n❌ Algo ainda não bate: capa ausente ou plays que sobraram depois do apagamento.')
 process.exit(bad ? 1 : 0)
