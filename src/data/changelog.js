@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '3.2.7',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'O contador de moedas agora muda em todas as telas: card do gatinho, habitat e minigames. Ele estava mostrando o total ganho, que nunca diminui, em vez do saldo.' },
+      { type: 'correcao', text: 'O que você gasta (moedas, comida e usos de banho) agora é sincronizado de verdade. Antes ele não subia para a nuvem, então o outro aparelho não sabia do que já tinha sido usado.' },
+    ],
+  },
+  {
     version: '3.2.6',
     date: 'Outubro de 2026',
     items: [

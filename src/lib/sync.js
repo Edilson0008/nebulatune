@@ -8,7 +8,7 @@
 
 import { readLocal, clearAllMedia, writeLocal } from '../localstore.js'
 import { accountConfigured, authedFetch, clearSession, getUserId } from './account.js'
-import { MOOD_KEYS } from './pet.js'
+import { MOOD_KEYS, juntaConsumido } from './pet.js'
 
 export const SYNC_TABLE = 'sync_profiles'
 const RESULT_KEY = 'nt.sync.merged'
@@ -82,8 +82,10 @@ function gravarSectionsDoCloud(cloud) {
     settingsAt: 'nt.settingsAt',
     petstats: 'nt.petstats',
     inv: 'nt.inv',
+    invUsado: 'nt.invUsado',
     toys: 'nt.toys',
     bath: 'nt.bath',
+    bathUsado: 'nt.bathUsado',
     achSeen: 'nt.achSeen',
     playlists: 'nt.playlists',
     playedRecent: 'nt.playedRecent',
@@ -116,8 +118,10 @@ export function collectLocal() {
     settings: readLocal('nt.settings'),
     petstats: readLocal('nt.petstats'),
     inv: readLocal('nt.inv'),
+    invUsado: readLocal('nt.invUsado'),
     toys: readLocal('nt.toys'),
     bath: readLocal('nt.bath'),
+    bathUsado: readLocal('nt.bathUsado'),
     achSeen: readLocal('nt.achSeen'),
     playlists: readLocal('nt.playlists'),
     library: readLocal('nt.library'),
@@ -481,8 +485,10 @@ export function mergeAll(a, b) {
     settingsAt: Math.max(atLocal, atNuvem),
     petstats: mergePetstats(local.petstats, nuvem.petstats),
     inv: mergeCounters(local.inv, nuvem.inv),
+    invUsado: juntaConsumido(local.invUsado, nuvem.invUsado),
     toys: mergeStrings(local.toys, nuvem.toys),
     bath: mergeCounters(local.bath, nuvem.bath),
+    bathUsado: juntaConsumido(local.bathUsado, nuvem.bathUsado),
     achSeen: mergeStrings(local.achSeen, nuvem.achSeen),
     playlists: mergePlaylists(local.playlists, nuvem.playlists),
     library: mergeLibrary(local.library, nuvem.library, local.libApagadas || nuvem.libApagadas),

@@ -327,6 +327,14 @@ function App() {
     0,
     (Number(petStats?.coins) || 0) - (Number(petStats?.coinsGastos) || 0),
   )
+  // As telas que mostram o contador de moedas leem `stats.coins`. Passamos
+  // `petStats` cru, e `coins` é o total GANHO (que só cresce, para o sync não
+  // desfazer a compra) — então o número exibido nunca mudava. Aqui o `.coins`
+  // já é o SALDO, e todas as telas passam a mostrar a mesma coisa.
+  const petStatsExibido = useMemo(
+    () => ({ ...(petStats || {}), coins: moedas }),
+    [petStats, moedas],
+  )
 
   // Permissão de notificação (uma vez só): o gatinho precisa dela pra chamar de volta
   useEffect(() => {
@@ -2404,7 +2412,7 @@ const shareTrack = useCallback(
             <PetHabitatCard
               greeting={petGreet}
               greetMs={!loadingLib && library.length === 0 ? 0 : 4800}
-              stats={petStats}
+              stats={petStatsExibido}
               onShowProfile={() => setView('perfil')}
               onOpenHabitat={() => setView('habitat')}
               playing={!!playing}
@@ -2674,7 +2682,7 @@ onPetAction={handlePetAction}
           <Suspense fallback={<TelaCarregando />}>
             <PetHabitatView
             onBack={() => setView('inicio')}
-            stats={petStats}
+            stats={petStatsExibido}
             inv={invSaldo}
             toys={toys}
             bath={bathSaldo}

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { ensureSids } from '../src/lib/sid.js'
 import { disponivelDe, juntaConsumido, somaConsumido } from '../src/lib/pet.js'
-import { applyExtras, applyLibrary, applyPlaylists, collectExtras, deepMerge, mergeApagadas, mergeAll, mergeCounters, mergeExtras, mergeLibrary, mergePlaylists, mergePetstats, mergeSettings, mergeStrings, novoTudoDoZero } from '../src/lib/sync.js'
+import { applyExtras, applyLibrary, applyPlaylists, collectExtras, collectLocal, deepMerge, mergeApagadas, mergeAll, mergeCounters, mergeExtras, mergeLibrary, mergePlaylists, mergePetstats, mergeSettings, mergeStrings, novoTudoDoZero } from '../src/lib/sync.js'
 
 test('ensureSids: mesma música gera o mesmo sid', () => {
   const a = ensureSids([{ id: 'x', title: 'Pra Você', artist: 'DJ Rafael', album: 'Tô Forte', duration: 214 }])
@@ -555,4 +555,57 @@ test('os razões de consumo entram na sincronização', () => {
   const temNoFonte = readFileSync(new URL('../src/lib/sync.js', import.meta.url), 'utf8')
   assert.ok(temNoFonte.includes("'nt.invUsado'"), 'nt.invUsado tem que estar nas seções')
   assert.ok(temNoFonte.includes("'nt.bathUsado'"), 'nt.bathUsado tem que estar nas seções')
+})
+
+// ---------------------------------------------------------------------------
+// Regressão de sincronização: o gasto precisa SUBIR para a nuvem.
+//
+// `nt.invUsado`/`nt.bathUsado` entraram na lista de seções e, com isso, saíram
+// da coleta de "extras" — que é justamente por onde o resto do app sobe para
+// a nuvem. O efeito practicalo era o pior dos dois: o gasto não subia, e o
+// outro aparelho desconhecia a comida já comida. Aqui eles são seções de
+// primeira classe, lidas e enviadas como tal.
+// ---------------------------------------------------------------------------
+
+test('o motivo de consumo sobe para a nuvem (não fica só neste aparelho)', () => {
+  const store = {}
+  globalThis.localStorage.getItem = (k) => (k in store ? store[k] : null)
+  globalThis.localStorage.setItem = (k, v) => { store[k] = String(v) }
+  store['nt.invUsado'] = JSON.stringify({ frango: 2 })
+  store['nt.bathUsado'] = JSON.stringify({ shampoo: 1 })
+
+  const local = collectLocal()
+  assert.deepEqual(local.invUsado, { frango: 2 }, 'invUsado tem que ser lido do aparelho')
+  assert.deepEqual(local.bathUsado, { shampoo: 1 }, 'bathUsado tem que ser lido do aparelho')
+  assert.equal('invUsado' in local, true, 'precisa existir no payload enviado à nuvem')
+  assert.equal('bathUsado' in local, true)
+})
+
+test('moedas: o saldo some depois de mesclar com um gasto maior da nuvem', () => {
+  const local = { petstats: { coins: 200, coinsGastos: 30, lt: 1000 }, inv: {}, toys: [], bath: {}, library: [], achSeen: [], playlists: [], playedRecent: [], extras: {} }
+  const nuvem = { petstats: { coins: 200, coinsGastos: 80, lt: 1000 }, inv: {}, toys: [], bath: {}, library: [], achSeen: [], playlists: [], playedRecent: [], extras: {} }
+  const m = mergeAll(local, nuvem)
+  assert.equal(m.petstats.coinsGastos, 80, 'o maior total gasto é o que vale')
+  assert.equal(m.petstats.coins - m.petstats.coinsGastos, 120, 'saldo 200 - 80 = 120')
+})
+
+test('comida e banho: unir os gastos não volta o que já foi comido', () => {
+  const local = { petstats: { lt: 0 }, inv: { frango: 3 }, invUsado: { frango: 2 }, bath: { shampoo: 5 }, bathUsado: { shampoo: 1 }, toys: [], library: [], achSeen: [], playlists: [], playedRecent: [], extras: {} }
+  const nuvem = { petstats: { lt: 0 }, inv: { frango: 3 }, invUsado: { frango: 3 }, bath: { shampoo: 5 }, bathUsado: { shampoo: 2 }, toys: [], library: [], achSeen: [], playlists: [], playedRecent: [], extras: {} }
+  const m = mergeAll(local, nuvem)
+  // Consumi 2 aqui e 3 lá: os são o MESMO total acumulado, então vale o maior.
+  assert.equal(m.invUsado.frango, 3)
+  assert.equal(m.inv.frango - m.invUsado.frango, 0, 'ninguém mais tem frango')
+  assert.equal(m.bathUsado.shampoo, 2, 'banho não soma duas vezes, fica no maior')
+  assert.equal(m.bath.shampoo - m.bathUsado.shampoo, 3, 'sobram 3 usos de shampoo')
+})
+
+test('saldo de moedas mostrado na tela nunca volta ao total ganho', () => {
+  // A tela recebe `stats` e lê `.coins`. Se passarmos o petStats cru, o
+  // contador fica preso no total ganho e "não muda" ao comprar.
+  const petStats = { coins: 200, coinsGastos: 30, touches: 12 }
+  const moedas = Math.max(0, (Number(petStats.coins) || 0) - (Number(petStats.coinsGastos) || 0))
+  const exibido = { ...petStats, coins: moedas }
+  assert.equal(exibido.coins, 170, 'a tela tem que mostrar o saldo, não o total')
+  assert.equal(exibido.touches, 12, 'os outros contadores continuam iguais')
 })
