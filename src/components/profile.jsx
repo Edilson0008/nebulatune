@@ -1,12 +1,19 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ACCENTS, resolveAccent } from '../settings'
 import { Cover } from './Cover.jsx'
 import { nf } from '../lib/format.js'
 import { PERIOD_LABELS, getAchievements, playsInPeriod } from '../lib/stats.js'
+import { reduzirAvatar } from '../lib/avatar.js'
 
 export function Profile({ settings, api, library, onPlay, petStats }) {
   const avatarInputRef = useRef(null)
   const [statsPeriod, setStatsPeriod] = useState('week')
+  const [salvandoFoto, setSalvandoFoto] = useState(false)
+  // A foto que a pessoa acabou de escolher. Serve de rede de segurança: se uma
+  // sincronização velha sobrescrever ela, reassentamos a escolhida (tentando
+  // algumas vezes) em vez de deixar a foto voltar sozinha.
+  const escolhidaRef = useRef(null)
+  const tentativasRef = useRef(0)
 
   const displayName = settings.userName.trim() || 'Seu nome'
 
@@ -14,14 +21,39 @@ export function Profile({ settings, api, library, onPlay, petStats }) {
     ? settings.userName.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'NT'
     : 'NT'
 
-  const handleAvatar = (e) => {
+  // A foto é reduzida antes de guardar: ela aparece pequena na tela, mas é a
+  // mesma que vai para o servidor e para a lista de amigos. A original dentro
+  // do localStorage só pesaria.
+  const handleAvatar = async (e) => {
     const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => api.setAvatar(reader.result)
-    reader.readAsDataURL(file)
     e.target.value = ''
+    if (!file) return
+    setSalvandoFoto(true)
+    try {
+      const mini = await reduzirAvatar(file)
+      if (mini) {
+        escolhidaRef.current = mini
+        tentativasRef.current = 0
+        api.setAvatar(mini)
+      }
+    } finally {
+      setSalvandoFoto(false)
+    }
   }
+
+  const removerFoto = () => {
+    escolhidaRef.current = null
+    api.setAvatar('')
+  }
+
+  useEffect(() => {
+    const escolhida = escolhidaRef.current
+    if (!escolhida || settings.avatar === escolhida) return
+    if (tentativasRef.current >= 3) return
+    tentativasRef.current += 1
+    api.setAvatar(escolhida)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.avatar])
 
   const mostPlayed = library
     .filter((t) => playsInPeriod(t, statsPeriod) > 0)
@@ -47,11 +79,11 @@ export function Profile({ settings, api, library, onPlay, petStats }) {
             )}
           </div>
           <div className="profile-avatar-actions">
-            <button className="btn-primary" onClick={() => avatarInputRef.current?.click()}>
-              {settings.avatar ? 'Trocar foto' : 'Adicionar foto'}
+            <button className="btn-primary" disabled={salvandoFoto} onClick={() => avatarInputRef.current?.click()}>
+              {salvandoFoto ? 'Salvando…' : settings.avatar ? 'Trocar foto' : 'Adicionar foto'}
             </button>
             {settings.avatar && (
-              <button className="btn-ghost" onClick={() => api.setAvatar('')}>
+              <button className="btn-ghost" onClick={removerFoto}>
                 Remover foto
               </button>
             )}

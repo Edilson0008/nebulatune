@@ -10,7 +10,7 @@ import {
   signUp,
   updatePassword,
 } from '../lib/account'
-import { getSyncStatus, syncNow } from '../lib/sync'
+import { getSyncStatus, novoTudoDoZero, syncNow } from '../lib/sync'
 
 function horaCurta(ts) {
   try {
@@ -36,7 +36,10 @@ export function AccountModal({ onClose }) {
 
   // Reage sozinho quando a sessão muda (login, senha trocada pelo link).
   const [, tick] = useState(0)
-  useEffect(() => onAccount(() => tick((n) => n + 1)), [])
+  useEffect(() => onAccount(() => {
+    setStatus(getSyncStatus())
+    tick((n) => n + 1)
+  }), [])
 
   const runSync = async () => {
     if (syncing) return
@@ -135,7 +138,12 @@ export function AccountModal({ onClose }) {
       if (res.needsConfirm) {
         setDoneMsg(`Conta criada! Confirme pelo link que enviamos para ${res.email}.`)
       } else {
-        setDoneMsg('Conta criada e login feito! Suas coisas serão sincronizadas.')
+        // Conta NOVA = começa do zero: nada do que está neste aparelho vai
+        // para a conta nova. Apaga os dados locais, marca o dono e recarrega
+        // o app para nascer limpo com a conta nova.
+        await novoTudoDoZero(getSession()?.user?.id)
+        setDoneMsg('Conta criada! Começando do zero nesta conta.')
+        window.location.reload()
       }
       return
     }

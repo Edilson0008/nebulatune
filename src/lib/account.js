@@ -43,6 +43,10 @@ function setSession(next) {
   session = next
   if (next) writeLocal(SESSION_KEY, next)
   else writeLocal(SESSION_KEY, null)
+  // NADA é reivindicado automaticamente aqui. Quem marca o dono dos dados do
+  // aparelho é o próprio sync (após uma sincronização real) ou uma decisão
+  // explícita do usuário (conta nova = começa do zero). Se tomássemos posse
+  // no login, os dados da conta anterior vazariam para a conta recém-entrada.
   emit()
 }
 
@@ -136,12 +140,19 @@ export async function ensureSession() {
 
 // Chamada já autenticada: renova o token se preciso e repete uma vez se o
 // servidor recusar (401 = token vencido).
-export async function authedFetch(path, { method = 'GET', body, headers = {} } = {}) {
+// Tempo máximo de uma requisição. Sem isto, uma rede que aceita a conexão e
+// nunca responde (wi-fi de hotel, portal cativo) deixa o fetch pendurado para
+// sempre — e as filas do app (gravações de perfil, sincronização) travam sem
+// erro nenhum: o nome e a foto mudam na tela e nunca chegam em lugar nenhum.
+const TIMEOUT_REQUISICAO = 20000
+
+export async function authedFetch(path, { method = 'GET', body, headers = {}, timeout = TIMEOUT_REQUISICAO } = {}) {
   const run = async (token) => {
     const res = await fetch(`${SUPABASE_URL}${path}`, {
       method,
       headers: { ...baseHeaders(), Authorization: `Bearer ${token}`, ...headers },
       body: body ? JSON.stringify(body) : undefined,
+      signal: timeout ? AbortSignal.timeout(timeout) : undefined,
     })
     let data = null
     try {
@@ -154,12 +165,18 @@ export async function authedFetch(path, { method = 'GET', body, headers = {} } =
 
   let current = await ensureSession()
   if (!current) return { ok: false, status: 0, data: { msg: 'sem sessão' } }
-  let res = await run(current.access_token)
-  if (res.status === 401) {
-    current = (await renewSession()) || current
-    res = await run(current.access_token)
+  try {
+    let res = await run(current.access_token)
+    if (res.status === 401) {
+      current = (await renewSession()) || current
+      res = await run(current.access_token)
+    }
+    return res
+  } catch (err) {
+    // O AbortSignal também cobre rede caída, DNS e TLS: o erro vira um
+    // "não deu" comum, em vez de uma promessa que nunca resolve.
+    return { ok: false, status: 0, data: { msg: 'sem conexão', erro: String(err && err.message) } }
   }
-  return res
 }
 
 export async function getUserId() {

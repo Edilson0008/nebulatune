@@ -6,12 +6,96 @@
 // duplicar) e nenhum valor é apagado. Uniões são idempotentes, então o merge
 // converge após uma rodada.
 
-import { readLocal, writeLocal } from '../localstore.js'
+import { readLocal, clearAllMedia, writeLocal } from '../localstore.js'
 import { accountConfigured, authedFetch, clearSession, getUserId } from './account.js'
 
 export const SYNC_TABLE = 'sync_profiles'
 const RESULT_KEY = 'nt.sync.merged'
 const STATUS_KEY = 'nt.sync.status'
+const OWNER_KEY = 'nt.sync.owner'
+
+// ── Dono dos dados do aparelho ───────────────────────────────────────────────
+// Marcação usada só para a decisão de "conta nova = começa do zero" (a conta
+// que sincroniza de verdade assume a posse). Entrar numa conta que já exista
+// não precisa de permissão: o app só carrega/junta os dados, que é o que a
+// pessoa espera.
+export function marcarDono(uid) {
+  if (uid) writeLocal(OWNER_KEY, uid)
+}
+
+// "Conta nova" = começa do zero: apaga os dados deste aparelho (e os arquivos
+// de mídia) para a conta recém-criada não herdar nada da conta anterior. A
+// sessão e o dono continuam — o app recarrega e nasce limpo.
+export async function novoTudoDoZero(uid) {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith('nt.') && k !== 'nt.account.session' && k !== OWNER_KEY) {
+        localStorage.removeItem(k)
+      }
+    }
+  } catch {
+    /* storage indisponível: segue */
+  }
+  await clearAllMedia()
+  marcarDono(uid || null)
+}
+
+// Dono marcado atualmente (conta a que os dados deste aparelho pertencem).
+export function donoDosDados() {
+  return readLocal(OWNER_KEY) || null
+}
+
+// Troca de conta = isola: apaga do aparelho tudo que é POR-CONTA (perfil,
+// moedas, inventário, recordes, ajustes...) para que nada fique para trás nem
+// some com a conta que entrou. Músicas (nt.library) e capas (nt.cover.*) fi-
+// cam — são do aparelho; capas são só cache, e a biblioteca é o arquivo.
+function removerDadosDeContaAnterior() {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+      const k = localStorage.key(i)
+      if (!k || !k.startsWith('nt.')) continue
+      if (
+        k === 'nt.account.session' ||
+        k === 'nt.sync.owner' ||
+        k === 'nt.library' ||
+        k.startsWith('nt.cover.') ||
+        NAO_SINCRONIZA.has(k)
+      ) {
+        continue
+      }
+      localStorage.removeItem(k)
+    }
+  } catch {
+    /* storage indisponível: segue */
+  }
+}
+
+// Depois de limpar, grava NO APARELHO exatamente o que a conta tem na nuvem:
+// o syncApply vai pro estado do app, e esta gravação garante que as telas que
+// leem o storage na hora (recordes, diário, minigames) já vejam a conta certa.
+// As seções que a conta nunca teve ficam sem chave aqui (nada do dono antigo).
+function gravarSectionsDoCloud(cloud) {
+  const secaoParaChave = {
+    settings: 'nt.settings',
+    settingsAt: 'nt.settingsAt',
+    petstats: 'nt.petstats',
+    inv: 'nt.inv',
+    toys: 'nt.toys',
+    bath: 'nt.bath',
+    achSeen: 'nt.achSeen',
+    playlists: 'nt.playlists',
+    playedRecent: 'nt.playedRecent',
+  }
+  for (const [campo, chave] of Object.entries(secaoParaChave)) {
+    const v = cloud[campo]
+    if (vazio(v)) localStorage.removeItem(chave)
+    else writeLocal(chave, v)
+  }
+  for (const [k, v] of Object.entries(cloud.extras || {})) {
+    if (k.startsWith('nt.') && !NAO_SINCRONIZA.has(k) && !SECOES.includes(k)) writeLocal(k, v)
+  }
+}
 
 // Status da última tentativa: a tela "Minha conta" mostra isso para nunca
 // falhar em silêncio.
@@ -139,7 +223,10 @@ export function mergeLibrary(a, b) {
       album: r.album || '',
       duration: r.duration || 0,
       cover: r.cover || null,
-      coverRemote: r.coverRemote || null,
+      // `coverUrl` pode ser um blob do aparelho (não serve para outro
+      // dispositivo); `coverRemote` é o link que dá para compartilhar. Se só
+      // houver um coverUrl que é mesmo um endereço http, aproveita ele.
+      coverRemote: r.coverRemote || (typeof r.coverUrl === 'string' && r.coverUrl.startsWith('http') ? r.coverUrl : null) || null,
       addedAt: r.addedAt || Date.now(),
       fav: r.fav === true,
       plays: r.plays || 0,
@@ -177,21 +264,29 @@ export function mergePlaylists(a, b) {
 // VAZIO (nome em branco, bio nunca preenchida) nunca apaga o que o outro tem.
 const vazio = (v) => v === '' || v === null || v === undefined
 
+// ── Ajustes (nome, cor, etc.) ────────────────────────────────────────────────
+// Quem editou por ÚLTIMO vence (usando o horário do ajuste). Caso especial:
+// quando NENHUM lado tem horário (aAt e bAt são 0), o aparelho acabou de ser
+// reconfigurado e a nuvem guarda o que a conta tinha de verdade — então vale a
+// nuvem. Sem isso, os padrões do aparelho (nome vazio, cor padrão) ganhavam e
+// apagavam o perfil de contas antigas na nuvem.
 export function mergeSettings(a, b, aAt = 0, bAt = 0) {
   const local = a && typeof a === 'object' ? a : {}
   const nuvem = b && typeof b === 'object' ? b : {}
-  const maisNovoNaNuvem = Number(bAt) > Number(aAt)
+  const maisNovoNaNuvem = Number(bAt) > Number(aAt) || (Number(bAt) === Number(aAt) && Number(bAt) === 0)
   const out = { ...nuvem }
   for (const [k, v] of Object.entries(local)) {
     if (vazio(v)) {
+      // vazio não apaga o que o outro lado tem
       if (vazio(out[k])) out[k] = v
       continue
     }
-    if (maisNovoNaNuvem) {
-      // A mudança mais recente é da nuvem: ela manda, a não ser que esteja vazia.
-      if (!vazio(nuvem[k])) out[k] = nuvem[k]
+    if (vazio(nuvem[k])) {
+      // chave que só existe neste aparelho: mantém o valor daqui
+      out[k] = v
       continue
     }
+    if (maisNovoNaNuvem) continue
     out[k] = v
   }
   return out
@@ -269,17 +364,70 @@ export function mergeExtras(a, b) {
   return out
 }
 
-// Escreve no aparelho o que veio da nuvem (apenas o que ainda está vazio aqui).
-export function applyExtras(merged) {
+// Escreve no aparelho o que veio da nuvem. No modo normal só preenche o que
+// ainda está vazio aqui (para nunca sobrescrever algo novo do aparelho). Na
+// troca de conta (`trocar`) SUBSTITUI: as estatísticas da conta que entrou
+// (recordes dos minigames, diário, etc.) viram as do aparelho e o que era da
+// conta anterior é removido — nada de uma conta vaza pra outra.
+export function applyExtras(merged, opts = {}) {
+  const trocar = Boolean(opts?.trocar)
   let mudou = false
-  for (const [k, v] of Object.entries(merged || {})) {
+  const cloud = merged || {}
+  if (trocar) {
+    // remove chaves de extras que existem no aparelho mas não na conta
+    for (const k of todasAsChaves()) {
+      if (!k.startsWith('nt.') || SECOES.includes(k) || NAO_SINCRONIZA.has(k)) continue
+      if (k === 'nt.library' || k.startsWith('nt.cover.')) continue
+      if (!(k in cloud)) {
+        localStorage.removeItem(k)
+        mudou = true
+      }
+    }
+  }
+  for (const [k, v] of Object.entries(cloud)) {
     if (!k.startsWith('nt.') || SECOES.includes(k) || NAO_SINCRONIZA.has(k)) continue
-    if (!vazio(v) && vazio(readLocal(k))) {
+    if (vazio(v)) continue
+    if (trocar || vazio(readLocal(k))) {
       writeLocal(k, v)
       mudou = true
     }
   }
   return mudou
+}
+
+const mesmoTexto = (a, b) => (a || '') === (b || '')
+
+// Uma sincronização lê o aparelho no começo e só escreve o resultado no fim.
+// Se a pessoa mexeu em alguma coisa nesse meio-tempo (trocou a foto, mudou o
+// nome), o resultado já chega velho e sobrescreveria a edição dela — a foto
+// "voltava para a anterior". Para cada campo comparamos o que está no
+// aparelho AGORA com o que era no início da sync: se mudou, quem vale é o de
+// agora. Na troca de conta isso não vale (lá o WINNER é a outra conta).
+export function preservaEditionsRecentes(mergedSettings, base) {
+  const alvo = mergedSettings && typeof mergedSettings === 'object' ? mergedSettings : {}
+  if (!base || typeof base !== 'object') return alvo
+  const agora = readLocal('nt.settings') || {}
+  if (!agora || typeof agora !== 'object') return alvo
+  const out = { ...alvo }
+  for (const k of Object.keys(alvo)) {
+    if (vazio(agora[k])) continue
+    if (!mesmoTexto(agora[k], base[k])) out[k] = agora[k]
+  }
+  return out
+}
+
+// As músicas importadas sobrevivem à troca de conta; os números que contam a
+// quem a escuta não. Devolve a mesma biblioteca com `fav`, `plays` e `playDays`
+// zerados, para a conta nova começar a contar do zero e o aparelho continuar
+// guardando o áudio (que é do aparelho, não da conta).
+export function soCatalogoDaBiblioteca(library) {
+  const linhas = Array.isArray(library) ? library : []
+  return linhas.map((row) => ({
+    ...row,
+    fav: false,
+    plays: 0,
+    playDays: {},
+  }))
 }
 
 export function mergeAll(a, b) {
@@ -313,6 +461,18 @@ export function mergeAll(a, b) {
 // artista + álbum + duração). Assim, ao importar o mesmo arquivo aqui, os
 // plays, a favorita e os dias ouvidos voltam sozinhos. Linhas "sem áudio"
 // deixadas por versões antigas são removidas.
+
+// A biblioteca é a seção mais traiçoeza do merge: `applyLibrary` faz o MAIOR
+// entre as reproduções e une os dias. Isso é certo na MESMA conta (une o que cada
+// aparelho viu) e é justamente o vazamento na TROCA: a biblioteca em memória
+// ainda é da conta antiga, então `max(9, 0) = 9` devolvia os plays, a favorita e
+// os dias dela para a conta que tinha acabado de entrar — e o próximo sync
+// subia isso para a nuvem nova. Na troca, a conta nova fica só com o que veio
+// dela (o catálogo do aparelho entra sem números, via soCatalogoDaBiblioteca).
+export function aplicarBiblioteca(cur, entrada, trocar) {
+  if (trocar) return Array.isArray(entrada) ? entrada : []
+  return applyLibrary(cur, entrada)
+}
 
 export function applyLibrary(cur, mergedRows) {
   const cloudRows = Array.isArray(mergedRows) ? mergedRows : []
@@ -369,12 +529,28 @@ export function watchCloud(onData) {
         `/rest/v1/sync_profiles?select=updated_at&uid=eq.${encodeURIComponent(uid)}&limit=1`,
       )
       if (!probe.ok) return
+      // Durante uma troca de conta (antes do syncNow adotar a nova), não puxa
+      // nada: o que muda na nuvem ainda é da conta de quem entrou agora.
+      const dono = donoDosDados()
+      if (dono && dono !== uid) {
+        carimbo = null
+        return
+      }
       const atual = (Array.isArray(probe.data) && probe.data[0] && probe.data[0].updated_at) || null
       if (atual && carimbo && atual !== carimbo) {
         const dados = await fetchCloud(uid)
-        if (dados) onData(dados)
+        // Três conferências depois do `await`: a pessoa pode ter saído (o
+        // watcher foi parado), trocado de conta, ou o token pode ter vencido.
+        // Sem elas, a resposta da conta antiga entrava na conta nova — e como o
+        // consumidor junta por união, moedas, conquistas e reproduções dela
+        // voltavam para a conta que tinha acabado de entrar.
+        if (dados && !parado && (await getUserId()) === uid && donoDosDados() === uid) onData(dados)
       }
+      // Só grava o carimbo depois de tentar. Gravar antes (ou sem ter buscado)
+      // fazia o app "conferir" e não baixar nada, e ainda deixava o carimbo novo
+      // pronto para o próximo ciclo dizer que está tudo igual.
       if (atual) carimbo = atual
+      else carimbo = null
     } catch {
       /* sem internet: tenta de novo no próximo ciclo */
     } finally {
@@ -384,10 +560,105 @@ export function watchCloud(onData) {
 
   const timer = setInterval(tick, WATCH_MS)
   const onVis = () => {
-    if (document.visibilityState === 'visible') {
-      carimbo = null // acabou de voltar: confere tudo de novo
-      tick()
+    // `carimbo = null` faz o próximo tick trazer TUDO (a condição só busca se
+    // carimbo e mudada). Não se grava nada aqui, ou o tick não buscaria.
+    if (document.visibilityState === 'visible') tick()
+  }
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVis)
+  tick()
+  return () => {
+    parado = true
+    clearInterval(timer)
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVis)
+  }
+}
+
+// Mesma ideia do watchCloud, mas para a lista de amigos: fica de olho no
+// "carimbo" de cada amizade e nos perfis dos amigos, e só avisa quando alguma
+// coisa realmente mudou (foto, nome, amizade nova, pedido aceito, a pessoa
+// entrou no app). Uma chamada leve por ciclo: o id dos amigos vem das linhas de
+// friendships, e os carimbos dos perfis vêm de uma consulta só.
+// Impressão de uma linha de amizade. `updated_at` NÃO existe em friendships
+// (perguntar por ela dá erro 400 e a lista nunca atualizaria): o que existe é
+// `created_at` e `responded_at`, que cobrem o pedido e a resposta.
+export function carimboDeAmizades(linhas) {
+  return (Array.isArray(linhas) ? linhas : [])
+    .map((l) => `${l.requester_id}>${l.addressee_id}:${l.status}:${l.created_at}:${l.responded_at}`)
+    .sort()
+    .join('|')
+}
+
+// Impressão dos perfis dos amigos. Precisa cobrir TUDO que a lista e o cartão
+// mostram. Quando eram só `uid,name`, trocar a bio, a cor ou a foto deixava a
+// lista parada, e o sintoma era o nome mudando sozinho e o resto não.
+//
+// A foto é uma data URL inteira e não cabe no carimbo: entram o comprimento e o
+// fim do base64, que mudam quando a imagem muda. O `updated_at` (que a trigger
+// do banco mexe quando nome/bio/cor/foto mudam) cobre o resto.
+export function carimboDePerfis(perfis) {
+  return (Array.isArray(perfis) ? perfis : [])
+    .map((p) => {
+      const ft = p.avatar ? `${p.avatar.length}.${p.avatar.slice(-24)}` : 'sem-foto'
+      return `${p.uid}:${p.name}:${p.bio}:${p.accent}:${p.updated_at}:${p.last_seen_at}:${ft}`
+    })
+    .sort()
+    .join('|')
+}
+
+export function watchAmigos(onMudou) {
+  if (!accountConfigured()) return () => {}
+  let parado = false
+  let carimbo = null
+  let ocupado = false
+
+  const tick = async () => {
+    if (parado || ocupado) return
+    ocupado = true
+    try {
+      const uid = await getUserId()
+      if (!uid) {
+        carimbo = null
+        return
+      }
+      // `updated_at` NÃO existe em friendships: perguntar por ela dá erro 400 e a
+      // lista nunca atualizaria. O que existe é `created_at` e `responded_at`,
+      // que cobrem os dois momentos que importam (pedido e resposta).
+      const { ok, data } = await authedFetch(
+        `/rest/v1/friendships?or=(${[
+          `requester_id.eq.${encodeURIComponent(uid)}`,
+          `addressee_id.eq.${encodeURIComponent(uid)}`,
+        ].join(',')})&select=status,requester_id,addressee_id,created_at,responded_at`,
+      )
+      if (!ok) return
+      const linhas = Array.isArray(data) ? data : []
+      // Só o formato da lista, sem baixar imagem nem perfil inteiro: é o que
+      // basta para saber se mudou alguma coisa.
+      const resumo = carimboDeAmizades(linhas)
+      // Também olha os perfis dos amigos: se a pessoa trocou a foto, o nome ou a
+      // bio, a linha da amizade continua igual e só a lista pode mudar.
+      // `uid=in.(...)` quebra em mais de 50 uuids, então a lista é fatiada.
+      const ids = [...new Set(linhas.flatMap((l) => (l.requester_id === uid ? [l.addressee_id] : [l.requester_id])))]
+      let carimboPerfis = ''
+      for (let i = 0; i < ids.length; i += 50) {
+        const fatia = ids.slice(i, i + 50)
+        const { ok: okP, data: perfis } = await authedFetch(
+          `/rest/v1/user_profiles?uid=in.(${fatia.map((x) => `"${x}"`).join(',')})&select=uid,name,bio,accent,avatar,last_seen_at,updated_at`,
+        )
+        if (okP && Array.isArray(perfis)) carimboPerfis += carimboDePerfis(perfis)
+      }
+      const marca = `${resumo}#${carimboPerfis}`
+      if (carimbo !== null && marca !== carimbo) onMudou()
+      carimbo = marca
+    } catch {
+      /* sem internet: tenta de novo no próximo ciclo */
+    } finally {
+      ocupado = false
     }
+  }
+
+  const timer = setInterval(tick, WATCH_MS)
+  const onVis = () => {
+    if (document.visibilityState === 'visible') tick()
   }
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVis)
   tick()
@@ -420,8 +691,21 @@ async function pushCloud(uid, data) {
 // Roda a sincronização: baixa → junta → sobe (a nuvem vira superconjunto) →
 // guarda o resultado em `nt.sync.merged` para o app aplicar no estado. As
 // uniões são idempotentes: depois desta rodada os dois lados batem.
+// Uma sincronização por vez. Sem esta trava, o sync da conta A (rede lenta) e o
+// da conta B (que entrou logo depois) corriam juntos: o do A resolvia por último e
+// deixava o aparelho marcado como sendo da A, com sessão da B.
+let syncCorrendo = null
+
 export async function syncNow() {
   if (!accountConfigured()) return { ok: false, reason: 'not-configured' }
+  if (syncCorrendo) return syncCorrendo
+  syncCorrendo = syncNowUmaVez().finally(() => {
+    syncCorrendo = null
+  })
+  return syncCorrendo
+}
+
+async function syncNowUmaVez() {
   const uid = await getUserId()
   if (!uid) {
     // Token vencido/inválido: limpa a sessão local para o app pedir login de novo
@@ -434,15 +718,64 @@ export async function syncNow() {
   try {
     const local = collectLocal()
     const cloud = await fetchCloud(uid)
-    const merged = mergeAll(local, cloud || {})
+    // Trocar de conta = carregar o que É DA conta que entrou, e nada mais.
+    // O aparelho é uma janela: moedas, inventário, recordes, perfil... são de
+    // cada conta (não podem somar nem ficar para trás quando se troca). Só as
+    // MÚSICAS importadas ficam no aparelho; stats se ligam por sid. A conta
+    // antiga continua inteira na nuvem dela — volta quando você entrar nela.
+    //
+    // Importante: a troca é detectada pelo DONO, nunca pela nuvem. Antes era
+    // `dono !== uid && cloud` — e uma conta nova (que ainda não tem nada na
+    // nuvem) caía no outro lado: o aparelho inteiro da conta antiga era
+    // simplesmente enviado para a conta que tinha acabado de entrar.
+    const dono = donoDosDados()
+    const mesmaConta = dono === uid
+    const trocouComDono = Boolean(dono && dono !== uid)
+    // "Tem alguma coisa na nuvem?" — só os campos que importam, para não contar
+    // uma linha vazia como conta com histórico.
+    const nuvemTemDados = Boolean(
+      cloud && (cloud.settingsAt !== undefined || cloud.inv || (Array.isArray(cloud.library) && cloud.library.length) || (Array.isArray(cloud.playlists) && cloud.playlists.length)),
+    )
+    // Trocar de conta = a nuvem manda e o aparelho só cede o catálogo. Acontece em
+    // dois casos: entrou outra conta (dono diferente) ou o carimbo de dono se
+    // perdeu e a nuvem tem histórico. No resto (mesma conta, ou nuvem ainda
+    // vazia) vale juntar — é a primeira sincronização, e quem decide o que é
+    // "dado de conta" ainda não existe.
+    const mudouDeConta = trocouComDono || (!mesmaConta && nuvemTemDados)
+    let merged
+    if (mudouDeConta) {
+      // As músicas ficam no aparelho, mas SEM os números: plays, favorita e
+      // playDays dizem a quem a escuta foi. Se viessem junto, a conta nova
+      // nasceria com as estatísticas da antiga — e era assim que as músicas e as
+      // conquistas mudavam de um lado para o outro.
+      merged = mergeAll({ library: soCatalogoDaBiblioteca(local.library) }, cloud || {})
+      if (trocouComDono) {
+        removerDadosDeContaAnterior()
+        // nt.library sobrevive à limpeza (é do aparelho) — mas os números dela
+        // não. Se ficassem, a próxima sincronização leria os plays e as
+        // favoritas da conta antiga e a contagem voltaria a vazar.
+        writeLocal('nt.library', soCatalogoDaBiblioteca(readLocal('nt.library')))
+        // Sem nuvem (conta nova) não há seção nenhuma para gravar: a limpeza
+        // acima já tirou da conta antiga. Passar vazio derrubaria a sync.
+        if (cloud) gravarSectionsDoCloud(cloud)
+      }
+    } else {
+      merged = mergeAll(local, cloud || {})
+    }
+    // A pessoa pode ter trocado de conta com a rede aberta. Sem esta conferida, a
+    // sincronização da conta antiga terminaria por cima: marcava o aparelho como
+    // sendo da conta antiga e deixava o resultado dela pendente para a sessão
+    // nova aplicar.
+    const sessaoAgora = await getUserId()
+    if (sessaoAgora !== uid) return { ok: false, reason: 'conta-trocada' }
     await pushCloud(uid, merged)
-    const result = { merged, at: Date.now(), uid }
+    marcarDono(uid)
+    const result = { merged, at: Date.now(), uid, trocar: mudouDeConta, base: local.settings }
     writeLocal(RESULT_KEY, result)
     setSyncStatus({
       ok: true,
       reason: 'ok',
-      message: `Sincronizado! ${merged.library ? merged.library.length : 0} músicas no perfil.`,
-      tracks: merged.library ? merged.library.length : 0,
+      message: 'Tudo sincronizado.',
     })
     return { ok: true, result }
   } catch (err) {
@@ -454,10 +787,19 @@ export async function syncNow() {
 
 // Pega (e limpa) o resultado de um sync pendente para o app aplicar no estado.
 // Devolve null quando não há nada pendente.
-export function takePendingSync() {
+//
+// `nt.sync.merged` é um resultado SALVO e sobrevive a sair da conta e reabrir o
+// app. Sem conferir de quem ele é, o resultado da conta antiga seria aplicado na
+// sessão nova — e, como o consumidor junta por união, as moedas, as conquistas e
+// as reproduções dela apareceriam na conta que entrou depois. Descartar é
+// seguro: a sincronização seguinte refaz o mesmo trabalho.
+export async function takePendingSync() {
   const res = readLocal(RESULT_KEY)
   if (res) writeLocal(RESULT_KEY, null)
-  return res || null
+  if (!res) return null
+  const uid = await getUserId()
+  if (res.uid && uid && res.uid !== uid) return null
+  return res
 }
 
 export const hasPendingSync = () => Boolean(readLocal(RESULT_KEY))

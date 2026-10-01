@@ -9814,3 +9814,168 @@ button.pet-pill {
   font-size: 9px; font-weight: 900; color: #063;
   background: #4ade80; box-shadow: 0 0 10px rgba(74,222,128,0.7);
 }
+
+/* ── Amigos ─────────────────────────────────────────────────────────────── */
+.amigos-avatar {
+  display: grid; place-items: center;
+  flex: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--amig, #8ab4ff) 24%, transparent);
+  color: var(--amig, #8ab4ff);
+  font-weight: 900; font-size: 15px;
+  border: 1px solid color-mix(in srgb, var(--amig, #8ab4ff) 45%, transparent);
+  object-fit: cover;
+}
+.amigos-avatar-foto { background: var(--surface2); }
+
+/* Meu código: uma pílula só, com o código em destaque. */
+.amigos-codigo {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.amigos-codigo-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-2);
+  flex: none;
+}
+.amigos-codigo-valor {
+  flex: 1; min-width: 0;
+  font-size: 20px; font-weight: 800; letter-spacing: .1em;
+  color: var(--text-h);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.amigos-codigo .btn-ghost { flex: none; }
+
+.amigos-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.amigos-card:last-of-type { border-bottom: none; }
+/* A linha inteira abre o perfil; as ações ficam fora do botão para não
+   disparar a navegação quando alguém aceita/recusa. */
+.amigos-card-hit {
+  display: flex; align-items: center; gap: 12px;
+  flex: 1; min-width: 0;
+  background: none; border: 0; padding: 0; margin: 0;
+  color: inherit; font: inherit; text-align: left;
+  cursor: pointer;
+}
+.amigos-card-hit:active { opacity: .7; }
+.amigos-card-info {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.amigos-card-nome { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.amigos-card-bio { font-size: 12px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.amigos-card .amigos-acoes,
+.amigos-card > .amigos-acoes { margin-left: auto; flex: none; }
+.amigos-acoes { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
+.amigos-acoes button { white-space: nowrap; }
+.amigos-chevron { flex: none; display: grid; place-items: center; color: var(--text-2); }
+.amigos-buscar { display: flex; gap: 8px; align-items: center; padding: 8px 0; }
+.amigos-buscar .search { flex: 1; min-width: 0; }
+.amigos-erro { font-size: 13px; color: var(--text-2); padding: 8px 0; }
+.amigos-vazio { font-size: 13px; color: var(--text-2); margin: 8px 0 0; }
+/* Resultados da busca por nome: mesma cartão da lista, só com um respiro. */
+.amigos-resultados { padding-top: 4px; }
+.amigos-resultados .amigos-card { padding: 10px 0; }
+/* Caixa da mensagem do pedido: empilha em vez de esticar a linha, senão o
+   campo fica estreito demais em tela de celular. */
+.amigos-msgbox {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  flex: 1 1 100%; justify-content: flex-end; padding: 4px 0 2px;
+}
+.amigos-msgbox .search { flex: 1 1 180px; min-width: 0; }
+/* "Viu o app há 2 h" no perfil do amigo. */
+.amigo-perfil-visto {
+  margin-top: 6px; font-size: 12px; color: var(--text-2);
+  letter-spacing: 0.2px;
+}
+/* Online: ponto verde + texto. Fica acima do "viu o app" (que some nesse caso). */
+.amigo-perfil-online {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 6px; font-size: 12px; color: #34d399; font-weight: 600;
+}
+.amigo-online-ponto {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #34d399; flex: none;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
+}
+
+/* ── Perfil do amigo ────────────────────────────────────────────────────── */
+.amigo-voltar {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 0; padding: 4px 0;
+  color: var(--text-2); font: inherit; font-size: 14px; font-weight: 600;
+  cursor: pointer; margin-bottom: 6px;
+}
+.amigo-voltar:active { opacity: .7; }
+
+.amigo-perfil-topo {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; gap: 4px;
+  padding: 8px 0 18px;
+}
+.amigo-perfil-avatar {
+  padding: 4px;
+  border-radius: 50%;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--amig) 60%, transparent), transparent 70%);
+}
+.amigo-perfil-avatar .amigos-avatar { font-size: 30px; }
+.amigo-perfil-nome {
+  margin: 6px 0 0; font-size: 22px; font-weight: 800; color: var(--text-h);
+}
+.amigo-perfil-codigo {
+  font-size: 12px; font-weight: 700; letter-spacing: .08em;
+  color: var(--amig, var(--accent));
+  padding: 2px 10px; border-radius: 999px;
+  background: color-mix(in srgb, var(--amig, var(--accent)) 16%, transparent);
+}
+.amigo-perfil-bio {
+  margin: 8px 0 0; max-width: 34ch;
+  font-size: 14px; line-height: 1.45; color: var(--text-2);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+.amigo-numeros {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 8px; margin: 10px 0;
+}
+.amigo-num {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 10px 4px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface2);
+}
+.amigo-num-valor {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 17px; font-weight: 800; color: var(--text-h);
+}
+.amigo-num-icone { font-size: 12px; opacity: .8; }
+.amigo-num-rotulo {
+  font-size: 10px; line-height: 1.2; text-align: center;
+  color: var(--text-2);
+}
+
+.amigo-top { display: flex; flex-direction: column; }
+.amigo-fav { color: var(--accent-2); font-size: 11px; margin-left: 4px; }
+
+.amigo-conquistas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.amigo-conquista {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; border-radius: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  filter: grayscale(1); opacity: .4;
+  font-size: 16px;
+}
+.amigo-conquista.on {
+  filter: none; opacity: 1;
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+

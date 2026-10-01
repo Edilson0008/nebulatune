@@ -1,5 +1,17 @@
 export const CHANGELOG = [
   {
+    version: '3.2.0',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'novo', text: 'A tela de Amigos: cada conta tem um código, você encontra a pessoa por ele e o pedido pode ser aceito ou recusado. A lista de amigos mostra foto, bio e se a pessoa está online agora.' },
+      { type: 'novo', text: 'Abrindo o perfil de um amigo dá para ver as estatísticas dele: músicas, reproduções e dias ouvindo. Dá para remover a amizade de lá também.' },
+      { type: 'novo', text: 'A cor do card do amigo é a cor do tema que a pessoa está usando. Se ela está no tema vermelho, a borda da foto e o nome aparecem em vermelho — e mudam junto se ela trocar de tema.' },
+      { type: 'correcao', text: 'As músicas, fichas e conquistas de uma conta não aparecem mais na conta seguinte. Ao trocar de conta no mesmo aparelho, o app agora começa pelo zero em vez de herdar o que era da outra conta.' },
+      { type: 'correcao', text: 'Nome, bio e foto que você edita aparecem na hora no card do outro, sem precisar mexer em nada. Antes às vezes a foto ou a bio mudavam e o outro lado continuava vendo a versão antiga.' },
+      { type: 'correcao', text: 'Abrir o app com a conta trocada não trava mais: o perfil voltava a não ser publicado e o outro continuava vendo a versão antiga para sempre.' },
+    ],
+  },
+  {
     version: '3.1.3',
     date: 'Setembro de 2026',
     items: [

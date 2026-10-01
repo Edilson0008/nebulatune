@@ -9,7 +9,7 @@ import { deleteMediaBlobs, loadAllMediaBlobs, mediaStorageInfo, purgeOrphanMedia
 import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
 import { PET_NEEDS_INFO, pickNeedNudge, pickPetNudge } from './petNudges'
 import { ProgressProvider } from './progress'
-import { MOOD_KEYS, usePetStats, useSettings } from './settings'
+import { MOOD_KEYS, corPublicavel, usePetStats, useSettings } from './settings'
 import { APK_URL, fetchLatestVersion, installUpdate, isNewer, markUpdatePrompted, notifyUpdateAvailable, requestNotificationsPermission, wasUpdatePrompted } from './updater'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { Cover } from './components/Cover.jsx'
@@ -40,7 +40,8 @@ import { sleepNativeCancel, sleepNativeStart } from './lib/sleep-native.js'
 import { getAchievements } from './lib/stats.js'
 import { getRecovery, onAccount, restoreSession, getSession } from './lib/account.js'
 import { ensureSids, idsToSids } from './lib/sid.js'
-import { applyExtras, applyLibrary, applyPlaylists, collectLocal, mergeAll, mergeCounters, mergeStrings, syncNow, takePendingSync, watchCloud } from './lib/sync.js'
+import { aplicarBiblioteca, applyExtras, applyPlaylists, collectLocal, donoDosDados, mergeAll, mergeCounters, mergeStrings, preservaEditionsRecentes, syncNow, takePendingSync, watchCloud } from './lib/sync.js'
+import * as amigosMod from './lib/amigos.js'
 
 /* Telas que o usuário quase sempre NÃO abre na primeira visita: entram no
    pacote só na hora de abrir. Deixa a abertura do app mais leve em aparelhos
@@ -59,6 +60,9 @@ const PetHabitatView = lazy(() =>
 )
 const AccountModal = lazy(() =>
   import('./components/account-modal.jsx').then((m) => ({ default: m.AccountModal })),
+)
+const AmigosView = lazy(() =>
+  import('./components/amigos-view.jsx').then((m) => ({ default: m.AmigosView })),
 )
 
 const SHOP_TABS = [
@@ -726,33 +730,54 @@ function App() {
 
   // Aplica um merge sincronizado no estado do app. Uniões são idempotentes, e
   // a biblioteca local mantém a própria ordem (as novidades entram no fim).
+  // `trocar` = acabou de trocar de conta: em vez de somar/juntar, SUBSTITUI
+  // pelo que é da conta (moedas, inventário, recordes... nada fica para trás).
   const syncApply = useCallback(
-    (merged) => {
+    (merged, opts = {}) => {
+      const trocar = Boolean(opts?.trocar)
       if (!merged || typeof merged !== 'object') return
-      if (merged.settings) settingsApi.setAll(merged.settings)
-      if (merged.petstats) applyPetStats(merged.petstats)
-      if (merged.inv) setInv((cur) => mergeCounters(cur, merged.inv))
-      if (merged.toys) setToys((cur) => mergeStrings(cur, merged.toys))
-      if (merged.bath) setBath((cur) => mergeCounters(cur, merged.bath))
-      if (merged.achSeen) setAchSeen((cur) => mergeStrings(cur, merged.achSeen))
-      if (merged.playlists) setPlaylists((cur) => applyPlaylists(cur, merged.playlists))
-      if (merged.playedRecent) {
-        setPlayedRecent((cur) => mergeStrings(cur, merged.playedRecent).slice(0, 10))
+      // `base` = o que as configurações eram quando a sync começou. O que a
+      // pessoa editou depois disso é mais novo que o resultado, e não pode ser
+      // sobrescrito (trocar a foto e ela voltar sozinha).
+      if (merged.settings) {
+        const settings = trocar ? merged.settings : preservaEditionsRecentes(merged.settings, opts?.base)
+        settingsApi.setAll(settings)
       }
-      if (merged.library) setLibrary((cur) => applyLibrary(cur, merged.library))
+      if (merged.petstats) {
+        if (trocar) restorePetStats(merged.petstats)
+        else applyPetStats(merged.petstats)
+      }
+      if (merged.inv) setInv(trocar ? merged.inv : (cur) => mergeCounters(cur, merged.inv))
+      if (merged.toys) setToys(trocar ? merged.toys : (cur) => mergeStrings(cur, merged.toys))
+      if (merged.bath) setBath(trocar ? merged.bath : (cur) => mergeCounters(cur, merged.bath))
+      if (merged.achSeen) setAchSeen(trocar ? merged.achSeen : (cur) => mergeStrings(cur, merged.achSeen))
+      if (merged.playlists) setPlaylists(trocar ? merged.playlists : (cur) => applyPlaylists(cur, merged.playlists))
+      if (merged.playedRecent) {
+        if (trocar) setPlayedRecent(Array.isArray(merged.playedRecent) ? merged.playedRecent : [])
+        else setPlayedRecent((cur) => mergeStrings(cur, merged.playedRecent).slice(0, 10))
+      }
+      if (merged.library) setLibrary((cur) => aplicarBiblioteca(cur, merged.library, trocar))
       // Recordes dos minijogos, diário, equalizador... ficam guardados direto no
       // storage e aparecem na hora em que cada tela for aberta.
-      if (merged.extras) applyExtras(merged.extras)
+      if (merged.extras) applyExtras(merged.extras, { trocar })
     },
-    [settingsApi, applyPetStats],
+    [settingsApi, applyPetStats, restorePetStats],
   )
 
   // Aplica no estado qualquer sync pendente (resultado salvo por syncNow).
   useEffect(() => {
     if (!libraryHydrated) return undefined
-    const pending = takePendingSync()
-    if (pending) syncApply(pending.merged)
-    return undefined
+    let alive = true
+    // takePendingSync é assíncrono (confere de quem é o resultado antes de
+    // devolver): sem esta trava, uma resposta antiga chegaria depois de a conta
+    // ter mudado e entraria na conta errada.
+    takePendingSync().then((pending) => {
+      if (!alive || !pending) return
+      syncApply(pending.merged, { trocar: pending.trocar, base: pending.base })
+    })
+    return () => {
+      alive = false
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [libraryHydrated])
 
@@ -765,7 +790,7 @@ function App() {
       syncNow()
         .then((res) => {
           if (!alive || !res.ok || !res.result) return
-          syncApply(res.result.merged)
+          syncApply(res.result.merged, { trocar: res.result.trocar, base: res.result.base })
         })
         .catch(() => {})
     }, 500)
@@ -786,6 +811,82 @@ function App() {
     return stop
   }, [accountUserId, syncApply])
 
+  // O perfil público (nome, foto, bio) que os AMIGOS veem mora em outra tabela
+  // da nuvem, e não no bloco de dados que a sincronização leva. Sem isto aqui, o
+  // perfil só era enviado quando a pessoa abria a aba Amigos — mudar o nome na
+  // aba Perfil não atualizava nada para o outro, e o "viu o app" ficava travado
+  // na primeira vez. Agora qualquer mudança sobe na hora.
+  //
+  // A espera de um segundo junta o que vier de uma vez: trocar nome e foto juntos
+  // vira uma gravação só, e trocar o tema (que não é perfil) não gera nada.
+  //
+  // E só manda DEPOIS que a sincronização pousar. No meio dela o que está na tela
+  // pode ser a versão antiga que acabou de chegar da nuvem: enviar isso seria
+  // devolver ao banco o que ele disse — foi assim que a foto nova voltou a
+  // antiga. Quem reenvia (reenviarMeuPerfil) ainda compara com a última coisa que
+  // ESTE aparelho mandou e pula se for só o eco da nuvem.
+  const syncVoandoRef = useRef(false)
+  // Só depois que a PRIMEIRA sincronização da sessão pousou é seguro falar do
+  // que está na tela. Antes disso a tela pode estar vazia (aparelho novo) e,
+  // mandando assim, o app escreveria um perfil em branco por cima do que a
+  // nuvem já tinha.
+  const syncDesceuRef = useRef(false)
+  // Conta nova: a "primeira sincronização" é a da conta nova. Precisa acontecer
+  // antes de falar o perfil, senão o app descreve a conta que acabou de sair.
+  useEffect(() => {
+    syncDesceuRef.current = false
+    syncVoandoRef.current = false
+  }, [accountUserId])
+  useEffect(() => {
+    if (!accountUserId) return undefined
+    let vivo = true
+    let t = null
+    const enviar = (tentativa) => {
+      if (!vivo) return
+      // Se o aparelho ainda é da conta que saiu, o que está na tela é dela. Sem
+      // esta trava, o app descreveria a conta nova com o nome e a foto da antiga.
+      const dono = donoDosDados()
+      if (dono && dono !== accountUserId) {
+        // Esta trava é provisória e NÃO pode ser um beco sem saída: a
+        // sincronização que está em voo marca a conta que entrou como dona do
+        // aparelho (`marcarDono`, no fim do syncNow), e é isso que a resolve.
+        //
+        // Antes o app voltava na primeira tentativa e nunca mais. O efeito não
+        // é reagendado por mais nada a não ser mudar nome/bio/foto, então o
+        // perfil ficava sem publicação nenhuma — enquanto o "visto" seguia
+        // subindo por outro caminho. Sintoma: a conta aparece online e o outro
+        // lado continua vendo a versão antiga do cartão (ou nada).
+        if (tentativa < 40) {
+          t = setTimeout(() => enviar(tentativa + 1), 250)
+        }
+        return
+      }
+      amigosMod.reenviarMeuPerfil({
+        name: appSettings.userName,
+        bio: appSettings.bio,
+        accent: corPublicavel(appSettings),
+        avatar: appSettings.avatar,
+      })
+      amigosMod.avisarQueEntrou()
+    }
+    const esperar = (tentativa) => {
+      if (!vivo) return
+      // 24 tentativas de 250 ms = 6 s. Passou disso (offline, ou nuvem caída) o
+      // app manda mesmo assim: pior uma gravação atrasada do que nunca gravar.
+      const esperando = (syncVoandoRef.current || !syncDesceuRef.current) && tentativa < 24
+      if (esperando) {
+        t = setTimeout(() => esperar(tentativa + 1), 250)
+        return
+      }
+      enviar(tentativa)
+    }
+    t = setTimeout(() => esperar(0), 1000)
+    return () => {
+      vivo = false
+      if (t) clearTimeout(t)
+    }
+  }, [accountUserId, appSettings.userName, appSettings.bio, corPublicavel(appSettings), appSettings.avatar])
+
   // Sobe as mudanças para a nuvem sem travar o app: qualquer alteração (favorita,
   // play, gatinho, moedas) agenda uma sincronização; ao voltar para o app também.
   const syncDirtyRef = useRef(false)
@@ -803,13 +904,18 @@ function App() {
     const run = () => {
       if (!alive || !syncDirtyRef.current) return
       syncDirtyRef.current = false
+      syncVoandoRef.current = true
       syncNow()
         .then((res) => {
           if (!alive || !res.ok || !res.result) return
-          syncApply(res.result.merged)
+          syncApply(res.result.merged, { trocar: res.result.trocar, base: res.result.base })
         })
         .catch(() => {
           syncDirtyRef.current = true
+        })
+        .finally(() => {
+          syncVoandoRef.current = false
+          syncDesceuRef.current = true
         })
     }
     // Assim que a pessoa muda alguma coisa, sobe em ~2 s: é o que faz o outro
@@ -2074,6 +2180,7 @@ const shareTrack = useCallback(
               ['favoritas', 'Favoritas', 'heart'],
               ['biblioteca', 'Biblioteca', 'library'],
               ['equalizador', 'EQ', 'eq'],
+              ['amigos', 'Amigos', 'friends'],
               ['configuracoes', 'Ajustes', 'gear'],
             ].map(([id, label, icon]) => (
               <button
@@ -2479,6 +2586,16 @@ onPetAction={handlePetAction}
             playlists={playlists}
             lyricSync={syncOffsets}
           />
+          </Suspense>
+        )}
+      {view === 'amigos' && (
+          <Suspense fallback={<TelaCarregando />}>
+            <AmigosView
+              account={account}
+              settings={appSettings}
+              onOpenAccount={() => setAccountOpen(true)}
+              onToast={showToast}
+            />
           </Suspense>
         )}
       </main>

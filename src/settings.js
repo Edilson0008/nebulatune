@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { readLocal, writeLocal } from './localstore'
 
 const PSTAT_DEFAULTS = { touches: 0, hearts: 0, sleeps: 0, scares: 0, meows: 0, coins: 0 }
@@ -37,6 +37,23 @@ export function resolveAccent(settings) {
     return { name: 'Personalizada', accent: settings.customAccent, accent2: lighten(settings.customAccent) }
   }
   return ACCENTS[settings?.accent] || ACCENTS.violet
+}
+
+// A cor que o OUTRO precisa ver: sempre o hex resolvido.
+//
+// Não pode ser `settings.accent` direto: para quem usa tema pronto isso é a
+// PALAVRA do tema ('red', 'pink', 'violet'), não uma cor. Mandando a palavra, o
+// card do amigo recebia algo que não é cor e caía no azul padrão — sintoma: o
+// cartão nunca ficava com a cor do tema da pessoa. Só quem tinha escolhido
+// cor personalizada (#rrggbb) aparecia certo.
+//
+// Também ignora a `customAccent` que sobrou de quando a pessoa usava cor
+// personalizada: voltar para um tema pronto tem que apagar a cor antiga. Só a
+// `customAccent` vale quando o tema É o personalizado — por isso o desvio
+// abaixo, em vez de apagar o campo para todo mundo.
+export function corPublicavel(settings) {
+  if (settings?.accent === 'custom') return resolveAccent(settings).accent
+  return resolveAccent({ accent: settings?.accent }).accent
 }
 
 export const SPEEDS = [1, 1.25, 1.5, 2]
@@ -79,67 +96,56 @@ export function useSettings() {
     writeLocal('nt.settings', settings)
   }, [settings])
 
+  // Espelho do estado para os ajustes saberem o valor atual sem esperar o React
+  // redesenhar. É o que permite gravar na mesma hora (veja `aplica`).
+  // Mantido num efeito para não atrapalhar a renderização: o `aplica` abaixo já
+  // roda sempre com o valor em dia, porque só ele muda o estado.
+  const atualRef = useRef(settings)
+  useEffect(() => {
+    atualRef.current = settings
+  }, [settings])
+
   // Todo ajuste que a PESSOA muda carimba a hora. É isso que faz "mudei o nome
   // aqui e mudou lá": o relógio mais novo ganha, sem depender de qual aparelho
   // fala por último.
   const carimba = () => writeLocal('nt.settingsAt', Date.now())
 
+  // Grava no armazenamento no MESMO instante do clique, não num efeito depois do
+  // render. A sincronização lê o aparelho a qualquer momento; se o ajuste só
+  // aparecesse no armazenamento depois do redesenho, uma sync que começasse nessa
+  // fresta leria o valor velho, gravaria esse valor velho na nuvem com o carimbo
+  // novo e traria o tema/foto antigo de volta para a tela.
+  const aplica = useCallback((mudar, carimbado = true) => {
+    const proximo = mudar(atualRef.current)
+    if (carimbado) carimba()
+    atualRef.current = proximo
+    writeLocal('nt.settings', proximo)
+    setSettings(proximo)
+  }, [])
+
   const api = useMemo(
     () => ({
-      set: (key, value) => {
-        carimba()
-        setSettings((s) => ({ ...s, [key]: value }))
-      },
-      setAccent: (value) => {
-        carimba()
-        setSettings((s) => ({ ...s, accent: value }))
-      },
-      setCustomAccent: (value) => {
-        carimba()
-        setSettings((s) => ({ ...s, customAccent: value, accent: 'custom' }))
-      },
-      setUserName: (value) => {
-        carimba()
-        setSettings((s) => ({ ...s, userName: value }))
-      },
-      setBio: (value) => {
-        carimba()
-        setSettings((s) => ({ ...s, bio: value }))
-      },
-      setSpeed: (value) => {
-        carimba()
-        setSettings((s) => ({ ...s, speed: value }))
-      },
-      setFetchCovers: (value) => {
-        carimba()
-        setSettings((s) => ({ ...s, fetchCovers: value }))
-      },
-      setAvatar: (value) => {
-        carimba()
-        setSettings((s) => ({ ...s, avatar: value }))
-      },
-      setBgAnimated: (value) => {
-        carimba()
-        setSettings((s) => ({ ...s, bgAnimated: value }))
-      },
-      setCosmosAnimated: (value) => {
-        carimba()
-        setSettings((s) => ({ ...s, cosmosAnimated: value }))
-      },
-      setPetSound: (value) => {
-        carimba()
-        setSettings((s) => ({ ...s, petSound: value }))
-      },
-      setLowPower: (value) => {
-        carimba()
-        setSettings((s) => ({ ...s, lowPower: value }))
-      },
+      set: (key, value) => aplica((s) => ({ ...s, [key]: value })),
+      // Voltar para um tema pronto tem que APAGAR a cor personalizada: senão ela
+      // fica guardada e volta a ser usada no lugar do tema (o card do amigo
+      // mostrava a cor antiga depois de a pessoa trocar o tema).
+      setAccent: (value) => aplica((s) => ({ ...s, accent: value, customAccent: '' })),
+      setCustomAccent: (value) => aplica((s) => ({ ...s, customAccent: value, accent: 'custom' })),
+      setUserName: (value) => aplica((s) => ({ ...s, userName: value })),
+      setBio: (value) => aplica((s) => ({ ...s, bio: value })),
+      setSpeed: (value) => aplica((s) => ({ ...s, speed: value })),
+      setFetchCovers: (value) => aplica((s) => ({ ...s, fetchCovers: value })),
+      setAvatar: (value) => aplica((s) => ({ ...s, avatar: value })),
+      setBgAnimated: (value) => aplica((s) => ({ ...s, bgAnimated: value })),
+      setCosmosAnimated: (value) => aplica((s) => ({ ...s, cosmosAnimated: value })),
+      setPetSound: (value) => aplica((s) => ({ ...s, petSound: value })),
+      setLowPower: (value) => aplica((s) => ({ ...s, lowPower: value })),
       // Usado pela sincronização: aplicar o que veio do outro aparelho NÃO é uma
       // edição da pessoa, então não carimba nada (senão o aparelho "antigo" se
       // firmaria como o mais novo e o cambio nunca entraria).
-      setAll: (value) => setSettings((s) => ({ ...s, ...(value || {}) })),
+      setAll: (value) => aplica((s) => ({ ...s, ...(value || {}) }), false),
     }),
-    [],
+    [aplica],
   )
 
   return { settings, api }

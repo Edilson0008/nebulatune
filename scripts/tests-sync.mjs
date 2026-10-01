@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { ensureSids } from '../src/lib/sid.js'
-import { applyExtras, applyLibrary, applyPlaylists, collectExtras, deepMerge, mergeAll, mergeCounters, mergeExtras, mergeLibrary, mergePlaylists, mergePetstats, mergeSettings, mergeStrings } from '../src/lib/sync.js'
+import { applyExtras, applyLibrary, applyPlaylists, collectExtras, deepMerge, mergeAll, mergeCounters, mergeExtras, mergeLibrary, mergePlaylists, mergePetstats, mergeSettings, mergeStrings, novoTudoDoZero } from '../src/lib/sync.js'
 
 test('ensureSids: mesma música gera o mesmo sid', () => {
   const a = ensureSids([{ id: 'x', title: 'Pra Você', artist: 'DJ Rafael', album: 'Tô Forte', duration: 214 }])
@@ -43,11 +43,61 @@ test('mergeStrings: união sem duplicar', () => {
   assert.deepEqual(mergeStrings(['a', 'b', 'c'], ['b', 'd']), ['a', 'b', 'c', 'd'])
 })
 
-test('mergeSettings: junta chaves, lado local prevalece', () => {
-  const out = mergeSettings({ userName: 'Ana', accent: 'pink' }, { userName: 'Bia', fetchCovers: false })
-  assert.equal(out.userName, 'Ana')
+test('applyExtras: na troca de conta, as estatísticas da conta SUBSTITUEM as do aparelho', async () => {
+  const store = new Map([
+    ['nt.mgStats', JSON.stringify({ plays: 50, wins: 20 })], // da conta antiga
+    ['nt.mgWins', JSON.stringify({ corrida: 30 })],
+    ['nt.mgDiarioAntigo', JSON.stringify({ x: 1 })], // seção que a nova conta não tem
+  ])
+  globalThis.localStorage = {
+    get length() { return store.size },
+    key: (i) => [...store.keys()][i],
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+    clear: () => store.clear(),
+  }
+  const { applyExtras } = await import('../src/lib/sync.js')
+  // MODE NORMAL: só preenche o vazio, não sobrescreve (multi-aparelho da MESMA conta)
+  applyExtras({ 'nt.mgStats': { plays: 99, wins: 1 } })
+  assert.deepEqual(JSON.parse(store.get('nt.mgStats')), { plays: 50, wins: 20 })
+  // TROCA: substitui pelos dados da conta que entrou
+  applyExtras({ 'nt.mgStats': { plays: 7, wins: 3 } }, { trocar: true })
+  assert.deepEqual(JSON.parse(store.get('nt.mgStats')), { plays: 7, wins: 3 })
+  // o que a conta nova NÃO tem some do aparelho (não fica para trás)
+  assert.ok(!store.has('nt.mgDiarioAntigo'))
+})
+
+test('mergeAll: quando se troca de conta, só a biblioteca local fica; o resto vem da nuvem', () => {  // Baseline de conta DIFERENTE: local contribui apenas com as músicas
+  // importadas; nome/cor/moedas/recordes são os DA CONTA que entrou.
+  const local = {
+    library: [{ id: 'l1', sid: 's1', title: 'Aqui', plays: 5 }],
+    settings: { userName: 'Nome antigo', accent: 'violet', settingsAt: 0 },
+    petstats: { coins: 999 },
+  }
+  const nuvem = {
+    settings: { userName: 'Conta da nuvem', accent: 'pink' },
+    petstats: { coins: 77 },
+    library: [{ sid: 's1', plays: 9 }, { sid: 's2', title: 'Da nuvem', plays: 1 }],
+  }
+  const merged = mergeAll({ library: local.library }, nuvem)
+  assert.equal(merged.settings.userName, 'Conta da nuvem')
+  assert.equal(merged.settings.accent, 'pink')
+  assert.equal(merged.petstats.coins, 77)
+  const s1 = merged.library.find((r) => r.sid === 's1')
+  assert.equal(Number(s1.plays) || 0, 9)
+})
+
+test('mergeSettings: sem carimbo dos dois lados, a nuvem (que tem os dados) vale', () => {
+  // Conta antiga (nuvem sem horário de edição) num aparelho acabado de
+  // reconfigurar (padrões, sem horário): o perfil da conta NÃO pode sumir.
+  const out = mergeSettings({ userName: '', accent: 'violet' }, { userName: 'Bia', accent: 'pink' })
+  assert.equal(out.userName, 'Bia')
   assert.equal(out.accent, 'pink')
-  assert.equal(out.fetchCovers, false)
+  // chaves só do aparelho continuam entrando no resultado
+  const misto = mergeSettings({ userName: '', fetchCovers: false }, { userName: 'Bia' })
+  assert.equal(misto.userName, 'Bia')
+  assert.equal(misto.fetchCovers, false)
 })
 
 test('mergePlaylists: união por playlist e por faixa', () => {
@@ -148,20 +198,24 @@ test('applyPlaylists: junta sem repetir e nunca apaga', () => {
 })
 
 test('mergeSettings: nome/bio vazios NÃO escondem o que está na nuvem', () => {
-  const out = mergeSettings({ userName: '', bio: '', accent: 'pink' }, { userName: 'Edilson', bio: 'oi', accent: 'blue' })
+  // quem editou por último é o APARELHO (900 > 100): vazios não apagam a nuvem
+  const out = mergeSettings({ userName: '', bio: '', accent: 'pink' }, { userName: 'Edilson', bio: 'oi', accent: 'blue' }, 900, 100)
   assert.equal(out.userName, 'Edilson')
   assert.equal(out.bio, 'oi')
   assert.equal(out.accent, 'pink')
 })
 
 test('mergeSettings: nome preenchido localmente continua valendo', () => {
-  const out = mergeSettings({ userName: 'Meu nome' }, { userName: 'Nome da nuvem', speed: 1.5 })
+  // aparelho editou depois (900 > 100) → o nome daqui vale
+  const out = mergeSettings({ userName: 'Meu nome' }, { userName: 'Nome da nuvem', speed: 1.5 }, 900, 100)
   assert.equal(out.userName, 'Meu nome')
+  // chave que só a nuvem tem continua entrando
   assert.equal(out.speed, 1.5)
 })
 
 test('mergeSettings: false local não é considerado vazio', () => {
-  const out = mergeSettings({ bgAnimated: false }, { bgAnimated: true, petSound: true })
+  // aparelho editou depois (900 > 100): false é valor real, não "vazio"
+  const out = mergeSettings({ bgAnimated: false }, { bgAnimated: true, petSound: true }, 900, 100)
   assert.equal(out.bgAnimated, false)
   assert.equal(out.petSound, true)
 })
@@ -290,4 +344,79 @@ test('friendlyError: mensagens do Supabase chegam em português', async () => {
   assert.match(friendlyError({ msg: 'Password should be at least 6 characters.' }), /6 caracteres/i)
   assert.match(friendlyError({ msg: 'New password should be different from the old password.' }), /diferente/i)
   assert.ok(friendlyError('').length > 0)
+})
+
+test('conta nova começa do zero: apaga dados, mantém sessão e assume o dono', async () => {
+  const store = new Map([
+    ['nt.settings', JSON.stringify({ userName: 'ContaA' })],
+    ['nt.library', JSON.stringify([{ id: 'x' }])],
+    ['nt.petstats', JSON.stringify({ coins: 50 })],
+    ['nt.mgStats', JSON.stringify({ plays: 3 })],
+    ['nt.account.session', JSON.stringify({ access_token: 'x' })],
+    ['nt.sync.owner', 'conta-antiga'],
+  ])
+  globalThis.localStorage = {
+    get length() { return store.size },
+    key: (i) => [...store.keys()][i],
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+    clear: () => store.clear(),
+  }
+  await novoTudoDoZero('conta-nova')
+  assert.ok(!store.has('nt.settings'))
+  assert.ok(!store.has('nt.library'))
+  assert.ok(!store.has('nt.petstats'))
+  assert.ok(!store.has('nt.mgStats'))
+  // sessão continua (o login não se perde) e o dono passa a ser a conta nova
+  assert.ok(store.has('nt.account.session'))
+  assert.equal(JSON.parse(store.get('nt.sync.owner')), 'conta-nova')
+})
+
+// ── Foto do perfil: edição feita durante a sync não pode voltar atrás ───────
+// A sync lê o aparelho no começo e escreve no fim. Se a pessoa trocar a foto
+// nesse meio-tempo, o resultado chega com a foto antiga e sobrescrevia a
+// escolha (na tela, a foto "voltava sozinha").
+test('preservaEditionsRecentes: a foto escolhida durante a sync ganha', async () => {
+  const store = new Map()
+  globalThis.localStorage = {
+    get length() { return store.size },
+    key: (i) => [...store.keys()][i] ?? null,
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+    clear: () => store.clear(),
+  }
+  const { preservaEditionsRecentes } = await import('../src/lib/sync.js')
+
+  // No começo da sync a tela tinha a foto antiga
+  const base = { userName: 'Vovô', avatar: 'data:image/png;base64,VELHA' }
+  store.set('nt.settings', JSON.stringify(base))
+  // A pessoa troca a foto enquanto a sync está na rede
+  store.set('nt.settings', JSON.stringify({ userName: 'Vovô', avatar: 'data:image/png;base64,NOVA' }))
+
+  // O resultado velho da sync (foto antiga) NÃO pode passar por cima
+  const merged = preservaEditionsRecentes({ userName: 'Vovô', avatar: 'data:image/png;base64,VELHA' }, base)
+  assert.equal(merged.avatar, 'data:image/png;base64,NOVA')
+  // O que não foi mexido continua vindo da sync
+  assert.equal(merged.userName, 'Vovô')
+})
+
+test('preservaEditionsRecentes: sem edição durante a sync, o resultado entra normal', async () => {
+  const store = new Map()
+  globalThis.localStorage = {
+    get length() { return store.size },
+    key: (i) => [...store.keys()][i] ?? null,
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+    clear: () => store.clear(),
+  }
+  const { preservaEditionsRecentes } = await import('../src/lib/sync.js')
+  const base = { userName: 'Vovô', avatar: 'data:image/png;base64,VELHA' }
+  store.set('nt.settings', JSON.stringify(base))
+  // Sync trouxe tema novo do outro aparelho: nada foi editado aqui, então entra
+  const merged = preservaEditionsRecentes({ userName: 'Vovô', avatar: 'data:image/png;base64,VELHA', accent: 'green' }, base)
+  assert.equal(merged.accent, 'green')
+  assert.equal(merged.avatar, 'data:image/png;base64,VELHA')
 })
