@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '3.2.12',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'ajuste', text: 'As barrinhas caem um pouco mais rápido, principalmente brincar e dormir.' },
+    ],
+  },
+  {
     version: '3.2.11',
     date: 'Outubro de 2026',
     items: [

@@ -43,10 +43,10 @@ public class PetAlarmReceiver extends BroadcastReceiver {
     private static final double CRITICO = 18.0;
 
     /** As mesmas de MOOD_DECAY em src/lib/pet.js, por minuto. */
-    private static final double DECAY_FULL = 1.6;
-    private static final double DECAY_HAPPY = 1.1;
-    private static final double DECAY_SLEEP = 1.4;
-    private static final double DECAY_CLEAN = 2.0;
+    private static final double DECAY_FULL = 1.8;
+    private static final double DECAY_HAPPY = 1.25;
+    private static final double DECAY_SLEEP = 1.6;
+    private static final double DECAY_CLEAN = 2.2;
 
     private static final String[] KEYS = {"full", "happy", "sleep", "clean"};
     private static final String[] LABELS = {"Fome", "Carinho", "Sono", "Banho"};

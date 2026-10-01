@@ -133,7 +133,7 @@ export const MOOD_DEFAULTS = { full: 100, happy: 85, sleep: 90, clean: 90 }
 // levava horas para mexer na tela e parecia travado. Agora é por minuto, com
 // uma curva: cai rápido no começo (dá para ver acontecer) e vai
 // desacelerando perto de 100, então uma barra cheia não despenca de uma vez.
-export const MOOD_DECAY = { full: 1.6, happy: 1.1, sleep: 1.4, clean: 2.0 }
+export const MOOD_DECAY = { full: 1.8, happy: 1.25, sleep: 1.6, clean: 2.2 }
 
 // Curva do decaimento: perto de 100 cai ~55% da taxa, lá no meio cai a taxa
 // inteira, e embaixo de 15 já desacelera de novo para não zerar num pulo.
