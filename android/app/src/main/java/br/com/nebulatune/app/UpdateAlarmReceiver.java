@@ -38,6 +38,9 @@ public class UpdateAlarmReceiver extends BroadcastReceiver {
             || "android.intent.action.MY_PACKAGE_REPLACED".equals(action)) {
             BackgroundUpdater.schedule(context);
             SleepTimerPlugin.rescheduleAfterRestart(context);
+            // O alarme do gatinho também é refeito no boot: sem isso as
+            // chamadas dele não voltam depois de reiniciar o aparelho.
+            PetAlarmReceiver.schedule(context);
             return;
         }
         if (!ACTION_CHECK.equals(action)) return;

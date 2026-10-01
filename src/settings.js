@@ -10,7 +10,7 @@ const PSTAT_DEFAULTS = { touches: 0, hearts: 0, sleeps: 0, scares: 0, meows: 0, 
 // As listas (e o quanto cada barra cai por hora) vivem em lib/pet.js porque a
 // sincronização precisa saber quais campos DIMINUEM, para não usar "pega o
 // maior dos dois" neles e reidratar a barra.
-import { MOOD_DECAY, MOOD_DEFAULTS, MOOD_KEYS } from './lib/pet.js'
+import { MOOD_DECAY, MOOD_DEFAULTS, MOOD_KEYS, taxaDeDecaimento } from './lib/pet.js'
 export { MOOD_KEYS, MOOD_DEFAULTS, MOOD_DECAY }
 
 export const ACCENTS = {
@@ -176,13 +176,19 @@ export function usePetStats() {
   const settlePet = useMemo(
     () => (meters = {}) =>
       setPetStats((s) => {
+        const agora = Date.now()
         const next = { ...s }
+        // Primeiro desconta o que passou desde a última passada, senão a
+        // barra só voltaria a cair na próxima volta do intervalo (30s depois):
+        // tocar/cariciar parecia "subir" mesmo com o tempo correndo.
+        const minutos = Math.max(0, (agora - (Number(s.lt) || agora)) / 60000)
         for (const k of MOOD_KEYS) {
-          const cur = typeof s[k] === 'number' ? s[k] : MOOD_DEFAULTS[k]
+          const base = typeof s[k] === 'number' ? s[k] : MOOD_DEFAULTS[k]
+          const caiu = Math.max(0, minutos * MOOD_DECAY[k] * taxaDeDecaimento(base))
           const add = Number(meters[k]) || 0
-          next[k] = Math.max(0, Math.min(100, cur + add))
+          next[k] = Math.max(0, Math.min(100, base - caiu + add))
         }
-        next.lt = Date.now()
+        next.lt = agora
         return next
       }),
     [],
@@ -196,12 +202,15 @@ export function usePetStats() {
       setPetStats((s) => {
         const lt = Number(s.lt) || nowV
         if (!s.lt) return { ...s, lt: nowV }
-        const hours = Math.max(0, (nowV - lt) / 3.6e6)
-        if (hours < 0.02) return s
+        const minutos = Math.max(0, (nowV - lt) / 60000)
+        // Menos de meio segundo não muda nada e só gastaria CPU escrevendo.
+        if (minutos < 0.01) return s
         const next = { ...s, lt: nowV }
         for (const k of MOOD_KEYS) {
           const cur = typeof s[k] === 'number' ? s[k] : MOOD_DEFAULTS[k]
-          const v = cur - hours * MOOD_DECAY[k]
+          // A curva deixa a barra cheia cair mais devagar, senão uma barra em
+          // 100 despencaria na primeira passada e pareceria um bug.
+          const v = cur - minutos * MOOD_DECAY[k] * taxaDeDecaimento(cur)
           const rounded = Math.round(v * 10) / 10
           if (Math.abs(rounded - cur) > 0.001) next[k] = Math.max(0, rounded)
         }
@@ -209,7 +218,7 @@ export function usePetStats() {
       })
     }
     decay()
-    const id = setInterval(decay, 60000)
+    const id = setInterval(decay, 30000)
     const onVis = () => {
       if (document.visibilityState === 'visible') decay()
     }

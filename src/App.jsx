@@ -11,6 +11,7 @@ import { PET_NEEDS_INFO, pickNeedNudge, pickPetNudge } from './petNudges'
 import { ProgressProvider } from './progress'
 import { MOOD_KEYS, corPublicavel, usePetStats, useSettings } from './settings'
 import { APK_URL, fetchLatestVersion, installUpdate, isNewer, markUpdatePrompted, notifyUpdateAvailable, requestNotificationsPermission, wasUpdatePrompted } from './updater'
+import { sincronizaAlarmeDoGatinho } from './pet-alarm'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { Cover } from './components/Cover.jsx'
 import { BackgroundFX } from './components/background.jsx'
@@ -345,6 +346,16 @@ function App() {
     return () => clearTimeout(t)
   }, [])
 
+  // Manda as barras para o alarme nativo. Sem isso o Android não tem como
+  // avisar com o app FECHADO: quem percebia a barra baixa era só a tela, e tela
+  // fechada não roda. Vai um pouco atrasado para não chamar o native a cada
+  // mexida da barra (o decaimento as muda continuamente).
+  useEffect(() => {
+    if (!IS_NATIVE) return undefined
+    const t = setTimeout(() => sincronizaAlarmeDoGatinho(petStats), 1500)
+    return () => clearTimeout(t)
+  }, [petStats])
+
   // ---------- Chamada do gatinho quando uma barra fica baixa ----------
   // O pet manda notificação pedindo pra pessoa entrar no app (tipo "tô com fome 🍗").
   // Respeita um intervalo mínimo por necessidade pra não encher o celular de aviso.
@@ -442,15 +453,18 @@ function App() {
   const handlePetAction = useCallback(
     (a, extra) => {
       const map = {
-        touch: { stat: 'touches', coins: 2, mood: { happy: 6 } },
-        heart: { stat: 'hearts', coins: 1, mood: { happy: 14 } },
-        scared: { stat: 'scares', coins: 0, mood: {} },
-        sleep: { stat: 'sleeps', coins: 1, mood: { sleep: 36, happy: 4 } },
-        meow: { stat: 'meows', coins: 0, mood: {} },
-        food: { stat: null, coins: 2, mood: { full: 28, happy: 6 } },
-        play: { stat: null, coins: 2, mood: { happy: 22, sleep: -5 } },
-        bath: { stat: null, coins: 2, mood: { clean: 34, happy: 4 } },
-        bubbles: { stat: null, coins: 1, mood: { happy: 18 } },
+        // Cada ação sobe a barra que ela cuida e CONSOME as outras: é o que
+        // fazia "brincar" e "dormir" parecerem que não desciam nada — antes
+        // elas só somavam na própria barra e deixavam as demais paradas.
+        touch: { stat: 'touches', coins: 2, mood: { happy: 6, sleep: -2 } },
+        heart: { stat: 'hearts', coins: 1, mood: { happy: 14, sleep: -3 } },
+        scared: { stat: 'scares', coins: 0, mood: { happy: -6, sleep: -4 } },
+        sleep: { stat: 'sleeps', coins: 1, mood: { sleep: 36, happy: 4, full: -5, clean: -3 } },
+        meow: { stat: 'meows', coins: 0, mood: { happy: 2, full: -2 } },
+        food: { stat: null, coins: 2, mood: { full: 28, happy: 6, clean: -4 } },
+        play: { stat: null, coins: 2, mood: { happy: 22, sleep: -6, full: -5, clean: -4 } },
+        bath: { stat: null, coins: 2, mood: { clean: 34, happy: 4, full: -2 } },
+        bubbles: { stat: null, coins: 1, mood: { happy: 18, sleep: -3, clean: -3 } },
       }
       const def = map[a]
       if (def) {

@@ -60,6 +60,19 @@
             android:name=".SleepAlarmReceiver"
             android:exported="false" />
 
+        <!-- Chamadas do gatinho com o app fechado: o Android acorda o app pelo
+             alarme, sem foreground service. Precisa do BOOT_COMPLETED para
+             voltar a rodar depois que o aparelho reinicia. -->
+        <receiver
+            android:name=".PetAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="br.com.nebulatune.app.PET_CHECK" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
     <!-- Permissions -->

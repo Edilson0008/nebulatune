@@ -129,4 +129,17 @@ export function temDisponivel(estoque, reasons, key) {
 // estas mesmas listas.
 export const MOOD_KEYS = ['full', 'happy', 'sleep', 'clean']
 export const MOOD_DEFAULTS = { full: 100, happy: 85, sleep: 90, clean: 90 }
-export const MOOD_DECAY = { full: 9, happy: 6, sleep: 8, clean: 11 }
+// Quanto cada barra cai por minuto. Antes era por HORA (6 a 11), o que
+// levava horas para mexer na tela e parecia travado. Agora é por minuto, com
+// uma curva: cai rápido no começo (dá para ver acontecer) e vai
+// desacelerando perto de 100, então uma barra cheia não despenca de uma vez.
+export const MOOD_DECAY = { full: 1.6, happy: 1.1, sleep: 1.4, clean: 2.0 }
+
+// Curva do decaimento: perto de 100 cai ~55% da taxa, lá no meio cai a taxa
+// inteira, e embaixo de 15 já desacelera de novo para não zerar num pulo.
+export function taxaDeDecaimento(valor) {
+  const v = Math.max(0, Math.min(100, Number(valor) || 0))
+  if (v >= 100) return 0.55
+  if (v <= 15) return 0.70
+  return 1
+}

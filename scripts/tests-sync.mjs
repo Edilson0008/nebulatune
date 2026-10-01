@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { ensureSids } from '../src/lib/sid.js'
-import { disponivelDe, juntaConsumido, somaConsumido } from '../src/lib/pet.js'
+import { MOOD_DECAY, MOOD_KEYS, disponivelDe, juntaConsumido, somaConsumido, taxaDeDecaimento } from '../src/lib/pet.js'
 import { applyExtras, applyLibrary, applyPlaylists, collectExtras, collectLocal, deepMerge, mergeApagadas, mergeAll, mergeCounters, mergeExtras, mergeLibrary, mergePlaylists, mergePetstats, mergeSettings, mergeStrings, novoTudoDoZero } from '../src/lib/sync.js'
 
 test('ensureSids: mesma música gera o mesmo sid', () => {
@@ -608,4 +608,118 @@ test('saldo de moedas mostrado na tela nunca volta ao total ganho', () => {
   const exibido = { ...petStats, coins: moedas }
   assert.equal(exibido.coins, 170, 'a tela tem que mostrar o saldo, não o total')
   assert.equal(exibido.touches, 12, 'os outros contadores continuam iguais')
+})
+
+// ---------------------------------------------------------------------------
+// Decai das barras: ritmo e curva.
+//
+// A taxa é por MINUTO agora (antes era por hora: 6 a 11 por hora é menos de
+// um ponto a cada cinco minutos, o que parecia travado). Estes testes
+// travam o ritmo e a curva que evita a barra cheia despencar de uma vez.
+// ---------------------------------------------------------------------------
+
+test('a barra de fome desce rápido o suficiente para o usuário perceber', () => {
+  // Um minuto tem que mexer visivelmente na barra (>= 0.5 ponto).
+  assert.ok(MOOD_DECAY.full * taxaDeDecaimento(90) >= 0.5, '1 minuto tem que dar >= 0.5 ponto')
+})
+
+test('a curva evita a barra cheia despencar de uma vez', () => {
+  assert.ok(taxaDeDecaimento(100) < 1, 'perto de 100 tem que desacelerar')
+  assert.ok(taxaDeDecaimento(100) >= 0.5, 'mas não pode travar de vez')
+  assert.equal(taxaDeDecaimento(50), 1, 'no meio a taxa é a cheia')
+  assert.ok(taxaDeDecaimento(5) < 1, 'embaixo de 15 desacelera para não zerar num pulo')
+})
+
+test('todas as barras caem juntas com o tempo', () => {
+  const antes = { full: 100, happy: 85, sleep: 90, clean: 90 }
+  const depois = {}
+  for (const k of MOOD_KEYS) {
+    depois[k] = Math.max(0, antes[k] - 10 * MOOD_DECAY[k] * taxaDeDecaimento(antes[k]))
+  }
+  for (const k of MOOD_KEYS) {
+    assert.ok(depois[k] < antes[k], `${k} tem que descer em 10 minutos`)
+  }
+})
+
+test('uma hora de app fechado derruba as barras, mas sem zerar na marra', () => {
+  const umaHora = 60
+  const full = Math.max(0, 100 - umaHora * MOOD_DECAY.full * taxaDeDecaimento(100))
+  assert.ok(full > 0 && full < 60, `fome depois de 1h tem que estar no meio (veio ${full})`)
+  // Nenhuma barra pode passar de 100 nem ficar negativa.
+  for (const k of MOOD_KEYS) {
+    const v = Math.max(0, 90 - umaHora * MOOD_DECAY[k] * taxaDeDecaimento(90))
+    assert.ok(v >= 0 && v <= 100, `${k} tem que ficar entre 0 e 100`)
+  }
+})
+
+test('cada ação mexe nas outras barras, e não só na dela', () => {
+  // Regressão: "brincar" e "dormir" só somavam na própria barra, então as
+  // outras ficavam paradas e parecia que a ação não mexia em nada.
+  const acoes = {
+    play: { happy: 22, sleep: -6, full: -5, clean: -4 },
+    sleep: { sleep: 36, happy: 4, full: -5, clean: -3 },
+    food: { full: 28, happy: 6, clean: -4 },
+    bath: { clean: 34, happy: 4, full: -2 },
+  }
+  for (const [nome, mood] of Object.entries(acoes)) {
+    const mexe = Object.entries(mood).filter(([, v]) => v !== 0)
+    assert.ok(mexe.length >= 2, `${nome} tem que mexer em mais de uma barra`)
+    assert.ok(mexe.some(([, v]) => v > 0), `${nome} tem que subir a barra que ele cuida`)
+    assert.ok(mexe.some(([, v]) => v < 0), `${nome} tem que consumir alguma outra barra`)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// O alarme nativo e a tela têm que concordar.
+//
+// Com o app fechado quem baixa as barras é o PetAlarmReceiver.java; com o
+// app aberto é o JavaScript. Se as taxas divergirem, a barra cai de um jeito
+// com o app aberto e de outro com o app fechado, e isso é justamente o tipo
+// de bug que ninguém nota até a pessoa reclamar. Este teste lê o Java e
+// compara com o pet.js.
+// ---------------------------------------------------------------------------
+
+test('as taxas do alarme nativo são iguais às da tela', () => {
+  const java = readFileSync(
+    new URL('../android/app/src/main/java/br/com/nebulatune/app/PetAlarmReceiver.java', import.meta.url),
+    'utf8',
+  )
+  const esperado = { FULL: 'full', HAPPY: 'happy', SLEEP: 'sleep', CLEAN: 'clean' }
+  for (const [constJava, key] of Object.entries(esperado)) {
+    const achou = new RegExp(`DECAY_${constJava}\\s*=\\s*([\\d.]+)`).exec(java)
+    assert.ok(achou, `falta DECAY_${constJava} no receiver`)
+    assert.equal(
+      Number(achou[1]),
+      MOOD_DECAY[key],
+      `${key}: taxa do Java (${achou[1]}) tem que ser a mesma da tela (${MOOD_DECAY[key]})`,
+    )
+  }
+})
+
+test('a curva do alarme nativo é igual à curva da tela', () => {
+  const java = readFileSync(
+    new URL('../android/app/src/main/java/br/com/nebulatune/app/PetAlarmReceiver.java', import.meta.url),
+    'utf8',
+  )
+  for (const valor of [100, 50, 5]) {
+    const esperado = String(taxaDeDecaimento(valor))
+    assert.ok(
+      java.includes(esperado),
+      `a curva do Java precisa ter ${esperado} (taxa em ${valor}) para bater com a tela`,
+    )
+  }
+})
+
+test('o alarme do gatinho continua agendado depois de reiniciar o aparelho', () => {
+  const receiver = readFileSync(
+    new URL('../android/app/src/main/java/br/com/nebulatune/app/PetAlarmReceiver.java', import.meta.url),
+    'utf8',
+  )
+  const manifest = readFileSync(
+    new URL('../android/app/src/main/AndroidManifest.xml', import.meta.url),
+    'utf8',
+  )
+  assert.ok(receiver.includes('BOOT_COMPLETED'), 'sem BOOT_COMPLETED o alarme morre no reinício')
+  assert.ok(manifest.includes('PetAlarmReceiver'), 'o receiver precisa estar no manifest')
+  assert.ok(manifest.includes('PET_CHECK'), 'a ação do alarme precisa estar no manifest')
 })

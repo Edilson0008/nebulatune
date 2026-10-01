@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '3.2.8',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'recurso', text: 'O gatinho agora chama mesmo com o app totalmente fechado. O Android acorda o app por alarme, aplica a mesma queda das barrinhas e avisa quando alguma fica crítica.' },
+      { type: 'correcao', text: 'Brincar e dormir agora mexem em todas as barrinhas, não só na delas. Antes comida e banho desciam, mas brincar e dormir pareciam não mexer em nada.' },
+      { type: 'correcao', text: 'As barrinhas descem bem mais rápido: agora é por minuto, e você vê acontecer em vez de esperar horas.' },
+    ],
+  },
+  {
     version: '3.2.7',
     date: 'Outubro de 2026',
     items: [
