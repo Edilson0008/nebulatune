@@ -1,5 +1,19 @@
 export const CHANGELOG = [
   {
+    version: '3.2.16',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'Reverte o ajuste dos troféus dos minigames que estava quebrando o layout.' },
+    ],
+  },
+  {
+    version: '3.2.15',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'Desfez o ajuste da safe area na tela de troféus dos minigames (estava quebrando o layout).' },
+    ],
+  },
+  {
     version: '3.2.14',
     date: 'Outubro de 2026',
     items: [
