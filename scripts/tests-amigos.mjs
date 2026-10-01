@@ -114,3 +114,9 @@ test('miniatura da capa sobrevive ao merge entre aparelhos', () => {
   const m = mergeLibrary([{ sid: 'a', title: 'X' }], [{ sid: 'a', coverShare: 'data:image/webp;base64,AAA' }])
   assert.equal(m[0].coverRemote, 'data:image/webp;base64,AAA')
 })
+
+test('miniatura da capa não se perde ao reescrever a biblioteca', () => {
+  const linhas = [{ sid: 'a', coverShare: 'data:image/webp;base64,AAA', plays: 3 }]
+  const volta = mergeLibrary(linhas, [])
+  assert.equal(volta[0].coverShare, 'data:image/webp;base64,AAA', 'precisa ir em coverShare, não só em coverRemote')
+})

@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '3.2.3',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'As capas das músicas aparecem no perfil do amigo. A miniatura estava sendo gerada, mas se perdia ao salvar a biblioteca — por isso a capa nunca chegava. Agora ela fica salva e vai para a nuvem.' },
+    ],
+  },
+  {
     version: '3.2.2',
     date: 'Outubro de 2026',
     items: [

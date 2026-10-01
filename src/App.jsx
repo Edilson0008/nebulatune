@@ -526,6 +526,10 @@ function App() {
           duration: x.duration || 0,
           cover: Array.isArray(x.cover) ? x.cover : null,
           coverRemote: x.coverRemote || null,
+          // A miniatura compartilhada precisa sobreviver ao recarregar o app: ela
+          // é só texto, e sem esta linha a capa sumia do perfil do amigo toda vez
+          // que a biblioteca era reescrita.
+          coverShare: x.coverShare || null,
           addedAt: x.addedAt || Date.now(),
           fav: x.fav === true,
           plays: x.plays || 0,

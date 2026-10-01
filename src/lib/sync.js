@@ -233,6 +233,9 @@ export function mergeLibrary(a, b) {
         r.coverShare ||
         (typeof r.coverUrl === 'string' && r.coverUrl.startsWith('http') ? r.coverUrl : null) ||
         null,
+      // Vai junto para a miniatura não se perder no caminho: sem isto ela
+      // sobrevive em `coverRemote` mas some no próximo merge.
+      coverShare: r.coverShare || null,
       addedAt: r.addedAt || Date.now(),
       fav: r.fav === true,
       plays: r.plays || 0,
