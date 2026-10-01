@@ -155,11 +155,20 @@ export function mergePetstats(a, b) {
   const ltA = a ? Number(a.lt) || 0 : 0
   const ltB = b ? Number(b.lt) || 0 : 0
   const maisRecente = ltA >= ltB ? a : b
+  const maisAntigo = ltA >= ltB ? b : a
   for (const k of keys) {
     const va = a ? Number(a[k]) || 0 : 0
     const vb = b ? Number(b[k]) || 0 : 0
-    if (DIMINUEM.has(k)) out[k] = Number(maisRecente?.[k]) || 0
-    else out[k] = k === 'lt' ? (va > vb ? va : vb) : va > vb ? va : vb
+    if (DIMINUEM.has(k)) {
+      // Quem tem a barra mais recente manda. Mas se essa cópia não tem a
+      // chave, usava 0 — e 0 é um valor de verdade ("gatinho com fome"), não
+      // "desconhecido". O efeito era a barra pular para o chão só por causa de
+      // um campo que não veio. Nesse caso pegamos a da outra cópia.
+      const v = maisRecente && typeof maisRecente[k] === 'number' && Number.isFinite(maisRecente[k])
+        ? maisRecente[k]
+        : Number(maisAntigo && maisAntigo[k]) || 0
+      out[k] = v
+    } else out[k] = k === 'lt' ? (va > vb ? va : vb) : va > vb ? va : vb
   }
   out.lt = Math.max(ltA, ltB)
   return out
@@ -480,6 +489,11 @@ export function mergeAll(a, b) {
   const nuvem = b && typeof b === 'object' ? b : {}
   const atLocal = Number(local.settingsAt) || 0
   const atNuvem = Number(nuvem.settingsAt) || 0
+  // A união das lápides é calculada ANTES e usada tanto para filtrar a
+  // biblioteca quanto para devolver. Usar `local || nuvem` aqui fazia uma
+  // música apagada no outro aparelho voltar para a nuvem: o resultado dizia
+  // que a lápide existia, mas a faixa continuava na lista.
+  const libApagadas = mergeApagadas(local.libApagadas, nuvem.libApagadas)
   return {
     settings: mergeSettings(local.settings, nuvem.settings, atLocal, atNuvem),
     settingsAt: Math.max(atLocal, atNuvem),
@@ -491,8 +505,8 @@ export function mergeAll(a, b) {
     bathUsado: juntaConsumido(local.bathUsado, nuvem.bathUsado),
     achSeen: mergeStrings(local.achSeen, nuvem.achSeen),
     playlists: mergePlaylists(local.playlists, nuvem.playlists),
-    library: mergeLibrary(local.library, nuvem.library, local.libApagadas || nuvem.libApagadas),
-    libApagadas: mergeApagadas(local.libApagadas, nuvem.libApagadas),
+    library: mergeLibrary(local.library, nuvem.library, libApagadas),
+    libApagadas,
     playedRecent: mergeStrings(local.playedRecent, nuvem.playedRecent).slice(0, 10),
     extras: mergeExtras(local.extras, nuvem.extras),
   }

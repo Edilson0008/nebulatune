@@ -254,10 +254,17 @@ export function usePetStats() {
         const ltVem = Number(value.lt) || 0
         const ltAqui = Number(s.lt) || 0
         if (ltVem > ltAqui) {
+          let veioBarra = false
           for (const k of MOOD_KEYS) {
-            if (typeof value[k] === 'number') merged[k] = value[k]
+            if (typeof value[k] === 'number') {
+              merged[k] = value[k]
+              veioBarra = true
+            }
           }
-          merged.lt = ltVem
+          // O relógio só anda junto se veio alguma barra. Adotar o lt sem
+          // barra reinicia o decaimento a partir de agora, mesmo as barras
+          // daqui continuaremmeas no tempo antigo.
+          if (veioBarra) merged.lt = ltVem
         }
         return { ...PSTAT_DEFAULTS, ...MOOD_DEFAULTS, ...merged }
       })

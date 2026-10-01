@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '3.2.11',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'O merge das lápides não deixava mais uma faixa apagada voltar quando os aparelhos tinham listas diferentes.' },
+      { type: 'correcao', text: 'Ao sincronizar, as barrinhas do gatinho não voltam para zero se o outro aparelho tiver um estado antigo incompleto.' },
+    ],
+  },
+  {
     version: '3.2.10',
     date: 'Outubro de 2026',
     items: [
