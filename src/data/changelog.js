@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '3.2.14',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'Tela de troféus dos minigames respeita a barra de status/notificações (não fica por baixo dela).' },
+    ],
+  },
+  {
     version: '3.2.13',
     date: 'Outubro de 2026',
     items: [
