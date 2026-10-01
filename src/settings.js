@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { readLocal, writeLocal } from './localstore'
 
-const PSTAT_DEFAULTS = { touches: 0, hearts: 0, sleeps: 0, scares: 0, meows: 0, coins: 0 }
+// `coins` é o total já GANHO e `coinsGastos` o total já GASTO: o saldo é a
+// diferença. Os dois só crescem, então a sincronização pode juntar as duas
+// cópias com "o maior dos dois" sem que a compra seja desfeita.
+const PSTAT_DEFAULTS = { touches: 0, hearts: 0, sleeps: 0, scares: 0, meows: 0, coins: 0, coinsGastos: 0 }
 
-// Sistema de humores do gatinho: barras de necessidade que caem com o tempo
-export const MOOD_DEFAULTS = { full: 100, happy: 85, sleep: 90, clean: 90 }
-export const MOOD_KEYS = ['full', 'happy', 'sleep', 'clean']
-// Quanto cada barra cai por hora (%, ponto flutuante)
-const MOOD_DECAY = { full: 9, happy: 6, sleep: 8, clean: 11 }
+// Sistema de humores do gatinho: barras de necessidade que caem com o tempo.
+// As listas (e o quanto cada barra cai por hora) vivem em lib/pet.js porque a
+// sincronização precisa saber quais campos DIMINUEM, para não usar "pega o
+// maior dos dois" neles e reidratar a barra.
+import { MOOD_DECAY, MOOD_DEFAULTS, MOOD_KEYS } from './lib/pet.js'
+export { MOOD_KEYS, MOOD_DEFAULTS, MOOD_DECAY }
 
 export const ACCENTS = {
   violet: { name: 'Violeta', accent: '#8b5cf6', accent2: '#c084fc' },
@@ -222,11 +226,23 @@ export function usePetStats() {
     () => (value) => {
       if (!value || typeof value !== 'object') return
       setPetStats((s) => {
-        const keys = ['touches', 'hearts', 'sleeps', 'scares', 'meows', 'coins', ...MOOD_KEYS, 'lt']
+        const keys = ['touches', 'hearts', 'sleeps', 'scares', 'meows', 'coins', 'coinsGastos', ...MOOD_KEYS, 'lt']
         const merged = { ...s }
         for (const k of keys) {
           const v = Number(value[k]) || 0
           if (v > (Number(s[k]) || 0)) merged[k] = v
+        }
+        // As barras DIMINUEM com o tempo, então "só cresce" não serve: uma
+        // barra baixinha (gato com fome) precisa poder substituir a deste
+        // aparelho. Só aceitamos se a cópia que chegou for mais recente, para
+        // não desfazer o decaimento que o outro aparelho já acumulou.
+        const ltVem = Number(value.lt) || 0
+        const ltAqui = Number(s.lt) || 0
+        if (ltVem > ltAqui) {
+          for (const k of MOOD_KEYS) {
+            if (typeof value[k] === 'number') merged[k] = value[k]
+          }
+          merged.lt = ltVem
         }
         return { ...PSTAT_DEFAULTS, ...MOOD_DEFAULTS, ...merged }
       })

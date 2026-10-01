@@ -32,7 +32,7 @@ import { IS_NATIVE } from './lib/env.js'
 import { AUDIO_RE, IMAGE_RE, baseName, cleanArtist, cleanTitle, extFromImageType, extFromType, parseFileName } from './lib/filename.js'
 import { fmtBytes, formatTime, hashStr } from './lib/format.js'
 import { LYRICS_CACHE_MAX, buildLyrics, fetchLyrics, searchLyrics } from './lib/lyrics.js'
-import { BATH_CATALOG, FOOD_CATALOG, PET_GREETINGS, START_INVENTORY, TOY_CATALOG, greetingForHour, random } from './lib/pet.js'
+import { BATH_CATALOG, FOOD_CATALOG, PET_GREETINGS, START_INVENTORY, TOY_CATALOG, disponivelDe, greetingForHour, juntaConsumido, random, somaConsumido } from './lib/pet.js'
 import { setMusicPlaying, sfxCoin, sfxSpawn } from './lib/sfx.js'
 import { shareBlobNative, shareFilesNative } from './lib/share.js'
 import { makeShareCard } from './lib/share-card.js'
@@ -145,6 +145,36 @@ function App() {
     const s = readLocal('nt.bath')
     return s && typeof s === 'object' ? s : {}
   })
+
+  // Razões de consumo (só crescem, por isso o merge por maior valor funciona):
+  // o que já foi gasto em moedas, comida comida e usos de banho. O saldo que a
+  // tela mostra é sempre "o que tem menos o que já foi usado" — ver
+  // `disponivelDe` em lib/pet.js.
+  const [invUsado, setInvUsado] = useState(() => {
+    const s = readLocal('nt.invUsado')
+    return s && typeof s === 'object' ? s : {}
+  })
+  const [bathUsado, setBathUsado] = useState(() => {
+    const s = readLocal('nt.bathUsado')
+    return s && typeof s === 'object' ? s : {}
+  })
+
+  useEffect(() => {
+    writeLocal('nt.invUsado', invUsado)
+  }, [invUsado])
+  useEffect(() => {
+    writeLocal('nt.bathUsado', bathUsado)
+  }, [bathUsado])
+
+  // Saldos reais (o que sobra), já descontando o que foi consumido.
+  const invSaldo = useMemo(
+    () => Object.fromEntries(Object.keys(inv).map((k) => [k, disponivelDe(inv, invUsado, k)])),
+    [inv, invUsado],
+  )
+  const bathSaldo = useMemo(
+    () => Object.fromEntries(Object.keys(bath).map((k) => [k, disponivelDe(bath, bathUsado, k)])),
+    [bath, bathUsado],
+  )
 
   useEffect(() => {
     writeLocal('nt.toys', toys)
@@ -291,6 +321,12 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, loadingLib, library.length, appSettings.userName])
   const { petStats, bumpPet, settlePet, applyPetStats, restorePetStats } = usePetStats()
+  // Saldo de moedas = total ganho menos total gasto (ver lib/pet.js). Fica
+  // depois do hook porque é petStats que carrega os dois valores.
+  const moedas = Math.max(
+    0,
+    (Number(petStats?.coins) || 0) - (Number(petStats?.coinsGastos) || 0),
+  )
 
   // Permissão de notificação (uma vez só): o gatinho precisa dela pra chamar de volta
   useEffect(() => {
@@ -418,7 +454,7 @@ function App() {
     },
     [bumpPet, settlePet],
   )
-  const shopCoins = Number(petStats?.coins) || 0
+  const shopCoins = moedas
   const shopAll = SHOP_CONSUMABLES
   const dailyOffer = shopAll[Math.floor(Date.now() / 86400000) % shopAll.length]
   const dailyPrice = dailyOffer ? Math.round(dailyOffer.price * 0.6) : 0
@@ -797,6 +833,15 @@ function App() {
       if (merged.inv) setInv(trocar ? merged.inv : (cur) => mergeCounters(cur, merged.inv))
       if (merged.toys) setToys(trocar ? merged.toys : (cur) => mergeStrings(cur, merged.toys))
       if (merged.bath) setBath(trocar ? merged.bath : (cur) => mergeCounters(cur, merged.bath))
+      // Os razões de consumo também são "o maior dos dois": eles só crescem, e
+      // é justamente por isso que o gasto não volta quando o outro aparelho
+      // ainda tem a cópia antiga do saldo.
+      if (merged.invUsado) {
+        setInvUsado(trocar ? merged.invUsado : (cur) => juntaConsumido(cur, merged.invUsado))
+      }
+      if (merged.bathUsado) {
+        setBathUsado(trocar ? merged.bathUsado : (cur) => juntaConsumido(cur, merged.bathUsado))
+      }
       if (merged.achSeen) setAchSeen(trocar ? merged.achSeen : (cur) => mergeStrings(cur, merged.achSeen))
       if (merged.playlists) setPlaylists(trocar ? merged.playlists : (cur) => applyPlaylists(cur, merged.playlists))
       if (merged.playedRecent) {
@@ -1080,7 +1125,11 @@ function App() {
     const done = getAchievements(library, petStats?.touches || 0, {
       buys: Number(petStats?.buys) || 0,
       toys: toys.length,
-      baths: Object.values(bath).filter((n) => Number(n) > 0).length,
+      // Contadores que SÓ CRESCEM. Antes era "quantos itens de banho tem em
+      // estoque", que diminuía a cada banho dado: a conquista "Primeira loção"
+      // se des-completava sozinha depois de você dar o primeiro banho.
+      baths: Math.max(Number(petStats?.bathsFeitos) || 0, (Number(petStats?.buysBath) || 0)),
+      toysFeitos: Math.max(Number(petStats?.toysBrincados) || 0, toys.length),
     }).filter((a) => a.done)
     const doneIds = new Set(done.map((a) => a.id))
     const seenIds = new Set(achSeen)
@@ -1114,10 +1163,12 @@ function App() {
   const buyShopItem = useCallback(
     (it, offerPrice) => {
       const price = offerPrice ?? it.price
-      if ((Number(petStats?.coins) || 0) < price) return
+      if (moedas < price) return
       if (it.kind === 'toy' && toys.includes(it.key)) return
-      if (it.kind === 'bath' && (bath[it.key] || 0) > 0) return
-      bumpPet('coins', -price)
+      if (it.kind === 'bath' && (bathSaldo[it.key] || 0) > 0) return
+      // Moedas: o saldo NÃO diminui (senão o sync desfaz a compra). O gasto vai
+      // para um razão que só cresce, e o saldo exibido é a diferença.
+      bumpPet('coinsGastos', price)
       bumpPet('buys', 1)
       if (it.kind === 'food') {
         // Comida vai pro estoque: só aparece no card do botão Comida depois de comprada
@@ -1143,28 +1194,19 @@ function App() {
     [petStats, toys, bath, bumpPet, settlePet, appSettings.petSound, showToast],
   )
 
-// O gato comeu: tira 1 do estoque
-const onFoodEaten = useCallback((key) => {
-    setInv((prev) => {
-      const n = (prev[key] || 0) - 1
-      const next = { ...prev }
-      if (n > 0) next[key] = n
-      else delete next[key]
-      return next
-    })
+// O gato comeu: soma 1 no razão de comida, o saldo exibido é a diferença
+  const onFoodEaten = useCallback((key) => {
+    setInvUsado((prev) => somaConsumido(prev, key, 1))
   }, [])
 
-// Usou um item de banho: gasta 1 uso (a Esponjinha é a padrão e nunca acaba)
+// Usou um item de banho: soma 1 no razão de usos (a Esponjinha nunca acaba)
   const onBathUsed = useCallback((key) => {
     if (!key) return
-    setBath((prev) => {
-      const n = (prev[key] || 0) - 1
-      const next = { ...prev }
-      if (n > 0) next[key] = n
-      else delete next[key]
-      return next
-    })
-  }, [])
+    setBathUsado((prev) => somaConsumido(prev, key, 1))
+    // Contador que só cresce: é ele que a conquista "loção" usa, para não
+    // des-completar quando os usos acabam.
+    bumpPet('bathsFeitos', 1)
+  }, [bumpPet])
 
   // Fim de um minigame: moedas ganhas + quantas partidas foram jogadas
   const onMinigame = useCallback(
@@ -2260,7 +2302,8 @@ const shareTrack = useCallback(
                   ? getAchievements(library, petStats?.touches || 0, {
                     buys: Number(petStats?.buys) || 0,
                     toys: toys.length,
-                    baths: Object.values(bath).filter((n) => Number(n) > 0).length,
+                    baths: Math.max(Number(petStats?.bathsFeitos) || 0, (Number(petStats?.buysBath) || 0)),
+                    toysFeitos: Math.max(Number(petStats?.toysBrincados) || 0, toys.length),
                   }).find((a) => a.id === lastAchId)
                   : null
                 if (lastAch) {
@@ -2632,9 +2675,9 @@ onPetAction={handlePetAction}
             <PetHabitatView
             onBack={() => setView('inicio')}
             stats={petStats}
-            inv={inv}
+            inv={invSaldo}
             toys={toys}
-            bath={bath}
+            bath={bathSaldo}
             onFoodEaten={onFoodEaten}
             onBathUsed={onBathUsed}
             onMinigame={onMinigame}
@@ -2889,22 +2932,22 @@ onPetAction={handlePetAction}
                   <span className="shop-offer-tag">⚡ Oferta do dia</span>
                   {shopItemCard(dailyOffer, {
                     offer: true,
-                    qty: dailyOffer.kind === 'food' ? inv[dailyOffer.key] || 0 : 0,
-                    uses: dailyOffer.kind === 'bath' ? bath[dailyOffer.key] || 0 : 0,
+                    qty: dailyOffer.kind === 'food' ? invSaldo[dailyOffer.key] || 0 : 0,
+                    uses: dailyOffer.kind === 'bath' ? bathSaldo[dailyOffer.key] || 0 : 0,
                     owned:
                       (dailyOffer.kind === 'toy' && toys.includes(dailyOffer.key)) ||
-                      (dailyOffer.kind === 'bath' && (bath[dailyOffer.key] || 0) > 0),
+                      (dailyOffer.kind === 'bath' && (bathSaldo[dailyOffer.key] || 0) > 0),
                   })}
                 </div>
               )}
               <div className="shop-grid">
                 {(SHOP_BY_TAB[shopTab] || []).map((it) =>
                   shopItemCard(it, {
-                    qty: it.kind === 'food' ? inv[it.key] || 0 : 0,
-                    uses: it.kind === 'bath' ? bath[it.key] || 0 : 0,
+                    qty: it.kind === 'food' ? invSaldo[it.key] || 0 : 0,
+                    uses: it.kind === 'bath' ? bathSaldo[it.key] || 0 : 0,
                     owned:
                       (it.kind === 'toy' && toys.includes(it.key)) ||
-                      (it.kind === 'bath' && (bath[it.key] || 0) > 0),
+                      (it.kind === 'bath' && (bathSaldo[it.key] || 0) > 0),
                   }),
                 )}
               </div>

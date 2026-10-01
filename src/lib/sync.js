@@ -8,6 +8,7 @@
 
 import { readLocal, clearAllMedia, writeLocal } from '../localstore.js'
 import { accountConfigured, authedFetch, clearSession, getUserId } from './account.js'
+import { MOOD_KEYS } from './pet.js'
 
 export const SYNC_TABLE = 'sync_profiles'
 const RESULT_KEY = 'nt.sync.merged'
@@ -136,14 +137,27 @@ const pickMax = (a, b) => {
 }
 
 // Gatinho: contadores só crescem; barras de humor e lt ficam com o maior.
+// Campos que DIMINUEM sozinhos com o tempo: as barras de necessidade do
+// gatinho. Eles não podem entrar no "pega o maior dos dois" — era o que fazia
+// as barras voltarem cheias assim que a sincronização rodava.
+const DIMINUEM = new Set(MOOD_KEYS)
+
 export function mergePetstats(a, b) {
   const out = {}
   const keys = new Set([...(a ? Object.keys(a) : []), ...(b ? Object.keys(b) : [])])
+  // Qual das duas cópias é a mais recente? As barras vêm dela inteira, senão
+  // misturar "a barra mais alta de uma" com "o relógio da outra" produz um
+  // estado que nunca existiu (barra cheia com relógio velho = barra reidratada).
+  const ltA = a ? Number(a.lt) || 0 : 0
+  const ltB = b ? Number(b.lt) || 0 : 0
+  const maisRecente = ltA >= ltB ? a : b
   for (const k of keys) {
     const va = a ? Number(a[k]) || 0 : 0
     const vb = b ? Number(b[k]) || 0 : 0
-    out[k] = k === 'lt' ? (va > vb ? va : vb) : va > vb ? va : vb
+    if (DIMINUEM.has(k)) out[k] = Number(maisRecente?.[k]) || 0
+    else out[k] = k === 'lt' ? (va > vb ? va : vb) : va > vb ? va : vb
   }
+  out.lt = Math.max(ltA, ltB)
   return out
 }
 
@@ -325,7 +339,7 @@ export function mergeSettings(a, b, aAt = 0, bAt = 0) {
 const SECOES = [
   'nt.settings', 'nt.petstats', 'nt.inv', 'nt.toys', 'nt.bath',
   'nt.achSeen', 'nt.playlists', 'nt.library', 'nt.playedRecent',
-  'nt.settingsAt', 'nt.libApagadas',
+  'nt.settingsAt', 'nt.libApagadas', 'nt.invUsado', 'nt.bathUsado',
 ]
 
 // Nunca vai para a nuvem: a sessão, o estado do próprio sync, e avisos que

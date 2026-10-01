@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { ensureSids } from '../src/lib/sid.js'
+import { disponivelDe, juntaConsumido, somaConsumido } from '../src/lib/pet.js'
 import { applyExtras, applyLibrary, applyPlaylists, collectExtras, deepMerge, mergeApagadas, mergeAll, mergeCounters, mergeExtras, mergeLibrary, mergePlaylists, mergePetstats, mergeSettings, mergeStrings, novoTudoDoZero } from '../src/lib/sync.js'
 
 test('ensureSids: mesma música gera o mesmo sid', () => {
@@ -453,4 +455,104 @@ test('apagar todas as músicas zera as estatísticas que o amigo vê', () => {
   const apagadas = mergeApagadas([], ['a', 'b'])
   const m = mergeLibrary([], [{ sid: 'a', plays: 30 }, { sid: 'b', plays: 12 }], apagadas)
   assert.equal(m.length, 0, 'sem músicas, não pode sobrar plays no perfil do amigo')
+})
+
+// ---------------------------------------------------------------------------
+// Contadores que DIMINUEM: moedas gastas e barras do gatinho.
+//
+// O merge por "pega o maior dos dois" é certo para contadores que só crescem,
+// mas devolvia o valor gasto/dormido assim que a sincronização rodava. Estes
+// testes travam a regressão: se alguém voltar a usar o maior valor aqui, o
+// gasto ou o decaimento voltam a desfazer sozinhos.
+// ---------------------------------------------------------------------------
+
+test('moedas gastas não voltam quando a nuvem ainda tem o saldo antigo', () => {
+  // Você tinha 100, gastou 30. O saldo some e o gasto vira contador.
+  const local = { coins: 100, coinsGastos: 30 }
+  // A nuvem ainda não sabe da compra: tem as 100 inteiras e nada de gasto.
+  const nuvem = { coins: 100, coinsGastos: 0 }
+  const m = mergePetstats(local, nuvem)
+  const saldo = m.coins - m.coinsGastos
+  assert.equal(saldo, 70, 'as 30 moedas gastas têm que continuar gastas')
+})
+
+test('gastar mais moedas continua certo em cada rodada de sincronização', () => {
+  let local = { coins: 100, coinsGastos: 0 }
+  // A nuvem nunca recebe a compra: no pior caso ela continua com as 100 e
+  // zero gasto, e mesmo assim o saldo tem que cair a cada gasto.
+  const nuvem = { coins: 100, coinsGastos: 0 }
+  let gastoAcumulado = 0
+  for (const gasto of [30, 20, 10]) {
+    gastoAcumulado += gasto
+    local = { coins: local.coins, coinsGastos: local.coinsGastos + gasto }
+    const m = mergePetstats(local, nuvem)
+    assert.equal(m.coinsGastos, gastoAcumulado, `total gasto depois de gastar ${gasto}`)
+    assert.equal(m.coins - m.coinsGastos, 100 - gastoAcumulado, `saldo depois de gastar ${gasto}`)
+  }
+})
+
+test('ganhar moedas de verdade continua somando no saldo', () => {
+  const local = { coins: 140, coinsGastos: 30 }
+  const nuvem = { coins: 100, coinsGastos: 30 }
+  const m = mergePetstats(local, nuvem)
+  assert.equal(m.coins - m.coinsGastos, 110, 'ganhar 40 tem que aumentar o saldo')
+})
+
+test('barras do gatinho não são reidratadas pela cópia velha da nuvem', () => {
+  const agora = Date.now()
+  // O gato está com fome de verdade neste aparelho: full baixo, relógio novo.
+  const local = { full: 25, happy: 30, sleep: 40, clean: 35, lt: agora }
+  // A nuvem ainda tem o gato alimentado de horas atrás, com o relógio velho.
+  const nuvem = { full: 100, happy: 95, sleep: 90, clean: 92, lt: agora - 6 * 3600000 }
+  const m = mergePetstats(local, nuvem)
+  assert.equal(m.full, 25, 'a barra baixa não pode virar 100 de novo')
+  assert.equal(m.happy, 30)
+  assert.equal(m.sleep, 40)
+  assert.equal(m.clean, 35)
+  assert.equal(m.lt, agora, 'o relógio segue o mais recente')
+})
+
+test('barras: a cópia mais recente vence, e as duas juntas são consistentes', () => {
+  const agora = Date.now()
+  const velho = { full: 100, happy: 100, sleep: 100, clean: 100, lt: agora - 3600000 }
+  const novo = { full: 40, happy: 55, sleep: 60, clean: 35, lt: agora }
+  const m = mergePetstats(velho, novo)
+  // Misturar "barra cheia" com "relógio novo" seria um estado que nunca existiu.
+  for (const k of ['full', 'happy', 'sleep', 'clean']) {
+    assert.equal(m[k], novo[k], `${k} tem que vir inteira da cópia mais recente`)
+  }
+})
+
+test('barras: contador que cresce (toques) continua usando o maior valor', () => {
+  const m = mergePetstats({ touches: 50, lt: 1 }, { touches: 80, lt: 1 })
+  assert.equal(m.touches, 80, 'toques só crescem, então o maior valor está certo')
+})
+
+test('razão de consumo some tudo que foi usado e nunca regride', () => {
+  const a = somaConsumido({}, 'frango', 1)
+  assert.deepEqual(a, { frango: 1 })
+  const b = somaConsumido(a, 'frango', 2)
+  assert.deepEqual(b, { frango: 3 })
+  assert.deepEqual(somaConsumido({}, 'leite', 1), { leite: 1 })
+  // Unir dois razões só pode somar o que já foi usado, nunca devolver.
+  const junto = juntaConsumido({ frango: 3 }, { frango: 5, leite: 1 })
+  assert.deepEqual(junto, { frango: 5, leite: 1 })
+})
+
+test('saldo de comida é o que tem menos o que já foi comido', () => {
+  const estoque = { frango: 3, pizza: 2 }
+  assert.equal(disponivelDe(estoque, {}, 'frango'), 3)
+  assert.equal(disponivelDe(estoque, { frango: 2 }, 'frango'), 1)
+  assert.equal(disponivelDe(estoque, { frango: 9 }, 'frango'), 0, 'nunca fica negativo')
+  assert.equal(disponivelDe(estoque, { frango: 1 }, 'pizza'), 2)
+})
+
+test('os razões de consumo entram na sincronização', () => {
+  const secoes = collectExtras()
+  assert.ok(secoes, 'coleta tem que existir')
+  // O que importa é que os dois razões são seções de sync, senão o gasto fica
+  // só neste aparelho e volta a aparecer no outro.
+  const temNoFonte = readFileSync(new URL('../src/lib/sync.js', import.meta.url), 'utf8')
+  assert.ok(temNoFonte.includes("'nt.invUsado'"), 'nt.invUsado tem que estar nas seções')
+  assert.ok(temNoFonte.includes("'nt.bathUsado'"), 'nt.bathUsado tem que estar nas seções')
 })

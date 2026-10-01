@@ -74,3 +74,59 @@ export const BATH_CATALOG = [
 
 // Estoque inicial: o gato sempre começa com o essencial pra não ficar sem comer.
 export const START_INVENTORY = { frango: 3, pizza: 2, leite: 2 }
+
+// ---------------------------------------------------------------------------
+// Contadores que DIMINUEM (moedas gastas, comida comida, usos de banho).
+//
+// O merge da sincronização junta duas cópias do mesmo contador tomando "o maior
+// dos dois", porque é assim que contadores que só crescem (plays, toques,
+// compras) se mantêm corretos. Mas para um contador que diminui isso quebra:
+// você gasta 30 moedas e a cópia da nuvem ainda tem o valor antigo, o merge
+// devolve 100 e as moedas voltaram sozinhas.
+//
+// A saída é não fazer o contador diminuir. O saldo continua sendo o valor que
+// já era; o que foi consumido passa a contar num "razebook" separado, que só
+// cresce e pode ser mesclado com o maior tranquilamente. O saldo é a diferença.
+//
+// Os razões começam zerados para quem já tinha o app: o saldo antigo continua
+// valendo como saldo, então nada muda na hora da atualização.
+// ---------------------------------------------------------------------------
+
+// Quantos restam de `key`: o que tem menos o que já foi consumido.
+export function disponivelDe(estoque, reasons, key) {
+  const tem = Number(estoque && estoque[key]) || 0
+  const usou = Number(reasons && reasons[key]) || 0
+  return Math.max(0, tem - usou)
+}
+
+// Soma `n` ao razão de consumo de `key`. Sempre crescente, então o merge por
+// maior valor continua sendo o certo.
+export function somaConsumido(consumido, key, n = 1) {
+  const base = consumido && typeof consumido === 'object' ? consumido : {}
+  return { ...base, [key]: (Number(base[key]) || 0) + n }
+}
+
+// Junta dois razões de consumo. Os dois só crescem, então "o maior dos dois"
+// é exatamente a união sem duplicar.
+export function juntaConsumido(a, b) {
+  const out = {}
+  const keys = new Set([
+    ...(a && typeof a === 'object' ? Object.keys(a) : []),
+    ...(b && typeof b === 'object' ? Object.keys(b) : []),
+  ])
+  for (const k of keys) out[k] = Math.max(Number(a?.[k]) || 0, Number(b?.[k]) || 0)
+  return out
+}
+
+// Tem estoque sobrando de `key`? (mesma conta, mas booleano)
+export function temDisponivel(estoque, reasons, key) {
+  return disponivelDe(estoque, reasons, key) > 0
+}
+
+// Barras de necessidade (full/happy/sleep/clean). Elas DIMINUEM com o tempo,
+// então NÃO podem entrar no "pega o maior dos dois" da sincronização: foi
+// exatamente aí que as barras voltavam cheias sozinhas. `settings.js` usa
+// estas mesmas listas.
+export const MOOD_KEYS = ['full', 'happy', 'sleep', 'clean']
+export const MOOD_DEFAULTS = { full: 100, happy: 85, sleep: 90, clean: 90 }
+export const MOOD_DECAY = { full: 9, happy: 6, sleep: 8, clean: 11 }

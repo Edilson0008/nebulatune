@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '3.2.6',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'As barrinhas de necessidade do gatinho voltam a descer com o tempo. Elas estavam sendo atualizadas pela sincronização com "o maior dos dois", o que enchia as barras de novo sempre que o app sincronizava.' },
+      { type: 'correcao', text: 'As moedas não voltam depois de gastar. O gasto passou a ser guardado como um total separado, então a sincronização não consegue mais desfazer a compra.' },
+      { type: 'correcao', text: 'A comida e os banhos também não reaparecem depois de usados, pelo mesmo motivo.' },
+      { type: 'correcao', text: 'As conquistas não se des-completam mais: "Primeira loção" e "Sala de brincadeiras" agora contam o que você realmente fez, e não o que ainda tem sobrando no estoque.' },
+    ],
+  },
+  {
     version: '3.2.5',
     date: 'Outubro de 2026',
     items: [
