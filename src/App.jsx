@@ -629,6 +629,32 @@ function App() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
 
+  // Pega as músicas que JÁ foram tocadas mas ainda não têm miniatura. Sem isto
+  // só gerou capa para quem tocou depois da atualização: quem já tinha plays
+  // antigos ficaria sem capa no perfil do amigo para sempre.
+  useEffect(() => {
+    if (!libraryHydrated || !library.length) return
+    const pendentes = library.filter(
+      (t) => t && (t.plays || 0) > 0 && !t.coverRemote && !t.coverShare && t.coverBlob,
+    )
+    if (!pendentes.length) return
+    let cancelado = false
+    ;(async () => {
+      for (const t of pendentes.slice(0, 30)) {
+        if (cancelado) return
+        // eslint-disable-next-line no-await-in-loop
+        const data = await compartilharCapa(t.coverBlob)
+        if (cancelado) return
+        if (!data) continue
+        // eslint-disable-next-line no-await-in-loop
+        setLibrary((cur) => cur.map((x) => (x.id === t.id ? { ...x, coverShare: data } : x)))
+      }
+    })()
+    return () => {
+      cancelado = true
+    }
+  }, [libraryHydrated, library])
+
   // Gera a miniatura compartilhável de uma capa que veio do arquivo. Só roda
   // quando ainda não existe: depois de pronta, a capa do amigo aparece sem
   // precisar esperar mais nada.
@@ -1950,6 +1976,42 @@ const shareTrack = useCallback(
           }
           added.push(fallback)
           setLibrary((prev) => [...prev, fallback])
+          // Capa do arquivo também na importação pelo aparelho. Sem isso a
+          // música entrava sem capa nenhuma e o amigo nunca via capa nenhuma:
+          // sem capa não tem miniatura para enviar.
+          try {
+            const { parseBlob } = await import('music-metadata')
+            const meta = await parseBlob(blob, { duration: true })
+            const pic = meta.common.picture?.[0]
+            if (pic) {
+              const small = await makeThumb(new Blob([pic.data], { type: pic.format || 'image/jpeg' }))
+              const id = fallback.id
+              setLibrary((prev) =>
+                prev.map((x) =>
+                  x.id === id
+                    ? { ...x, coverBlob: small, coverUrl: URL.createObjectURL(small) }
+                    : x,
+                ),
+              )
+            }
+            if (meta.common.title || meta.common.artist) {
+              const id = fallback.id
+              setLibrary((prev) =>
+                prev.map((x) =>
+                  x.id === id
+                    ? {
+                        ...x,
+                        title: meta.common.title || x.title,
+                        artist: meta.common.artist || x.artist,
+                        album: meta.common.album || x.album,
+                      }
+                    : x,
+                ),
+              )
+            }
+          } catch {
+            /* sem capa embutida: segue, o iTunes cobre depois */
+          }
         } catch {
           /* arquivo não lido: segue para o próximo */
         }

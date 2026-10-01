@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '3.2.5',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'As capas das músicas agora aparecem no perfil do amigo em dois casos que faltavam: músicas importadas pelo próprio aparelho (entravam sem capa nenhuma) e músicas que você já tinha ouvido antes da atualização (a capa nunca era gerada para elas).' },
+    ],
+  },
+  {
     version: '3.2.4',
     date: 'Outubro de 2026',
     items: [
