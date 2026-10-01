@@ -116,9 +116,9 @@ export async function reenviarMeuPerfil({ name, bio, accent, avatar } = {}) {
 // logada, separado de garantirMeuPerfil (que só grava se algo mudou).
 //
 // `forcar` ignora a janela de 5 min. Existe para o batimento: com a janela
-// valendo, quem deixasse o app aberto mais de 5 min sumia do "Online agora" e
-// o outro passou a ver "visto há 16 min" de alguém que estava com o app aberto
-// o tempo todo. O batimento renova antes da janela vencer.
+// valendo, quem deixasse o app aberto mais tempo do que ela sumia do "Online
+// agora" e o outro passava a ver "visto há 16 min" de alguém que estava com o
+// app aberto o tempo todo. O batimento renova antes da janela vencer.
 export function avisarQueEntrou({ forcar = false } = {}) {
   return enfileira(async () => {
     const uid = await getUserId()
@@ -141,11 +141,11 @@ export function avisarQueEntrou({ forcar = false } = {}) {
 // Batimento de "online": enquanto o app estiver aberto e logado, renova o
 // "visto" de tempos em tempos para o outro não ver a pessoa sumindo.
 //
-// O intervalo é menor que a janela de 5 min do `avisarQueEntrou`: assim, quem
+// O intervalo é menor que a janela de 2 min do `avisarQueEntrou`: assim, quem
 // ficou com o app aberto continua marcado como online, e quem saiu há pouco
-// também aparece. Custa uma escrita leve por minuto por pessoa com o app
+// também aparece. Custa uma escrita leve a cada 30 s por pessoa com o app
 // aberto — o mesmo que já acontecia na troca de conta, só que cadência previsível.
-const BATIMENTO_MS = 60 * 1000
+const BATIMENTO_MS = 30 * 1000
 
 export function iniciarBatimentoOnline() {
   if (typeof window === 'undefined') return () => {}
@@ -164,11 +164,30 @@ export function iniciarBatimentoOnline() {
   // Ao voltar para o app, marca na hora: voltar do bloqueador é o momento em
   // que mais importa dizer "voltou".
   window.addEventListener('focus', bater)
+  // Ao fechar, tenta marcar "saiu" na hora, para o outro não ficar olhando
+  // "Online agora" de alguém que já desligou. É melhor-esforço: recarregar ou
+  // fechar a aba mata a requisição, e o sistema mata o app sem aviso nenhum. Por
+  // isso a janela de 2 min do `estaOnline` continua valendo como rede de
+  // segurança — este aviso só faz o caso comum ser mais rápido.
+  const aoSair = () => {
+    if (!vivo || document.visibilityState === 'hidden') return
+    getUserId().then((uid) => {
+      if (!uid) return
+      authedFetch(`/rest/v1/${TAB}?uid=eq.${encodeURIComponent(uid)}`, {
+        method: 'PATCH',
+        keepalive: true,
+        headers: { Prefer: 'return=minimal' },
+        body: { last_seen_at: new Date(Date.now() - (ONLINE_MIN + 1) * 60000).toISOString() },
+      }).catch(() => {})
+    })
+  }
+  window.addEventListener('pagehide', aoSair)
   return () => {
     vivo = false
     clearInterval(timer)
     document.removeEventListener('visibilitychange', onVis)
     window.removeEventListener('focus', bater)
+    window.removeEventListener('pagehide', aoSair)
   }
 }
 
@@ -430,9 +449,9 @@ export async function cancelarPedido(id) {
 // de um desconhecido só passando o uid, mesmo chamando a RPC na mão.
 // "Viu o app há 2 horas" / "agora". Só texto, no padrão do português, e sem
 // prometer minuto exato: para o usuário "ontem" é mais útil que a hora.
-// `agora` significa menos de 5 minutos — o mesmo corte que o app usa para não
-// gravar o carimbo a cada abertura.
-const ONLINE_MIN = 5
+// `agora` significa menos de 2 minutos — a mesma janela que o batimento renova,
+// então quem está com o app aberto nunca fica para trás e quem fechou cai rápido.
+const ONLINE_MIN = 2
 
 export function estaOnline(iso) {
   if (!iso) return false

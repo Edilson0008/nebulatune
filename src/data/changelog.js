@@ -1,5 +1,15 @@
 export const CHANGELOG = [
   {
+    version: '3.2.2',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'A capa das músicas aparece no perfil do amigo. Antes, só aparecia quando a capa vinha da internet (iTunes) — música com capa do próprio arquivo ficava sem capa no perfil de quem é seu amigo.' },
+      { type: 'novo', text: 'Só a capa é enviada, em miniatura: 64 pixels, no máximo 6 KB. O áudio continua 100% no seu aparelho, como sempre.' },
+      { type: 'correcao', text: '"Online agora" some mais rápido quando você fecha o app. O app avisa na hora ao ser fechado e a janela caiu de 5 minutos para 2.' },
+      { type: 'correcao', text: 'Amigos e o resto da nuvem são atualizados mais rápido: pedidos e lista a cada 2 segundos (antes 3), o resto a cada 5 segundos (antes 8).' },
+    ],
+  },
+  {
     version: '3.2.1',
     date: 'Outubro de 2026',
     items: [

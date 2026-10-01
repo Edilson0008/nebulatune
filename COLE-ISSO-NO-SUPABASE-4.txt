@@ -1,0 +1,151 @@
+-- Cole no SQL Editor do Supabase (projeto ncmdfzqrfvwdhkvjkqkk) e rode.
+-- Só muda a capa do perfil do amigo: agora usa a miniatura de 64px (coverShare)
+-- quando a música não tem link do iTunes. Nada mais é alterado.
+
+create or replace function public.amigos_perfil(p_uid uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  eu       uuid := auth.uid();
+  nome     text;
+  bio      text;
+  cor      text;
+  foto     text;
+  codigo   text;
+  criado   timestamptz;
+  sao_amigos boolean;
+  dados    jsonb;
+  musicas  jsonb;
+  top5     jsonb;
+  n_plays  int := 0;
+  n_mus    int := 0;
+  n_favs   int := 0;
+  n_dias   int := 0;
+  pet      jsonb;
+begin
+  if eu is null or p_uid is null or eu = p_uid then
+    return null;
+  end if;
+
+  select up.name, up.bio, up.accent, up.avatar, up.code, up.last_seen_at
+    into nome, bio, cor, foto, codigo, criado
+    from public.user_profiles up
+   where up.uid = p_uid;
+
+  if codigo is null then
+    return null;
+  end if;
+
+  select exists (
+           select 1 from public.friendships f
+            where f.status = 'ativo'
+              and (
+                   (f.requester_id = eu and f.addressee_id = p_uid)
+                or (f.requester_id = p_uid and f.addressee_id = eu)
+              )
+         )
+    into sao_amigos;
+
+  -- Sem amizade: só o que é público (é o que o código de amigo já mostra).
+  if not sao_amigos then
+    return jsonb_build_object(
+      'uid', p_uid, 'codigo', codigo, 'nome', nome, 'bio', bio,
+      'cor', cor, 'foto', foto, 'amigo', false, 'estatisticas', null
+    );
+  end if;
+
+  -- Amigo: deriva os números da nuvem do dono. `dados` pode não existir ainda
+  -- (conta nova que nunca sincronizou) — nesse caso tudo fica em zero, sem erro.
+  select sp.data into dados from public.sync_profiles sp where sp.uid = p_uid;
+  dados := coalesce(dados, '{}'::jsonb);
+  musicas := coalesce(dados -> 'library', '[]'::jsonb);
+  if jsonb_typeof(musicas) <> 'array' then
+    musicas := '[]'::jsonb;
+  end if;
+
+  select coalesce(sum(amigos_numero(t, 'plays')), 0)::int,
+         count(*)::int,
+         count(*) filter (where t ->> 'fav' = 'true')::int
+    into n_plays, n_mus, n_favs
+    from jsonb_array_elements(musicas) as t;
+
+  -- Um dia conta uma vez só, mesmo que ele tenha tocado 50 músicas.
+  select count(distinct d)::int
+    into n_dias
+    from jsonb_array_elements(musicas) as t,
+         lateral jsonb_object_keys(
+           case when jsonb_typeof(t -> 'playDays') = 'object' then t -> 'playDays' else '{}'::jsonb end
+         ) as d;
+
+  -- Top 5 mais tocadas. Só o que dá pra ver: título, artista, plays, capa.
+  -- playDays/sid NÃO vêm: são dados internos.
+  select coalesce(jsonb_agg(x.item order by x.plays desc), '[]'::jsonb)
+    into top5
+    from (
+      select jsonb_build_object(
+               'titulo', coalesce(t ->> 'title', 'Sem título'),
+               'artista', coalesce(t ->> 'artist', ''),
+               'plays', amigos_numero(t, 'plays'),
+               'fav', (t ->> 'fav' = 'true'),
+               'cores', t -> 'cover',
+               -- A capa que dá para compartilhar é a `coverRemote` (link do
+               -- iTunes) ou, quando a capa veio do próprio arquivo, a
+               -- `coverShare`: uma miniatura de 64px que o aparelho manda como
+               -- data URL. O `coverUrl` é um blob do aparelho e nunca chega
+               -- em outro celular.
+               'capa', coalesce(nullif(t ->> 'coverRemote', ''), nullif(t ->> 'coverShare', ''))
+             ) as item,
+             amigos_numero(t, 'plays') as plays
+        from jsonb_array_elements(musicas) as t
+       where amigos_numero(t, 'plays') > 0
+       order by amigos_numero(t, 'plays') desc
+       limit 5
+    ) as x;
+
+  pet := coalesce(dados -> 'petstats', '{}'::jsonb);
+  if jsonb_typeof(pet) <> 'object' then
+    pet := '{}'::jsonb;
+  end if;
+
+  return jsonb_build_object(
+    'uid', p_uid, 'codigo', codigo, 'nome', nome, 'bio', bio,
+    'cor', cor, 'foto', foto, 'amigo', true,
+    -- Carimbo de "viu o app": last_seen_at, não updated_at (esse muda toda vez
+    -- que a pessoa mexe no perfil, o que daria um "viu" falso).
+    'atualizado', criado,
+    'estatisticas', jsonb_build_object(
+      'plays', n_plays,
+      'musicas', n_mus,
+      'favoritas', n_favs,
+      'dias', n_dias,
+      'toques', amigos_numero(pet, 'touches'),
+      'sonhos', amigos_numero(pet, 'sleeps'),
+      'coracoes', amigos_numero(pet, 'hearts'),
+      'compras', amigos_numero(pet, 'buys'),
+      'brinquedos', case
+                       when jsonb_typeof(dados -> 'toys') = 'array'
+                         then jsonb_array_length(dados -> 'toys')
+                       else 0
+                     end,
+      -- Tipos de banho que a pessoa tem (valor > 0). `jsonb_each_text` traz
+      -- duas colunas: key e value — tem que ler `value`, senão conta a chave
+      -- ('shampoo') em vez do número e dá zero sempre.
+      'banhos', case
+                  when jsonb_typeof(dados -> 'bath') = 'object' then (
+                    select count(*)::int
+                      from jsonb_each_text(dados -> 'bath') as b
+                     where coalesce(b.value, '0') ~ '^-?[0-9]+$'
+                       and b.value::int > 0
+                  )
+                  else 0
+                end,
+      'top', top5
+    )
+  );
+end;
+$$;
+
+revoke all on function public.amigos_perfil(uuid) from public;

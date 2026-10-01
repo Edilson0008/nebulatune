@@ -345,9 +345,11 @@ begin
                'fav', (t ->> 'fav' = 'true'),
                'cores', t -> 'cover',
                -- A capa que dá para compartilhar é a `coverRemote` (link do
-               -- iTunes). O `coverUrl` é um blob temporário do aparelho, que
-               -- não abre em outro celular — se existir, é melhor que nada.
-               'capa', nullif(t ->> 'coverRemote', '')
+               -- iTunes) ou, quando a capa veio do próprio arquivo, a
+               -- `coverShare`: uma miniatura de 64px que o aparelho manda como
+               -- data URL. O `coverUrl` é um blob do aparelho e nunca chega
+               -- em outro celular.
+               'capa', coalesce(nullif(t ->> 'coverRemote', ''), nullif(t ->> 'coverShare', ''))
              ) as item,
              amigos_numero(t, 'plays') as plays
         from jsonb_array_elements(musicas) as t

@@ -202,7 +202,7 @@ export function mergeLibrary(a, b) {
       cur.src = row.src
     }
     if (cur.audioMissing && row.audioMissing === false) cur.audioMissing = false
-    for (const k of ['title', 'artist', 'album', 'duration', 'cover', 'coverRemote', 'addedAt']) {
+    for (const k of ['title', 'artist', 'album', 'duration', 'cover', 'coverRemote', 'coverShare', 'addedAt']) {
       if (!cur[k] && row[k]) cur[k] = row[k]
     }
   }
@@ -224,9 +224,15 @@ export function mergeLibrary(a, b) {
       duration: r.duration || 0,
       cover: r.cover || null,
       // `coverUrl` pode ser um blob do aparelho (não serve para outro
-      // dispositivo); `coverRemote` é o link que dá para compartilhar. Se só
-      // houver um coverUrl que é mesmo um endereço http, aproveita ele.
-      coverRemote: r.coverRemote || (typeof r.coverUrl === 'string' && r.coverUrl.startsWith('http') ? r.coverUrl : null) || null,
+      // dispositivo); `coverRemote` é o que dá para compartilhar. Se só
+      // houver um coverUrl que é mesmo um endereço http, aproveita ele. E se a
+      // capa veio do próprio arquivo, `coverShare` traz a miniatura de 64px
+      // (data URL) — que o outro aparelho consegue abrir, ao contrário do blob.
+      coverRemote:
+        r.coverRemote ||
+        r.coverShare ||
+        (typeof r.coverUrl === 'string' && r.coverUrl.startsWith('http') ? r.coverUrl : null) ||
+        null,
       addedAt: r.addedAt || Date.now(),
       fav: r.fav === true,
       plays: r.plays || 0,
@@ -508,13 +514,13 @@ export function applyPlaylists(cur, merged) {
 // sozinho o que o outro aparelho salvou. Primeiro ele pergunta só o "carimbo de
 // última mudança" (bem Leves); o pacote inteiro só vem quando mudou mesmo.
 
-const WATCH_MS = 8000
+const WATCH_MS = 5000
 
 // A lista de amigos é uma tela que a pessoa fica OLHANDO (à espera de um
 // pedido), então 8 s de atraso era ela ficar encarando a tela sem acontecer
 // nada. É leitura barata (só o carimbo) e só roda com a tela aberta, então
-// pode ser bem mais fino. 3 s ainda é folgado para não martelar o banco.
-const WATCH_AMIGOS_MS = 3000
+// pode ser bem mais fino. 2 s ainda é folgado para não martelar o banco.
+const WATCH_AMIGOS_MS = 2000
 
 export function watchCloud(onData) {
   if (!accountConfigured()) return () => {}

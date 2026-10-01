@@ -5,6 +5,8 @@ import assert from 'node:assert/strict'
 
 import { gerarCodigo, normalizarCodigo, formatarCodigo, PREFIXO_CODIGO } from '../src/lib/codigo-amigo.js'
 import { conquistasDoResumo, getAchievements, resumoDeJogo } from '../src/lib/stats.js'
+import { blobToDataUrl, MAX_CAPA_COMPARTILHADA } from '../src/lib/cover.js'
+import { mergeLibrary } from '../src/lib/sync.js'
 
 const UID = '3f2c1b8e-7d4a-4f0e-9b6a-2c8d1e0f5a7b'
 
@@ -87,4 +89,28 @@ test('resumo de jogo trata bagunça do banco sem quebrar', () => {
   assert.equal(r.dias, 0)
   assert.equal(r.toys, 0)
   assert.deepEqual(resumoDeJogo(), { plays: 0, musicas: 0, favs: 0, dias: 0, touches: 0, buys: 0, toys: 0, baths: 0 })
+})
+// ── Capa no perfil do amigo ────────────────────────────────────────────────
+// A capa do arquivo é um blob do aparelho: para o outro ver, ela vira uma
+// miniatura de 64px (data URL) guardada em `coverShare`. O áudio continua
+// local — só a imagem sobe, e só depois que alguém toca a música.
+test('capa do arquivo vira miniatura compartilhável', () => {
+  assert.match(blobToDataUrl.toString(), /readAsDataURL/)
+  assert.ok(MAX_CAPA_COMPARTILHADA <= 8 * 1024, 'capa grande demais estufa a biblioteca')
+})
+
+test('capa compartilhada é a última opção: link do iTunes ganha', () => {
+  const comItunes = mergeLibrary(
+    [{ sid: 'a', coverRemote: 'https://is.example/c.jpg', coverShare: 'data:image/webp;base64,AAA' }],
+    [{ sid: 'a' }],
+  )
+  assert.equal(comItunes[0].coverRemote, 'https://is.example/c.jpg')
+
+  const soArquivo = mergeLibrary([{ sid: 'a', coverShare: 'data:image/webp;base64,AAA' }], [{ sid: 'a' }])
+  assert.equal(soArquivo[0].coverRemote, 'data:image/webp;base64,AAA')
+})
+
+test('miniatura da capa sobrevive ao merge entre aparelhos', () => {
+  const m = mergeLibrary([{ sid: 'a', title: 'X' }], [{ sid: 'a', coverShare: 'data:image/webp;base64,AAA' }])
+  assert.equal(m[0].coverRemote, 'data:image/webp;base64,AAA')
 })

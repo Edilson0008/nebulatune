@@ -27,7 +27,7 @@ import { TrackEdit, TrackList } from './components/track-list.jsx'
 import { useMoodDetector } from './hooks/use-mood-detector.js'
 import { useOnlinePlayer } from './hooks/use-online-player.js'
 import { usePlayer } from './hooks/use-player.js'
-import { fetchItunesCover, makeThumb } from './lib/cover.js'
+import { fetchItunesCover, makeThumb, compartilharCapa } from './lib/cover.js'
 import { IS_NATIVE } from './lib/env.js'
 import { AUDIO_RE, IMAGE_RE, baseName, cleanArtist, cleanTitle, extFromImageType, extFromType, parseFileName } from './lib/filename.js'
 import { fmtBytes, formatTime, hashStr } from './lib/format.js'
@@ -625,20 +625,37 @@ function App() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
 
-  const countPlay = useCallback((i) => {
-    const key = todayKey()
-    if (bumpPet) bumpPet('coins', 1)
-    setLibrary((prev) => {
-      const t = prev[i]
-      if (!t) return prev
-      const days = t.playDays || {}
-      return prev.map((x) =>
-        x.id === t.id
-          ? { ...x, plays: (x.plays || 0) + 1, playDays: { ...days, [key]: (days[key] || 0) + 1 } }
-          : x,
-)
+  // Gera a miniatura compartilhável de uma capa que veio do arquivo. Só roda
+  // quando ainda não existe: depois de pronta, a capa do amigo aparece sem
+  // precisar esperar mais nada.
+  const garantirCapaCompartilhada = useCallback((id) => {
+    const t = (libraryRef.current || []).find((x) => x.id === id)
+    if (!t || t.coverRemote || t.coverShare || !t.coverBlob) return
+    compartilharCapa(t.coverBlob).then((data) => {
+      if (!data) return
+      setLibrary((cur) => cur.map((x) => (x.id === id ? { ...x, coverShare: data } : x)))
     })
-  }, [bumpPet])
+  }, [])
+
+  const countPlay = useCallback(
+    (i) => {
+      const key = todayKey()
+      if (bumpPet) bumpPet('coins', 1)
+      setLibrary((prev) => {
+        const t = prev[i]
+        if (!t) return prev
+        const days = t.playDays || {}
+        return prev.map((x) =>
+          x.id === t.id
+            ? { ...x, plays: (x.plays || 0) + 1, playDays: { ...days, [key]: (days[key] || 0) + 1 } }
+            : x,
+        )
+      })
+      const alvo = libraryRef.current?.[i]
+      if (alvo) garantirCapaCompartilhada(alvo.id)
+    },
+    [bumpPet, garantirCapaCompartilhada],
+  )
 
   const [playlists, setPlaylists] = useState(() => readLocal('nt.playlists') || [])
 
