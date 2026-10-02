@@ -2,17 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as engine from '../audio/engine'
 import * as graph from '../audio/graph'
 
-export function usePlayer(library, speed = 1, onStart, sink = null) {
+export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = null) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
   const lastElapsedRef = useRef(-1)
   const lastDurationRef = useRef(0)
   const audioRef = useRef(null)
-  const modeRef = useRef('synth')
+  const modeRef = useRef('none')
   const indexRef = useRef(0)
   const libRef = useRef(library)
   const onEndedRef = useRef(() => {})
   const onStartRef = useRef(onStart)
+  const onMissingRef = useRef(onMissing)
   const onErrorRef = useRef(() => {})
   const errorCountRef = useRef(0)
   const playingRef = useRef(false)
@@ -97,10 +98,12 @@ export function usePlayer(library, speed = 1, onStart, sink = null) {
 
   const startIndex = useCallback((i) => {
     const libAll = libRef.current
-    // Se a música está marcada sem som, procura a próxima que tenha som — assim
-    // não toca um som de demonstração no lugar da música de verdade.
-    const soundable = (c) => c && (c.src || c.audioBlob || !c.audioMissing)
-    if (libAll[i]?.audioMissing && !soundable(libAll[i])) {
+    // Só toca o que tem ARQUIVO de verdade (`src` ou blob). `audioMissing` não
+    // é mais atalho para "pode tocar": o filtro da biblioteca já garante que
+    // essa coluna é sempre falsa, e confiar nela aqui era o que deixava uma
+    // música só da nuvem ser escolhida e soar no sintetizador.
+    const soundable = (c) => Boolean(c && (c.src || c.audioBlob))
+    if (!soundable(libAll[i])) {
       for (let step = 1; step < libAll.length; step += 1) {
         const j = (i + step) % libAll.length
         if (soundable(libAll[j])) {
@@ -117,14 +120,6 @@ export function usePlayer(library, speed = 1, onStart, sink = null) {
     const finish = () => {
       setPlaying(true)
       onStartRef.current?.(i)
-    }
-    const synthFallback = () => {
-      modeRef.current = 'synth'
-      if (audioRef.current) audioRef.current.pause()
-      graph.getContext()
-      engine.startTrack(i + 1)
-      emitProgress(0, engine.getDuration())
-      finish()
     }
     const startFile = (src, dur) => {
       modeRef.current = 'file'
@@ -150,7 +145,18 @@ export function usePlayer(library, speed = 1, onStart, sink = null) {
       startFile(src, t.duration)
       return
     }
-    synthFallback()
+    // NÃO existe mais o "se não achou arquivo, toca sintetizador": essa era a
+    // forma como uma música que só existe na nuvem aparecia com a voz de um
+    // instrumento de mentira. A biblioteca só chega aqui com áudio de verdade
+    // (portão em `biblioteca.js` / `comAudio` no App), então chegar aqui sem
+    // `src` e sem blob é dado corrompido — e dado corrompido não se ouve: só
+    // avisa e segue para a próxima.
+    if (!comAudio(t)) {
+      modeRef.current = 'none'
+      if (audioRef.current) audioRef.current.pause()
+      onMissingRef.current?.(t)
+      return
+    }
   }, [getAudio, playWithRetry, emitProgress])
 
   const randomIndex = useCallback(() => {
@@ -409,6 +415,10 @@ export function usePlayer(library, speed = 1, onStart, sink = null) {
   useEffect(() => {
     onErrorRef.current = handlePlayError
   }, [handlePlayError])
+
+  useEffect(() => {
+    onMissingRef.current = onMissing
+  }, [onMissing])
 
   useEffect(() => {
     if (!playing) return undefined

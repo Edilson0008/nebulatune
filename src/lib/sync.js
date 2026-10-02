@@ -43,8 +43,249 @@ export async function novoTudoDoZero(uid) {
 }
 
 // Dono marcado atualmente (conta a que os dados deste aparelho pertencem).
+/**
+ * Há dados de alguma conta neste aparelho para uma troca de conta substituir?
+ *
+ * A marca de dono (`nt.sync.owner`) diz de quem é o estado guardado aqui. Se
+ * ela aponta para outra conta, a leitura normal é "houve troca" — e aí a
+ * sincronização apaga o estado inteiro antes de juntar as coisas. Isso só faz
+ * sentido se houver mesmo um estado antigo para trocar.
+ *
+ * Se o aparelho está vazio (a pessoa acabou de limpar os dados, ou é a conta
+ * nova entrando), a marca é lixo antigo e a conta que entrou deve simplesmente
+ * assumir a posse. Sem esta distinção, cada rodada de sincronização recomeçava
+ * a conta do zero e o app "resetava tudo sozinho" sem parar.
+ */
+export function haveriaDadosParaTrocar() {
+  try {
+    const temRetrato = todasAsChaves().some((k) => eRetrato(k))
+    const temEstado = Boolean(
+      readLocal('nt.settings') || readLocal('nt.inv') || readLocal('nt.petstats') || readLocal('nt.playlists') || readLocal('nt.achSeen') || readLocal('nt.toys'),
+    )
+    return Boolean(temRetrato || temEstado)
+  } catch {
+    // Sem conseguir ler: presume que há estado (o caminho seguro é NÃO apagar).
+    return true
+  }
+}
+
 export function donoDosDados() {
   return readLocal(OWNER_KEY) || null
+}
+
+// ── Retrato (snapshot) de cada conta ────────────────────────────────────────
+// Sem isto, trocar de conta apagava tudo da conta que saiu: ao voltar, a
+// biblioteca vinha pela nuvem e as músicas importadas sumiam. O retrato guarda
+// o estado por conta no próprio aparelho, para que cada uma volte EXATAMENTE
+// como estava — e para que nada de uma conta apareça na outra.
+//
+// As capas (nt.cover.*) NÃO entram: são só cache visual e podem ser refeitas a
+// partir dos blobs. O áudio também não entra: fica no IndexedDB, já que o
+// retrato guarda apenas metadados.
+const SNAP_PREFIX = 'nt.snap.'
+
+// Montado sob demanda: NAO_SINCRONIZA só existe mais abaixo no arquivo, e
+// evaluates-lo aqui quebraria o módulo inteiro.
+let _naoSnapshot = null
+function naoEParaRetrato(k) {
+  if (!_naoSnapshot) _naoSnapshot = new Set(['nt.account.session', 'nt.sync.owner', ...NAO_SINCRONIZA])
+  return _naoSnapshot.has(k)
+}
+
+const chaveDoRetrato = (uid) => (uid ? `${SNAP_PREFIX}${uid}` : null)
+
+// Coleta o retrato completo de uma conta: toda chave `nt.*` que é por-conta.
+export function coletarRetrato(uid) {
+  if (!uid) return null
+  const dados = {}
+  try {
+    for (const k of todasAsChaves()) {
+      if (!k.startsWith('nt.') || naoEParaRetrato(k) || k.startsWith('nt.cover.')) continue
+      // Um retrato NUNCA guarda outro retrato: senão o estado da conta A
+      // acabava dentro do retrato da conta B, e de dentro do outro, e o
+      // aparelho virava uma trouxa de estados misturados.
+      if (eRetrato(k)) continue
+      const v = readLocal(k)
+      if (!vazio(v)) dados[k] = v
+    }
+  } catch {
+    /* storage indisponível: segue com o que deu */
+  }
+  // A marca de dono. Ela não começa com `nt.`, então `aplicarRetrato` a ignora e
+  // nunca vira uma chave solta no storage.
+  dados._uid = uid
+  return dados
+}
+
+export function lerRetrato(uid) {
+  if (!uid) return null
+  const r = readLocal(chaveDoRetrato(uid))
+  return isObj(r) ? r : null
+}
+
+// Todos os ids de música que este aparelho já conheceu, em QUALQUER conta: a
+// conta atual mais os retratos das outras.
+//
+// Existe para a limpeza de espaço: o arquivo de música é do APARELHO, não da
+// conta, e apagar de menos é perder música de verdade. Sem esta lista, trocar de
+// conta e pedir para liberar espaço apagava os arquivos da conta anterior — que
+// ainda estavam esperando para quando ela voltasse.
+export function idsDeTodasAsContas(idsDaContaAtual = []) {
+  const ids = new Set()
+  for (const id of idsDaContaAtual) if (id) ids.add(String(id))
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const k = localStorage.key(i)
+    if (!k || !k.startsWith(SNAP_PREFIX)) continue
+    const snap = lerRetrato(k.slice(SNAP_PREFIX.length))
+    if (!snap || !Array.isArray(snap.library)) continue
+    for (const row of snap.library) {
+      if (row && row.id) ids.add(String(row.id))
+    }
+  }
+  return [...ids]
+}
+
+// Guarda o retrato da conta que está no aparelho agora.
+export function salvarRetrato(uid) {
+  if (!uid) return
+  try {
+    const dados = coletarRetrato(uid)
+    // A marca de dono permite desconfiar de um retrato que veio de onde não
+    // devia (a mistura de contas que existiu antes desta correção).
+    dados._uid = uid
+    if (Object.keys(dados).length) writeLocal(chaveDoRetrato(uid), dados)
+  } catch {
+    /* storage cheio/indisponível: a nuvem ainda cobre a conta */
+  }
+}
+
+// Reparo único: tira de dentro de cada retrato os retratos que foram parar ali
+// (a conta que se misturou), e descarta um retrato que claramente pertence a outra
+// conta. Roda uma vez, na abertura.
+export function limparRetratosEmbutidos() {
+  let mudou = false
+  for (const uid of uidsComRetrato()) {
+    const chave = chaveDoRetrato(uid)
+    const snap = lerRetrato(uid)
+    if (!snap) continue
+    if (snap._uid && snap._uid !== uid) {
+      localStorage.removeItem(chave)
+      mudou = true
+      continue
+    }
+    const limpo = {}
+    let tireiAlgo = false
+    for (const [k, v] of Object.entries(snap)) {
+      if (eRetrato(k)) {
+        tireiAlgo = true
+        continue
+      }
+      limpo[k] = v
+    }
+    if (tireiAlgo) {
+      writeLocal(chave, limpo)
+      mudou = true
+    }
+  }
+  return mudou
+}
+
+export function uidsComRetrato() {
+  const out = []
+  for (const k of todasAsChaves()) {
+    if (k.startsWith(SNAP_PREFIX) && k.length > SNAP_PREFIX.length) out.push(k.slice(SNAP_PREFIX.length))
+  }
+  return out
+}
+
+// Recoloca no aparelho o retrato de uma conta. Devolve quantas chaves voltaram,
+// para a tela saber se havia algo a restaurar.
+// ISOLA O APARELHO PARA UMA CONTA, INTEIRO E NA HORA.
+//
+// Esta é a única porta de entrada para "entrou outra conta". Ela roda no
+// aparelho, sem rede e sem esperar nada, e faz três coisas na ordem:
+//
+//   1. guarda o retrato da conta que SAI (senão as conquistas dela se perdem);
+//   2. apaga do aparelho tudo que é POR-CONTA, para nada sobrar;
+//   3. volta o retrato da conta que ENTRA.
+//
+// A conta que entra tem, depois disto, UM estado que é só dela — e o resto do
+// app só precisa reler. Sem este passo, a memória do navegador continuava com
+// as moedas, o pet e as conquistas da conta anterior, e a tela mostrava dados de
+// uma conta na outra: vazamento visível, e os efeitos de gravar terminavam
+// guardando o Vazamento de volta.
+// AVISO DE ISOLAMENTO.
+//
+// Qualquer tela que guarde estado por conta na MEMÓRIA precisa reler quando a
+// conta troca, senão ela mostra (e regrava) o estado da conta anterior. Em vez
+// de cada tela adivinhar isso, `isolarParaConta` AVISA, e toda tela que tiver
+// estado por conta se inscreve aqui.
+let EPOCA_ISOLAMENTO = 0
+const ouvintesDeIsolamento = new Set()
+
+export function aoIsolarConta(fn) {
+  ouvintesDeIsolamento.add(fn)
+  return () => {
+    ouvintesDeIsolamento.delete(fn)
+  }
+}
+
+function avisarIsolamento() {
+  EPOCA_ISOLAMENTO += 1
+  for (const fn of Array.from(ouvintesDeIsolamento)) {
+    try {
+      fn(EPOCA_ISOLAMENTO)
+    } catch {
+      /* uma tela quebrada não pode impedir a de baixo de isolar */
+    }
+  }
+}
+
+export function isolarParaConta(uid) {
+  const dono = donoDosDados()
+  const trocou = Boolean(dono && dono !== uid)
+  if (trocou) {
+    // 1. O retrato da conta que sai vai primeiro, senão o passo 2 apaga o
+    //    estado dela e ela volta zerada quando a pessoa logar de novo.
+    salvarRetrato(dono)
+    // 2. Nada por-conta fica para trás.
+    removerDadosDeContaAnterior()
+    // nt.library sobrevive (é do aparelho), mas os números dela não: plays,
+    // favorita e playDays dizem a quem a escuta foi.
+    writeLocal('nt.library', soCatalogoDaBiblioteca(readLocal('nt.library')))
+  }
+  // 3. O estado da conta que entra é o dela — e o retrato é a única fonte que
+  //    vale. Sem retrato, o estado fica VAZIO (que é o certo), nunca o da conta
+  //    que saiu.
+  //
+  //    O retrato e aplicado SEMPRE que existir, e não só quando houve troca.
+  //    Voltar para uma conta que já usou este aparelho é o caso em que mais
+  //    importa, e é justamente ali que a condição antiga pulava a aplicação:
+  //    a marca de dono apontava para a conta, então não contava como troca, e
+  //    o estado dela ficava vazio depois de todo o trabalho de ter guardado o
+  //    retrato. A pessoa logava de volta e encontrava a conta zerada.
+  if (uid) {
+    if (lerRetrato(uid)) aplicarRetrato(uid)
+    marcarDono(uid)
+  }
+  avisarIsolamento()
+  return trocou
+}
+
+export function aplicarRetrato(uid) {
+  const r = lerRetrato(uid)
+  if (!r) return 0
+  let n = 0
+  for (const [k, v] of Object.entries(r)) {
+    if (!k.startsWith('nt.') || naoEParaRetrato(k)) continue
+    try {
+      writeLocal(k, v)
+      n += 1
+    } catch {
+      /* uma chave que não coube não pode derrubar o resto */
+    }
+  }
+  return n
 }
 
 // Troca de conta = isola: apaga do aparelho tudo que é POR-CONTA (perfil,
@@ -61,6 +302,7 @@ function removerDadosDeContaAnterior() {
         k === 'nt.sync.owner' ||
         k === 'nt.library' ||
         k.startsWith('nt.cover.') ||
+        k.startsWith(SNAP_PREFIX) ||
         NAO_SINCRONIZA.has(k)
       ) {
         continue
@@ -76,7 +318,12 @@ function removerDadosDeContaAnterior() {
 // o syncApply vai pro estado do app, e esta gravação garante que as telas que
 // leem o storage na hora (recordes, diário, minigames) já vejam a conta certa.
 // As seções que a conta nunca teve ficam sem chave aqui (nada do dono antigo).
-function gravarSectionsDoCloud(cloud) {
+//
+// `preferirLocal` (o retrato que acabou de voltar) tem a palavra final: quando o
+// aparelho já tem o valor, a nuvem só preenche o buraco — sobrescrever aqui
+// perderia o que a pessoa tinha neste aparelho.
+function gravarSectionsDoCloud(cloud, preferirLocal) {
+  const local = preferirLocal && typeof preferirLocal === 'object' ? preferirLocal : {}
   const secaoParaChave = {
     settings: 'nt.settings',
     settingsAt: 'nt.settingsAt',
@@ -91,7 +338,10 @@ function gravarSectionsDoCloud(cloud) {
     playedRecent: 'nt.playedRecent',
     libApagadas: 'nt.libApagadas',
   }
+  const jaTem = (campo) => !vazio(local[campo])
   for (const [campo, chave] of Object.entries(secaoParaChave)) {
+    // O retrato local manda: aqui só sincronizamos o que ainda está vazio.
+    if (jaTem(campo)) continue
     const v = cloud[campo]
     if (vazio(v)) localStorage.removeItem(chave)
     else writeLocal(chave, v)
@@ -362,6 +612,87 @@ const NAO_SINCRONIZA = new Set([
   'nt.notifAsked', 'nt.petNotif', 'nt.updatePrompted',
 ])
 
+// Os RETRATOS (uma cópia do estado de cada conta que já usou este aparelho) são
+// do APARELHO, nunca da conta. Deixá-los passar por `extras` colocava o retrato
+// de A dentro do perfil de B na nuvem, e o `applyExtras` depois gravava isso de
+// volta no aparelho: as contas se misturavam inteiras (biblioteca, plays,
+// playlists, moedas), a biblioteca ficava pela metade e o payload crescia a
+// cada troca de conta até o envio à nuvem falhar.
+function eRetrato(k) {
+  return k.startsWith(SNAP_PREFIX)
+}
+
+// O QUE A LIMPEZA DE MISTURA APAGA — e o que ela JAMAIS toca.
+//
+// A mistura não tem como ser desfeita com Surgery: dentro do estado guardado
+// não existe marca de qual conta era cada pedaço. Então a conta recomeça do
+// zero, uma conta por vez. Só que recomeçar NÃO pode custar as músicas: os
+// arquivos de áudio e a lista delas são o que o usuário tem de mais difícil de
+// repor, e eles não são o que estava misturado.
+const NAO_APAGAR_NA_LIMPEZA = new Set([
+  'nt.account.session', // sessão: não obriga a digitar a senha de novo
+  'nt.library', // a lista de músicas
+  'nt.notifAsked',
+  'nt.petNotif',
+  'nt.updatePrompted',
+  'nt.sidMigrated',
+  'nt.sync.merged',
+  'nt.sync.status',
+  // NOTA: a marca de DONO (`nt.sync.owner`) NÃO está nesta lista — ela sai
+  // junto com o resto. Ela é quem diz ao app "estes dados são da conta X" e,
+  // sozinha depois da limpeza, continuava apontando para a conta antiga: aí
+  // toda sincronização entendia que era uma troca de conta e APAGAVA o estado
+  // recomeçado, uma vez atrás da outra, sem parar.
+])
+
+// Cada faixa "zera" o que é da conta (plays, favorita, dias) e mantém o que é
+// da música. Sem isso, a conta nova nasceria com a pontuação embolada de outra.
+function zerarContagemDaLinha(m) {
+  return {
+    ...m,
+    plays: 0,
+    playDays: {},
+    fav: false,
+    downloaded: false,
+    addedAt: m.addedAt || 0,
+  }
+}
+
+/**
+ * Apaga o estado que se embolou entre as contas neste aparelho, preservando as
+ * músicas. Devolve um relatório do que saiu, para o app poder avisar.
+ */
+export function limparDadosMisturados() {
+  const removidas = []
+  let musicas = []
+  try {
+    for (const k of todasAsChaves()) {
+      if (!k.startsWith('nt.')) continue
+      if (NAO_APAGAR_NA_LIMPEZA.has(k)) {
+        if (k === 'nt.library') {
+          // A lista fica, mas as contagens (que eram da conta) vão a zero.
+          musicas = readLocal('nt.library')
+          writeLocal(
+            'nt.library',
+            Array.isArray(musicas) ? musicas.map(zerarContagemDaLinha) : musicas,
+          )
+        }
+        continue
+      }
+      if (k.startsWith('nt.cover.')) continue // capa é da música, não da conta
+      removidas.push(k)
+      try {
+        globalThis.localStorage.removeItem(k)
+      } catch {
+        /* uma chave teimosa não impede as outras de sair */
+      }
+    }
+  } catch {
+    /* storage bloqueado: segue */
+  }
+  return { removidas: removidas.length, musicas: Array.isArray(musicas) ? musicas.length : 0 }
+}
+
 function todasAsChaves() {
   const out = []
   try {
@@ -379,6 +710,9 @@ export function collectExtras() {
   const out = {}
   for (const k of todasAsChaves()) {
     if (!k.startsWith('nt.') || SECOES.includes(k) || NAO_SINCRONIZA.has(k)) continue
+    // O retrato de cada conta é deste aparelho. Se entrar aqui, o perfil da
+    // conta na nuvem passa a guardar o estado das outras contas.
+    if (eRetrato(k)) continue
     const v = readLocal(k)
     if (!vazio(v)) out[k] = v
   }
@@ -413,6 +747,12 @@ export function mergeExtras(a, b) {
   const nuvem = b && typeof b === 'object' ? b : {}
   const out = { ...nuvem }
   for (const [k, v] of Object.entries(a || {})) out[k] = deepMerge(v, nuvem[k])
+  // Perfis antigos podem ter retratos dentro do `extras` (o bug que misturava
+  // as contas). Se eles fossem repassados aqui, voltariam para a nuvem a cada
+  // sincronização e a mistura nunca acabaria. Somem do caminho.
+  for (const k of Object.keys(out)) {
+    if (eRetrato(k)) delete out[k]
+  }
   return out
 }
 
@@ -429,6 +769,9 @@ export function applyExtras(merged, opts = {}) {
     // remove chaves de extras que existem no aparelho mas não na conta
     for (const k of todasAsChaves()) {
       if (!k.startsWith('nt.') || SECOES.includes(k) || NAO_SINCRONIZA.has(k)) continue
+      // O retrato de cada conta é do aparelho: a troca de conta NÃO pode
+      // apagar o estado que a conta que saiu deixou guardado aqui.
+      if (eRetrato(k)) continue
       if (k === 'nt.library' || k.startsWith('nt.cover.')) continue
       if (!(k in cloud)) {
         localStorage.removeItem(k)
@@ -438,6 +781,10 @@ export function applyExtras(merged, opts = {}) {
   }
   for (const [k, v] of Object.entries(cloud)) {
     if (!k.startsWith('nt.') || SECOES.includes(k) || NAO_SINCRONIZA.has(k)) continue
+    // Profiles antigos podem ter retratos guardados dentro do `extras`. Não
+    // grava: isso é estado de outra conta, e escrever aqui é como as contas se
+    // misturaram pela primeira vez.
+    if (eRetrato(k)) continue
     if (vazio(v)) continue
     if (trocar || vazio(readLocal(k))) {
       writeLocal(k, v)
@@ -481,6 +828,12 @@ export function soCatalogoDaBiblioteca(library) {
     playDays: {},
   }))
 }
+
+// A pergunta "este aparelho tem o arquivo de alguma música?" mora em
+// `lib/biblioteca.js` (`temAudioAqui`), e é ela que decide o que aparece na
+// tela. Aqui, na parte que ESCREVE na nuvem, a biblioteca é sempre a união
+// completa: descartar linhas neste ponto apagaria de verdade as músicas da
+// conta no servidor.
 
 export function mergeAll(a, b) {
   // Nasceu para nunca quebrar: uma seção faltando (conta antiga na nuvem, ou
@@ -750,12 +1103,34 @@ async function fetchCloud(uid) {
 }
 
 async function pushCloud(uid, data) {
-  const { ok } = await authedFetch('/rest/v1/sync_profiles?on_conflict=uid', {
+  const corpo = { uid, data, updated_at: new Date().toISOString() }
+  const tamanho = JSON.stringify(corpo).length
+  const { ok, status, data: resposta } = await authedFetch('/rest/v1/sync_profiles?on_conflict=uid', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates' },
-    body: { uid, data, updated_at: new Date().toISOString() },
+    body: corpo,
   })
-  if (!ok) throw new Error('Falha ao gravar na nuvem')
+  if (!ok) {
+    // "Falha ao gravar na nuvem" não dizia nada e obrigava a adivinhar. O
+    // motivo real é o que separa "a sessão caiu" de "falta permissão" de
+    // "o envio ficou grande demais" — e cada um tem conserto diferente.
+    const doServidor =
+      (resposta && (resposta.message || resposta.msg || resposta.error || resposta.hint)) || ''
+    throw new Error(motivoDaGravacao(status, doServidor, tamanho))
+  }
+}
+
+// Traduz o status da gravação numa frase que diz o que fazer.
+export function motivoDaGravacao(status, doServidor, tamanho) {
+  const servidor = doServidor ? ` — ${String(doServidor).slice(0, 160)}` : ''
+  const mb = (tamanho / 1048576).toFixed(2)
+  if (status === 0) return `Sem conexão com a conta (${tamanho} bytes enviados)`
+  if (status === 401) return `Sessão expirada — entre na conta de novo (${mb} MB)`
+  if (status === 403) return `Sem permissão para gravar nesta conta${servidor}`
+  if (status === 409) return `Conflito ao gravar${servidor}`
+  if (status === 413 || status === 414) return `Envio grande demais (${mb} MB)${servidor}`
+  if (status >= 500) return `A nuvem caiu ao responder (${status})${servidor}`
+  return `Falha ao gravar na nuvem (${status}, ${mb} MB)${servidor}`
 }
 
 // Roda a sincronização: baixa → junta → sobe (a nuvem vira superconjunto) →
@@ -800,7 +1175,26 @@ async function syncNowUmaVez() {
     // simplesmente enviado para a conta que tinha acabado de entrar.
     const dono = donoDosDados()
     const mesmaConta = dono === uid
-    const trocouComDono = Boolean(dono && dono !== uid)
+    // DONO VELHO, APARELHO VAZIO.
+    //
+    // A marca de dono diz "estes dados são da conta X". Se ela aponta para uma
+    // conta que não é a que entrou, a leitura normal seria "houve troca de
+    // conta" — e aí a sincronização APAGA o estado inteiro antes de juntar
+    // qualquer coisa. Mas isso só vale se houver mesmo um estado antigo para
+    // trocar. Se o aparelho está vazio (a pessoa acabou de limpar os dados, ou
+    // é a conta nova entrando), apagar não tem o que apagar e só causa dano:
+    // cada rodada de sincronização recomeçava a conta, sem nunca terminar.
+    //
+    // Sem retrato de conta nenhuma e sem nenhum dado de conta no aparelho, a
+    // marca é apenas lixo antigo: a conta que entrou simplesmente ASSUME a
+    // posse, sem wiping.
+    const donoSemNadaParaTrocar = !haveriaDadosParaTrocar()
+    const trocouComDono = Boolean(dono && dono !== uid && !donoSemNadaParaTrocar)
+    if (dono && dono !== uid && donoSemNadaParaTrocar) {
+      // A conta que entrou fica com a posse: sem isto, a próxima sincronização
+      // repetiria a mesma leitura e o laço continuaria.
+      marcarDono(uid)
+    }
     // "Tem alguma coisa na nuvem?" — só os campos que importam, para não contar
     // uma linha vazia como conta com histórico.
     const nuvemTemDados = Boolean(
@@ -812,14 +1206,50 @@ async function syncNowUmaVez() {
     // vazia) vale juntar — é a primeira sincronização, e quem decide o que é
     // "dado de conta" ainda não existe.
     const mudouDeConta = trocouComDono || (!mesmaConta && nuvemTemDados)
+    // O retrato entra ANTES do merge: ao voltar para uma conta já usada neste
+    // aparelho, o estado dela volta ao lugar e a nuvem só completa o que faltar.
+    // `local` precisa ser relido porque o retrato acaba de gravar as chaves.
+    let base = local
+    if (trocouComDono) {
+      // Antes de limpar, guarda o retrato da conta que SAI. Sem isto, ao voltar
+      // para ela as músicas importadas e as conquistas já teriam sido apagadas.
+      salvarRetrato(dono)
+      removerDadosDeContaAnterior()
+      // nt.library sobrevive à limpeza (é do aparelho) — mas os números dela
+      // não. Se ficassem, a próxima sincronização leria os plays e as favoritas
+      // da conta antiga e a contagem voltaria a vazar.
+      writeLocal('nt.library', soCatalogoDaBiblioteca(readLocal('nt.library')))
+      // Volta o retrato da conta que ENTROU (se este aparelho já a usou): as
+      // músicas importadas e as conquistas reaparecem como estavam.
+      aplicarRetrato(uid)
+      base = collectLocal()
+    }
     let merged
     if (mudouDeConta) {
       // As músicas ficam no aparelho, mas SEM os números: plays, favorita e
       // playDays dizem a quem a escuta foi. Se viessem junto, a conta nova
       // nasceria com as estatísticas da antiga — e era assim que as músicas e as
       // conquistas mudavam de um lado para o outro.
+      //
+      // Exceção: quando o retrato desta conta voltou, o estado JÁ é dela e
+      // precisa ser preservado inteiro. Sem retrato, o aparelho só cede o
+      // catálogo (sem números) e quem manda é a nuvem.
+      const temRetrato = Boolean(lerRetrato(uid))
+      // Base da mesclagem: com retrato, é o estado restaurado (todas as
+      // seções); sem retrato, só a biblioteca sem os números da conta antiga.
+      // Passar apenas `{ library }` aqui descartaria o restante do retrato
+      // (conquistas vistas, histórico, moedas) no mesmo instante em que ele
+      // voltava — a conta apareceria vazia.
+      // A base da conta que ENTROU nunca pode ser a biblioteca que sobrou do
+      // aparelho: os arquivos de áudio são do mesmo jeito para todo mundo, mas
+      // o NOME/CAPA/PLAY delas pertencem à conta que saiu. Sem retrato, a conta
+      // nova entra com a biblioteca vazia e reconhece só as próprias músicas
+      // (o App filtra o que não tem áudio aqui).
+      const baseLocal = temRetrato
+        ? { ...base, library: base.library }
+        : { ...base, library: [], libApagadas: [] }
       merged = mergeAll(
-        { library: soCatalogoDaBiblioteca(local.library) },
+        baseLocal,
         // Na troca, quem manda na lápide é a nuvem da conta que ENTROU: as
         // lápides do aparelho são de quem saiu. Se fossem misturadas, as
         // músicas apagadas na conta antiga sumiriam também das estatísticas da
@@ -827,17 +1257,22 @@ async function syncNowUmaVez() {
         { ...(cloud || {}), libApagadas: (cloud && cloud.libApagadas) || [] },
       )
       if (trocouComDono) {
-        removerDadosDeContaAnterior()
-        // nt.library sobrevive à limpeza (é do aparelho) — mas os números dela
-        // não. Se ficassem, a próxima sincronização leria os plays e as
-        // favoritas da conta antiga e a contagem voltaria a vazar.
-        writeLocal('nt.library', soCatalogoDaBiblioteca(readLocal('nt.library')))
         // Sem nuvem (conta nova) não há seção nenhuma para gravar: a limpeza
         // acima já tirou da conta antiga. Passar vazio derrubaria a sync.
-        if (cloud) gravarSectionsDoCloud(cloud)
+        //
+        // Isto grava o que a NUVEM tem, mas só onde o aparelho ainda está
+        // vazio: o retrato que acabou de voltar tem prioridade. Sem essa
+        // conferida, uma nuvem desatualizada apagaria as conquistas vistas e o
+        // histórico recente que a pessoa tinha neste aparelho.
+        if (cloud) gravarSectionsDoCloud(cloud, base)
       }
     } else {
-      merged = mergeAll(local, cloud || {})
+      // Mesma lógica nos dois casos, de propósito: a biblioteca que vai para
+      // o PUSH é sempre a união completa. Filtrar aqui (por exemplo, zerando a
+      // biblioteca quando o aparelho não tem áudio) apagaria de verdade as
+      // músicas da conta no servidor — o defeito é só de TELA, e quem cuida da
+      // tela é o App, com o filtro de "só mostra o que tem áudio aqui".
+      merged = mergeAll(base, cloud || {})
     }
     // A pessoa pode ter trocado de conta com a rede aberta. Sem esta conferida, a
     // sincronização da conta antiga terminaria por cima: marcava o aparelho como
@@ -847,7 +1282,7 @@ async function syncNowUmaVez() {
     if (sessaoAgora !== uid) return { ok: false, reason: 'conta-trocada' }
     await pushCloud(uid, merged)
     marcarDono(uid)
-    const result = { merged, at: Date.now(), uid, trocar: mudouDeConta, base: local.settings }
+    const result = { merged, at: Date.now(), uid, trocar: mudouDeConta, base: base.settings }
     writeLocal(RESULT_KEY, result)
     setSyncStatus({
       ok: true,

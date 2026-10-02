@@ -138,6 +138,13 @@ create policy "friendships_insert_requester"
     and status = 'pendente'
   );
 
+-- ATENÇÃO: não crie uma policy de UPDATE separada para o reenvio.
+-- O reenvio de pedido recusado passa pela função reenviar_pedido
+-- (security definer, mais abaixo), que roda com os privilégios do dono da
+-- tabela e por isso não depende de policy. A policy de update que vale é
+-- `friendships_update_respond`, abaixo, e ela cobre tanto aceitar/recusar
+-- quanto reenviar — com a trava de que requester_id/addressee_id não mudam.
+
 -- Responder (aceitar/recusar) é privilege de QUEM RECEBEU, e a linha não pode
 -- ser reescrita: o `with check` garante que depois do update a dupla continue
 -- sendo (requester, quem recebeu) e que ninguém se aproveite para apontar a
@@ -167,6 +174,15 @@ create policy "friendships_delete_requester"
 revoke update on public.friendships from anon, authenticated;
 grant update (status, responded_at) on public.friendships to authenticated;
 grant select (id, requester_id, addressee_id, status, message, created_at, responded_at) on public.friendships to authenticated;
+
+-- INSERT: o app manda `requester_id, addressee_id, status, message` ao criar
+-- o pedido. Sem este grant, o PostgREST responde 401/403 "permission denied for
+-- table friendships" e o botão "Enviar" falha sem mostrar nada na tela — era o
+-- bug do pedido que não saía. A policy abaixo (friendships_insert_requester)
+-- continua sendo a que decide QUEM pode inserir; o grant é só o privilégio de
+-- coluna que o RLS pressupõe existir.
+revoke insert on public.friendships from anon;
+grant insert (requester_id, addressee_id, status, message) on public.friendships to authenticated;
 
 -- user_profiles: a pessoa escreve só os campos de apresentação do PRÓPRIO
 -- perfil. Sem travar por coluna, um PATCH livre também gravaria `code` (o

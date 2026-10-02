@@ -35,6 +35,21 @@ if (!html.includes('topbar')) {
 }
 console.log(`App renderizou (${html.length} caracteres)`)
 
+// Sonda dos hooks (troca de conta). Roda os hooks de verdade.
+const SondaHooks = (await import(new URL('ssr-out/ssr-smoke.js', raiz).href)).SondaHooks
+const htmlHooks = renderToString(createElement(SondaHooks, base))
+const tipos = JSON.parse((htmlHooks.match(/<pre id="sonda-hooks"[^>]*>(.*?)<\/pre>/s) || [, '{}'])[1]
+  .replace(/&quot;/g, '"'))
+for (const [nome, tipo] of Object.entries(tipos)) {
+  testados++
+  if (tipo !== 'function') {
+    console.error(`HOOK QUEBRADO: ${nome} é "${tipo}" (o App chama isso na troca de conta)`)
+    erros++
+  } else {
+    console.log(`hook ok: ${nome}`)
+  }
+}
+
 const componentes = (mod) =>
   Object.entries(mod).filter(
     ([chave, valor]) =>

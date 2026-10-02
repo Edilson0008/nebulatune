@@ -412,12 +412,25 @@ export async function enviarPedido(codigo, mensagem = '') {
     if (!ok || data === false) return { ok: false, error: 'Não deu para reenviar o pedido.' }
     return { ok: true, nome: perfil.name }
   }
-  const { ok } = await authedFetch(`/rest/v1/${FRI}`, {
+  const { ok, status, data } = await authedFetch(`/rest/v1/${FRI}`, {
     method: 'POST',
     headers: { Prefer: 'return=minimal' },
     body: { requester_id: uid, addressee_id: perfil.uid, status: 'pendente', message: texto },
   })
-  if (!ok) return { ok: false, error: 'Não deu para enviar o pedido.' }
+  if (!ok) {
+    // O erro do banco é o único jeito de saber o que aconteceu: 401 é sessão
+    // caída, 409 é pedido duplicado, 403 é política (RLS) barrando, 4xx de
+    // coluna é privilégio faltando. Sem isto a tela só dizia "não deu" e o
+    // pedido sumia sem explicação.
+    const detalhe = String(data?.message || data?.hint || data?.error || '')
+    let motivo = 'Não deu para enviar o pedido.'
+    if (status === 401) motivo = 'Sessão caiu. Entre na conta de novo.'
+    else if (status === 403) motivo = 'O banco recusou o pedido (permissão).'
+    else if (status === 409) motivo = 'Já existe um pedido entre vocês.'
+    else if (status === 0) motivo = 'Sem conexão. Tente de novo.'
+    else if (detalhe) motivo = `Não deu para enviar o pedido: ${detalhe}`
+    return { ok: false, error: motivo, status, detalhe }
+  }
   return { ok: true, nome: perfil.name }
 }
 

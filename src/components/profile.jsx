@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { ACCENTS, resolveAccent } from '../settings'
 import { Cover } from './Cover.jsx'
-import { nf } from '../lib/format.js'
-import { PERIOD_LABELS, getAchievements, playsInPeriod } from '../lib/stats.js'
+import { nf, fmtTempo } from '../lib/format.js'
+import {
+  PERIOD_LABELS,
+  getAchievements,
+  playsInPeriod,
+  tempoDaBiblioteca,
+} from '../lib/stats.js'
 import { reduzirAvatar } from '../lib/avatar.js'
 
-export function Profile({ settings, api, library, onPlay, petStats }) {
+export function Profile({ settings, api, library, onPlay, petStats, toys }) {
   const avatarInputRef = useRef(null)
   const [statsPeriod, setStatsPeriod] = useState('week')
   const [salvandoFoto, setSalvandoFoto] = useState(false)
@@ -61,10 +66,23 @@ export function Profile({ settings, api, library, onPlay, petStats }) {
 
   const totalPlaysPeriod = mostPlayed.reduce((acc, t) => acc + playsInPeriod(t, statsPeriod), 0)
 
+  // Soma sobre a biblioteca inteira, e não sobre `mostPlayed`: é o mesmo
+  // resultado (quem está fora de `mostPlayed` tem 0 reproduções no período e
+  // valeria 0 segundos), mas assim o tempo não depende da lista "Mais tocadas"
+  // estar correta para o número bater.
+  const { segundos: tempoPeriodo, semDuracao } = tempoDaBiblioteca(library, statsPeriod)
+
   const [achOpen, setAchOpen] = useState(false)
+  // `toys` e `toysFeitos` vinham FIXOS em zero: as conquistas "Primeiro
+  // brinquedo" e "Sala de brincadeiras" recebiam 0 e nunca completavam, por
+  // mais brinquedos que a pessoa tivesse comprado. Agora o Perfil recebe os
+  // brinquedos da conta — e, como eles são trocados junto com a conta, a
+  // conquista também é: o que o count de uma conta mostra não é o da outra.
+  const listaDeBrinquedos = Array.isArray(toys) ? toys : []
   const achievements = getAchievements(library, petStats?.touches || 0, {
     buys: Number(petStats?.buys) || 0,
-    toys: 0,
+    toys: listaDeBrinquedos.length,
+    toysFeitos: Math.max(Number(petStats?.toysBrincados) || 0, listaDeBrinquedos.length),
     baths: Math.max(Number(petStats?.bathsFeitos) || 0, Number(petStats?.buysBath) || 0),
   })
   const achUnlocked = achievements.filter((a) => a.done).length
@@ -242,6 +260,13 @@ export function Profile({ settings, api, library, onPlay, petStats }) {
           <span>
             <strong>{nf(totalPlaysPeriod)}</strong> reproduções {statsPeriod === 'all' ? 'no total' : `neste ${statsPeriod === 'week' ? 'período' : statsPeriod}`}
           </span>
+          {tempoPeriodo > 0 && (
+            <span className="stats-tempo" title="Estimado: multiplicamos o tamanho de cada música pela quantidade de vezes que ela tocou. Não contamos os segundos reais, então pulos no meio inflam um pouco o número.">
+              {' · '}
+              <strong>~{fmtTempo(tempoPeriodo)}</strong> estimados
+              {semDuracao > 0 && ` (${nf(semDuracao)} sem duração)`}
+            </span>
+          )}
         </div>
         <div className="settings-row">
           <h3 className="stats-list-title">

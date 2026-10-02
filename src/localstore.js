@@ -12,12 +12,66 @@ export function readLocal(key) {
   }
 }
 
+// Falha de gravação. Isto NÃO é enfeite: `localStorage` tem cota (~5 MB), e
+// quando ela estoura o `setItem` lança. O `catch` antigo comia o erro em
+// silêncio e o efeito era o pior possível — a pessoa preenchia o nome, apertava
+// F5 e o nome tinha simplesmente evaporado, sem nenhuma pista do porquê.
+//
+// Guardamos a última falha para o app conseguir MOSTRAR o problema (e para os
+// testes poderemprová-lo).
+let ultimaFalha = null
+export function ultimaFalhaDeGravacao() {
+  return ultimaFalha
+}
+export function limparFalhaDeGravacao() {
+  ultimaFalha = null
+}
+
 export function writeLocal(key, value) {
   try {
-    localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    /* armazenamento cheio/indisponível */
+    const texto = JSON.stringify(value)
+    localStorage.setItem(key, texto)
+    ultimaFalha = null
+    return true
+  } catch (e) {
+    const cheio = e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014)
+    ultimaFalha = { key, cheio: Boolean(cheio), mensagem: (e && e.message) || String(e) }
+    // Mesmo cheia, tenta uma última vez SEM a foto de perfil: ela é o item mais
+    // grosso da chave e sozinha pode estourar a cota. Perder a foto é muito
+    // melhor do que perder nome, bio e todos os outros ajustes junto — e a
+    // pessoa pode recolocar a foto num instante.
+    if (cheio && key === 'nt.settings' && value && typeof value === 'object' && value.avatar) {
+      try {
+        const semFoto = { ...value }
+        delete semFoto.avatar
+        localStorage.setItem(key, JSON.stringify(semFoto))
+        ultimaFalha = { ...ultimaFalha, salvouSemFoto: true }
+        return true
+      } catch {
+        /* nem assim coube */
+      }
+    }
+    return false
   }
+}
+
+// Quanto do armazenamento do navegador já foi usado. Serve para o app avisar
+// ANTES de a perda acontecer, em vez de a pessoa descobrir pelo F5.
+export function storageStatus() {
+  let bytes = 0
+  let max = 0
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (!k) continue
+      bytes += (localStorage.getItem(k) || '').length + (k.length || 0)
+    }
+    //const cota não é exposta: 5 MB é o padrão da maioria dos navegadores.
+    max = 5 * 1024 * 1024
+  } catch {
+    /* sem localStorage */
+  }
+  return { bytes, max, pct: max ? Math.min(100, Math.round((bytes / max) * 100)) : 0 }
 }
 
 const DB_NAME = 'nebulatune-media'
@@ -168,6 +222,43 @@ export function clearAllMedia() {
 // cache ser apertada. Estas duas funções permitem achá-lo e apagá-lo.
 
 const orphanKey = (key) => (key || '').split(':')[0]
+
+/**
+ * Lista os ARQUIVOS DE ÁUDIO que estão no aparelho, com o id de cada um.
+ *
+ * A chave no banco é `${id}:audio` (e `${id}:cover`). Isso permite achar
+ * músicas órfãs: áudio existe, mas a linha sumiu do `nt.library` (foi o que
+ * o apagão da troca de conta causou). O arquivo continua inteiro no aparelho —
+ * só a lista é que se perdeu. O nome do blob vai junto porque, sem a linha, é
+ * o que sobrou para identificar a música.
+ */
+export function listAudioIds() {
+  return runTx('readonly', (s) => {
+    const out = []
+    return new Promise((resolve) => {
+      const req = s.openCursor()
+      req.onsuccess = () => {
+        const cur = req.result
+        if (!cur) {
+          resolve(out)
+          return
+        }
+        const key = String(cur.key || '')
+        if (key.endsWith(':audio')) {
+          const blob = cur.value
+          out.push({
+            id: key.slice(0, -':audio'.length),
+            nome: (blob && typeof blob.name === 'string' && blob.name) || '',
+            tipo: (blob && blob.type) || '',
+            bytes: (blob && typeof blob.size === 'number' && blob.size) || 0,
+          })
+        }
+        cur.continue()
+      }
+      req.onerror = () => resolve(out)
+    })
+  }).catch(() => [])
+}
 
 /* Bytes guardados e quantos blobs existem, sem carregar o conteúdo. */
 export function mediaStorageInfo() {

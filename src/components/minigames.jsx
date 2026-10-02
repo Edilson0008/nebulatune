@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { readLocal, writeLocal } from '../localstore'
 import { setSfxEnabled, sfxBounce, sfxCoin, sfxHeart, sfxNota, sfxPop, sfxWeak } from '../lib/sfx.js'
 import { novoEspinhoId } from '../lib/espinho-id.js'
+import { aoIsolarConta } from '../lib/sync.js'
 
 const rnd = (a, b) => a + Math.random() * (b - a)
 const clamp01 = (v) => Math.max(0, Math.min(1, v))
@@ -1698,6 +1699,22 @@ export function Minigames({ stats, soundOn = true, onFinish, onBack }) {
   const [pausado, setPausado] = useState(false)
   const [somOn, setSomOn] = useState(() => readLocal('nt.som'))
   useEffect(() => { setSfxEnabled(somOn !== false) }, [somOn])
+  // Recordes, diário e AS CONQUISTAS são por conta. Enquanto esta tela fica
+  // montada, trocar de conta mantinha aqui o estado da conta anterior — as
+  // conquistas de uma conta apareciam na outra. O aviso de isolamento manda
+  // reler tudo, e a leitura é estrita: sem chave no storage, o valor é vazio.
+  useEffect(
+    () =>
+      aoIsolarConta(() => {
+        setBest(readLocal('nt.mgBest') || {})
+        setDiario(readLocal('nt.daily') || {})
+        setMgStats(readLocal('nt.mgStats') || { plays: 0, wins: 0 })
+        setMgWins(readLocal('nt.mgWins') || {})
+        const c = readLocal('nt.mgClaims')
+        setClaims(Array.isArray(c) ? c : [])
+      }),
+    [],
+  )
 
   const progT = (t) => {
     switch (t.id) {

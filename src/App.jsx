@@ -5,7 +5,26 @@ import { useEqualizer } from './audio/equalizer'
 import * as graph from './audio/graph'
 import { blobToDataUrl, dataUrlToBlob } from './backup'
 import { COVERS, featuredCovers } from './data/tracks'
-import { deleteMediaBlobs, loadAllMediaBlobs, mediaStorageInfo, purgeOrphanMedia, readLocal, saveMediaBlobs, writeLocal } from './localstore'
+import {
+  deleteMediaBlobs,
+  loadAllMediaBlobs,
+  mediaStorageInfo,
+  purgeOrphanMedia,
+  readLocal,
+  saveMediaBlobs,
+  writeLocal,
+} from './localstore'
+import { hidratarLinha } from './lib/biblioteca'
+import {
+  catalogoPronto,
+  comAudioNoAparelho,
+  criarCatalogo,
+  guardarNoCatalogo,
+  linhasDoCatalogo,
+  marcarCatalogoPronto,
+  tirarDoCatalogo,
+  trocarCatalogo,
+} from './lib/catalogo'
 import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
 import { PET_NEEDS_INFO, pickNeedNudge, pickPetNudge } from './petNudges'
 import { ProgressProvider } from './progress'
@@ -39,10 +58,21 @@ import { shareBlobNative, shareFilesNative } from './lib/share.js'
 import { makeShareCard } from './lib/share-card.js'
 import { sleepNativeCancel, sleepNativeStart } from './lib/sleep-native.js'
 import { getAchievements } from './lib/stats.js'
+
+// Na troca de conta, a lista da conta nova é a ÚNICA verdade. Se ela não vier
+// (ou vier vazia), o certo é lista vazia — nunca a lista da conta que saiu.
+const listaOuVazia = (v) => (Array.isArray(v) ? v : [])
 import { getRecovery, onAccount, restoreSession, getSession } from './lib/account.js'
-import { ensureSids, idsToSids } from './lib/sid.js'
-import { aplicarBiblioteca, applyExtras, applyPlaylists, collectLocal, donoDosDados, mergeAll, mergeCounters, mergeStrings, preservaEditionsRecentes, syncNow, takePendingSync, watchAmigos, watchCloud } from './lib/sync.js'
+import { ensureSids, idsToSids, mesmaMusica } from './lib/sid.js'
+import { deepEqual } from './lib/equal.js'
+import { protegerIdentidade } from './lib/identity.js'
+import { aplicarBiblioteca, applyExtras, applyPlaylists, collectLocal, donoDosDados, isolarParaConta, lerRetrato, limparRetratosEmbutidos, mergeAll, mergeCounters, mergeStrings, preservaEditionsRecentes, syncNow, takePendingSync, watchAmigos, watchCloud } from './lib/sync.js'
 import * as amigosMod from './lib/amigos.js'
+
+// Último portão da biblioteca: uma linha sem áudio não é uma música, é lixo de
+// sincronização. Fica aqui (fora do componente) para ser a mesma função em
+// qualquer ponto do app.
+const comAudio = (t) => Boolean(t && (t.src || t.audioBlob))
 
 /* Telas que o usuário quase sempre NÃO abre na primeira visita: entram no
    pacote só na hora de abrir. Deixa a abertura do app mais leve em aparelhos
@@ -125,6 +155,7 @@ function App() {
   const [accountOpen, setAccountOpen] = useState(false)
   const [cacheCleanMsg, setCacheCleanMsg] = useState('')
   const [freeSpaceMsg, setFreeSpaceMsg] = useState('')
+
   const [view, setView] = useState('inicio')
   const [shopOpen, setShopOpen] = useState(false)
   const [shopTab, setShopTab] = useState('comida')
@@ -321,7 +352,19 @@ function App() {
     setPetGreet(nextPetGreet(appSettings.userName || '', library.length === 0 && !loadingLib))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, loadingLib, library.length, appSettings.userName])
-  const { petStats, bumpPet, settlePet, applyPetStats, restorePetStats, adotePetStats } = usePetStats()
+  const { petStats, bumpPet, settlePet, applyPetStats, restorePetStats, replacePetStats, adotePetStats } = usePetStats()
+  // Espelho do gatinho para a sincronização decidir sem esperar o redesenho.
+  const petStatsRef = useRef(petStats)
+  useEffect(() => {
+    petStatsRef.current = petStats
+  }, [petStats])
+  // O aparelho já tem alguma coisa do gatinho? Se tem, foi a pessoa que ganhou
+  // agora — e aí a sincronização não pode trocar isso por uma cópia zerada.
+  const temPetStatsLocal = useCallback(() => {
+    const s = petStatsRef.current
+    if (!s || typeof s !== 'object') return false
+    return Object.values(s).some((v) => Number(v) > 0)
+  }, [])
   // Saldo de moedas = total ganho menos total gasto (ver lib/pet.js). Fica
   // depois do hook porque é petStats que carrega os dois valores.
   const moedas = Math.max(
@@ -512,6 +555,10 @@ function App() {
   const folderInputRef = useRef(null)
   const libraryRef = useRef([])
   const savedBlobsRef = useRef({})
+  // A memória do que a conta TEM, separada do que aparece na TELA. Vive num ref
+  // (nunca vira estado) porque é só de leitura/escrita: a tela é o estado, o
+  // catálogo é o que não pode ser perdido.
+  const catalogoRef = useRef(criarCatalogo())
   const [updatePrompt, setUpdatePrompt] = useState(null)
   const [updateInstalling, setUpdateInstalling] = useState(false)
   const [updateInstallMsg, setUpdateInstallMsg] = useState('')
@@ -529,11 +576,70 @@ function App() {
     })
     restoreSession()
     if (getRecovery()) setAccountOpen(true)
+    // Reparo único: remove dos retratos o estado de outras contas que ficou
+    // guardado dentro deles (a mistura que aconteceu antes de a sincronização
+    // parar de mandar retrato para a nuvem).
+    try {
+      limparRetratosEmbutidos()
+    } catch {
+      /* storage bloqueado: segue com o que tem */
+    }
     return off
+  }, [])
+
+  // A sessão também é lida logo de cara. Se `restoreSession()` falhar no efeito
+  // acima, o erro derrubava o app inteiro (efeito que lança derruba a árvore do
+  // React) e a tela ficava preta. Aqui a leitura é feita de novo, protegida:
+  // pior um logout visual do que um app morto.
+  useEffect(() => {
+    try {
+      const s = getSession()
+      if (s && !account) setAccount(s)
+    } catch {
+      /* sessão indisponível: o app segue sem conta */
+    }
   }, [])
 
   // Hidrata a biblioteca 100% local: metadados do localStorage + áudio/capa do
   // IndexedDB. O app abre direto na tela principal, sem login.
+  // Relê a biblioteca do disco e monta a tela: só entra o que tem arquivo.
+  const hidratarDoDisco = useCallback(async () => {
+    const rows = readLocal('nt.library')
+    if (!Array.isArray(rows)) {
+      setLibraryHydrated(true)
+      // Mesmo sem lista nenhuma, a leitura do disco ACABOU: o catálogo pode ser
+      // gravado. Sem esta marca o catálogo ficava "não pronto" para sempre e a
+      // biblioteca nunca mais era salva — o que se via como "não guarda ao dar
+      // F5". (E é justo numa conta recém-limpa, que ainda não tem lista.)
+      marcarCatalogoPronto(catalogoRef.current, true)
+      return
+    }
+    setLoadingLib(true)
+    const ids = rows.map((r) => (r && r.id) || '')
+    const mediaList = await loadAllMediaBlobs(ids)
+    const hydrated = []
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      if (!row || typeof row !== 'object') continue
+      try {
+        // O CATÁLOGO guarda a linha sempre (a conta tem essa música), mas a
+        // TELA só recebe se o arquivo veio de verdade. Antes, descartar a
+        // linha aqui apagava a música do `nt.library` no mesmo instante em
+        // que se abria o app — era assim que a biblioteca sumia sozinha.
+        const completa = guardarNoCatalogo(catalogoRef.current, row)
+        const pronta = hidratarLinha(completa, mediaList[i] || {})
+        if (pronta) hydrated.push(pronta)
+      } catch {
+        // Música defeituosa não derruba o carregamento da biblioteca inteira.
+      }
+    }
+    setLibrary(ensureSids(hydrated))
+    setLibraryHydrated(true)
+    // O `nt.library` desta conta já está dentro do catálogo: agora sim a
+    // biblioteca pode ser reescrita (antes disso, uma gravação escreveria vazio).
+    marcarCatalogoPronto(catalogoRef.current, true)
+  }, [])
+
   useEffect(() => {
     let alive = true
     const finish = () => {
@@ -541,42 +647,9 @@ function App() {
       requestAnimationFrame(() => setLoadingLib(false))
     }
     ;(async () => {
-      const rows = readLocal('nt.library')
-      if (!alive || !Array.isArray(rows)) {
-        if (alive) setLibraryHydrated(true)
-        return
-      }
-      setLoadingLib(true)
-      const ids = rows.map((r) => (r && r.id) || '')
-      const mediaList = await loadAllMediaBlobs(ids)
       if (!alive) return
-      const hydrated = []
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i]
-        if (!row || typeof row !== 'object') continue
-        try {
-          const media = mediaList[i] || {}
-          const audioBlob = media.audio instanceof Blob ? media.audio : null
-          const coverBlob = media.cover instanceof Blob ? media.cover : null
-          const prevCover =
-            row.coverUrl && row.coverUrl.startsWith('blob:') ? null : row.coverUrl || null
-          hydrated.push({
-            ...row,
-            audioBlob,
-            src: audioBlob ? URL.createObjectURL(audioBlob) : null,
-            coverBlob,
-            coverUrl: coverBlob
-              ? URL.createObjectURL(coverBlob)
-              : row.coverRemote || prevCover,
-            audioMissing: row.audioMissing === true && !audioBlob,
-          })
-        } catch {
-          // Música defeituosa não derruba o carregamento da biblioteca inteira.
-        }
-      }
+      await hidratarDoDisco()
       if (!alive) return
-      setLibrary(ensureSids(hydrated))
-      setLibraryHydrated(true)
       finish()
     })()
     // Rede de segurança: nunca deixar preso em "Carregando sua biblioteca…".
@@ -585,7 +658,7 @@ function App() {
       alive = false
       clearTimeout(guard)
     }
-  }, [])
+  }, [hidratarDoDisco])
 
   // Salva a biblioteca localmente (debounce): metadados + blobs novos.
   useEffect(() => {
@@ -593,7 +666,23 @@ function App() {
       // Nunca gravar "biblioteca vazia" por cima da verdadeira antes de a
       // hidratação terminar: isso fazia as músicas sumirem ao trocar de versão.
       if (!libraryHydrated && library.length === 0) return
-      const rows = library
+      // NUNCA gravar enquanto o catálogo da conta não está carregado. Este era
+      // o apagão: ao trocar de conta o catálogo é esvaziado e recarregado do
+      // retrato, mas este efeito dispara nesse intervalo — e gravava
+      // `nt.library: []`, apagando de verdade as músicas do aparelho. Como a
+      // conta antiga só voltaria pelo retrato (que já estava vazio), as músicas
+      // sumiam para sempre. O arquivo continuava no IndexedDB, sem lista.
+      if (!catalogoPronto(catalogoRef.current)) return
+      // O que vai para o `nt.library` (e daqui para a nuvem) é o CATÁLOGO
+      // inteiro, não a tela. Se fosse a tela, uma música sem arquivo neste
+      // aparelho — ou uma recién-importada antes do blob chegar ao IndexedDB —
+      // seria apagada do registro assim que a biblioteca fosse reescrita. Era
+      // esse o caminho das músicas que sumiam sozinhas.
+      const tela = new Map(library.filter((x) => x && x.id).map((x) => [x.id, x]))
+      for (const row of linhasDoCatalogo(catalogoRef.current)) {
+        guardarNoCatalogo(catalogoRef.current, tela.get(row.id) || row)
+      }
+      const rows = linhasDoCatalogo(catalogoRef.current)
         .filter((x) => x && x.id)
         .map((x) => ({
           id: x.id,
@@ -853,54 +942,300 @@ function App() {
     setPlayedRecent((prev) => [key, ...prev.filter((x) => x !== key)].slice(0, 10))
   }, [])
 
-  // Aplica um merge sincronizado no estado do app. Uniões são idempotentes, e
-  // a biblioteca local mantém a própria ordem (as novidades entram no fim).
-  // `trocar` = acabou de trocar de conta: em vez de somar/juntar, SUBSTITUI
-  // pelo que é da conta (moedas, inventário, recordes... nada fica para trás).
+  // Quem está na tela agora, e de quem é o CATÁLOGO.
+  const accountUserId = account && account.user ? account.user.id : null
+  const accountRef = useRef(accountUserId)
+  useEffect(() => {
+    accountRef.current = accountUserId
+  }, [accountUserId])
+
+  // Trocar de conta TROCA o catálogo inteiro. Sem isto as músicas de uma conta
+  // continuavam no registro da outra, e apareciam misturadas depois da troca —
+  // as músicas vazavam e ainda saíam duplicadas, porque a mesma faixa chegava
+  // com dois ids (o do retrato e o da nuvem). Sair da conta também esvazia:
+  // sem conta nenhuma, nada de ninguém fica na tela.
+  const contaDoEstadoRef = useRef(accountUserId)
+  const ehTrocaDeConta = useCallback(() => contaDoEstadoRef.current !== accountUserId, [accountUserId])
+
+  // Falha silenciosa e o pior defeito que existe: o app continua na tela e a
+  // pessoa acha que deu certo, mas a conta NAO trocou. Este ref deixa a falha
+  // aparecer na tela.
+  const toastRef = useRef(null)
+  const isolarContaRef = useRef(isolarParaConta)
+  const replacePetRef = useRef(replacePetStats)
+  const setAllRef = useRef(settingsApi.setAll)
+  const replaceRef = useRef(settingsApi.replaceAll)
+  useEffect(() => {
+    isolarContaRef.current = isolarParaConta
+    replacePetRef.current = replacePetStats
+    setAllRef.current = settingsApi.setAll
+    replaceRef.current = settingsApi.replaceAll
+  })
+
+  // Relê um estado por conta. A LEITURA É ESTRITA: se a chave não existe, o
+  // valor é o vazio/zerado, e nunca o que sobrou na memória. Este é o ponto
+  // que fecha o vazamento — antes, o que faltava no storage era preenchido com
+  // o valor da conta anterior que ainda estava no estado do React.
+  const relerDoStorage = useCallback((uid) => {
+    const inv = readLocal('nt.inv')
+    setInv(inv && typeof inv === 'object' && Object.keys(inv).length ? inv : { ...START_INVENTORY })
+    setToys(Array.isArray(readLocal('nt.toys')) ? readLocal('nt.toys') : [])
+    const bath = readLocal('nt.bath')
+    setBath(bath && typeof bath === 'object' ? bath : {})
+    const invUsado = readLocal('nt.invUsado')
+    setInvUsado(invUsado && typeof invUsado === 'object' ? invUsado : {})
+    const bathUsado = readLocal('nt.bathUsado')
+    setBathUsado(bathUsado && typeof bathUsado === 'object' ? bathUsado : {})
+    setAchSeen(Array.isArray(readLocal('nt.achSeen')) ? readLocal('nt.achSeen') : [])
+    setPlaylists(Array.isArray(readLocal('nt.playlists')) ? readLocal('nt.playlists') : [])
+    setPlayedRecent(Array.isArray(readLocal('nt.playedRecent')) ? readLocal('nt.playedRecent') : [])
+    setSyncOffsets(readLocal('nt.lyricSync') || {})
+    // O gatinho e SUBSTITUIDO, nunca fundido. `buys` e `bathsFeitos` nao estao
+    // nos defaults, entao a fusao mantinha as compras e os banhos da conta que
+    // saiu — e as quatro conquistas que medem compras e banhos destravavam
+    // sozinhas na conta nova.
+    replacePetRef.current(readLocal('nt.petstats'))
+    // Nome, bio e foto são SUBSTITUÍDOS, nunca fundidos. Sem conta nenhuma o
+    // valor é `{}` — e como o `setAll` funde, usar ele aqui manteria o nome, a
+    // bio e a foto da conta que saiu, visíveis depois do logout.
+    const st = readLocal('nt.settings')
+    replaceRef.current(st && typeof st === 'object' ? protegerIdentidade(st, st) : {})
+  }, [])
+
+  const contaDoCatalogoRef = useRef(account)
+  useEffect(() => {
+    // A troca e detectada pelo OBJETO DA SESSAO, e nao pelo id do usuario.
+    // Depender do id era o defeito: se a sessao chegasse sem `user` (login
+    // antigo, link de recuperacao, gravacao parcial), `account.user.id` era
+    // `null` o tempo todo. A sessao virava `null` ao deslogar e o id
+    // continuava `null` — o efeito era pulado, a pessoa deslogava e os dados
+    // dela ficavam na tela. E, pior: sem isolar, os dados vazavam entre contas.
+    if (contaDoCatalogoRef.current === account) return
+    contaDoCatalogoRef.current = account
+    // PRIMEIRO isola o aparelho, DEPOIS troca o catálogo e DEPOIS relê o
+    // estado. A ordem é toda a garantia: se o estado fosse relido antes da
+    // isolamento, ele leria o da conta que estava saindo.
+    // Um erro aqui dentro derrubava o app INTEIRO (efeito que lança derruba a
+    // árvore do React) e a tela ficava preta, obrigando a recarregar. Cada
+    // passo é protegido: se um falhar, os outros ainda rodam e a pessoa não
+    // fica sem app.
+    const uidDaConta = account && account.user ? account.user.id : null
+    try {
+      isolarContaRef.current(uidDaConta)
+    } catch (erro) {
+      console.error('[NebulaTune] falha ao isolar a conta', erro)
+      toastRef.current?.('Falha ao sair da conta: ' + (erro?.message || erro), 12000)
+    }
+    try {
+      relerDoStorage(uidDaConta)
+    } catch (erro) {
+      console.error('[NebulaTune] falha ao reler o estado da conta', erro)
+      toastRef.current?.('Falha ao limpar o perfil: ' + (erro?.message || erro), 12000)
+    }
+    // O estado em memória passa a pertencer a esta conta (ou a ninguém).
+    contaDoEstadoRef.current = uidDaConta
+    try {
+      trocarCatalogo(catalogoRef.current, uidDaConta ? lerRetrato(uidDaConta) : null)
+    } catch (erro) {
+      console.error('[NebulaTune] falha ao trocar o catálogo', erro)
+      toastRef.current?.('Falha ao trocar as músicas: ' + (erro?.message || erro), 12000)
+    }
+    // A tela muda AGORA, e não quando a sincronização responder. Deixar a
+    // biblioteca da conta anterior na tela até a rede voltar era vazamento na
+    // cara do usuário: as músicas de A ficavam visíveis como se fossem de B.
+    let vivo = true
+    ;(async () => {
+      const doCatalogo = linhasDoCatalogo(catalogoRef.current)
+      const mediaList = doCatalogo.length ? await loadAllMediaBlobs(doCatalogo.map((r) => r.id)) : []
+      if (!vivo) return
+      const porId = new Map()
+      doCatalogo.forEach((r, i) => porId.set(r.id, mediaList[i] || {}))
+      setLibrary(ensureSids(comAudioNoAparelho(catalogoRef.current, (linha) => porId.get(linha.id))))
+      // O catálogo desta conta já está montado. Só a partir daqui a biblioteca
+      // pode ser gravada sem risco de sobrescrever a de verdade com lista vazia.
+      marcarCatalogoPronto(catalogoRef.current, true)
+    })()
+    return () => {
+      vivo = false
+    }
+  }, [account, relerDoStorage])
+
+  // REGRA DA CASA, em duas metades que nunca se misturam:
+  //
+  //   TELA    = só as músicas com ARQUIVO neste aparelho, tocando de verdade.
+  //   CATÁLOGO = tudo o que a conta TEM, e é ele que vai para o `nt.library` e
+  //              para a nuvem. Descartar da tela nunca apaga da conta.
+  //
+  // O catálogo é por conta (`trocarCatalogo`): as músicas de uma conta não ficam
+  // no registro da outra. E é dele que a tela é montada, porque é nele que estão
+  // a capa e a duração — a linha crua que vem da nuvem não tem nenhuma das duas,
+  // e usá-la diretamente deixava a música sem capa e com "duração indefinida".
+  const aplicarBibliotecaDaConta = useCallback(
+    (entrada, trocar) => {
+      if (!Array.isArray(entrada)) return
+      // 1. Entra no catálogo tudo o que veio da conta (retrato + nuvem).
+      for (const row of entrada) {
+        if (row && typeof row === 'object' && row.id) guardarNoCatalogo(catalogoRef.current, row)
+      }
+      // A conta mandou o que tem: o catálogo está completo e pode ser gravado.
+      marcarCatalogoPronto(catalogoRef.current, true)
+      ;(async () => {
+        // 2. O arquivo de cada linha do catálogo. A busca é pelo id JÁ UNIFICADO:
+        //    a linha da nuvem que parecia outra música foi unida com a local, e
+        //    é no id local que o blob está.
+        const doCatalogo = linhasDoCatalogo(catalogoRef.current)
+        const mediaList = await loadAllMediaBlobs(doCatalogo.map((r) => r.id))
+        const porId = new Map()
+        doCatalogo.forEach((r, i) => porId.set(r.id, mediaList[i] || {}))
+        // Uma música recém-importada pode ainda não estar no IndexedDB (o
+        // salvamento é adiado). Ela TEM áudio — está na mão do app — e ignorar
+        // isso fazia a música recém-adicionada sumir sozinha.
+        for (const t of libraryRef.current || []) {
+          if (t && t.id && (t.src || t.audioBlob) && !porId.has(t.id)) {
+            porId.set(t.id, { audio: t.audioBlob, cover: t.coverBlob })
+          }
+        }
+        // 3. A TELA sai daqui: só o que tem arquivo, com capa e duração.
+        const tela = comAudioNoAparelho(catalogoRef.current, (linha) => porId.get(linha.id))
+        setLibrary((cur) => {
+          const base = ensureSids(aplicarBiblioteca(cur, tela, trocar)).filter(comAudio)
+          if (trocar) return base
+          // Mesma conta: acrescenta o que a tela trouxe e ainda não estava na
+          // biblioteca (por exemplo, uma faixa reconhecida depois de um sync).
+          const ids = new Set(base.map((r) => r.id))
+          return ensureSids([...base, ...tela.filter((r) => !ids.has(r.id))])
+        })
+      })()
+    },
+    [],
+  )
+
+  // A CONTA A QUE ESTE ESTADO PERTENCE.
+  //
+  // A junção ("mesma conta, junta o maior") só é válida entre dois aparelhos
+  // da MESMA pessoa. Entre contas diferentes, qualquer junão é vazamento.
+  //
+  // Por isso a decisão é tomada AQUI, comparando a conta com a última conta
+  // aplicada — e não pela flag `trocar` que viaja dentro do resultado da
+  // sincronização. Essa flag dependia da rede: se o resultado chegasse velho,
+  // sem a flag, ou de outra conta, a mesclagem acontecia na conta errada. Aqui
+  // não há rede no meio, só a identidade.
+
+
   const syncApply = useCallback(
     (merged, opts = {}) => {
-      const trocar = Boolean(opts?.trocar)
       if (!merged || typeof merged !== 'object') return
+      // SEM CONTA LOGADA NÃO SE APLICA NADA.
+      //
+      // Uma sincronização que já estava a caminho quando a pessoa deslogou
+      // chega alguns segundos depois e, se fosse aplicada, repovoava a tela:
+      // o nome, a bio e a foto da conta voltavam sozinhos, com a tela de login
+      // aberta. Pior: sem conta, "trocar de conta" dá falso, e o resultado
+      // entrava pelo caminho da FUSÃO, que devolve o que estava em memória em
+      // vez de trocar.
+      //
+      // Sem conta não existe estado de conta para sincronizar. A regra é uma só
+      // e vale para qualquer resultado, de qualquer origem.
+      if (!accountUserId) return
+      // Trocar de conta: substituição estrita. Mesma conta: junção permitida, que
+      // é o que impede o saldo de voltar atrás entre dois aparelhos.
+      const trocar = ehTrocaDeConta()
+      // Diz ao efeito acima que o que vem a seguir é a sync, não a pessoa.
+      syncAplicouRef.current = Date.now()
       // `base` = o que as configurações eram quando a sync começou. O que a
       // pessoa editou depois disso é mais novo que o resultado, e não pode ser
       // sobrescrito (trocar a foto e ela voltar sozinha).
       if (merged.settings) {
         const settings = trocar ? merged.settings : preservaEditionsRecentes(merged.settings, opts?.base)
-        settingsApi.setAll(settings)
+        // Nome, foto e bio: um valor VAZIO vindo da nuvem não pode apagar o que
+        // está gravado no aparelho (ver `protegerIdentidade`).
+        if (trocar) {
+          // Conta nova: cada campo passa a valer o que É dela. Fundir aqui
+          // deixaria de herdar da conta anterior todo campo que a nova conta
+          // não tem — foi assim que o nome e a foto atravessaram a troca.
+          const limpos = protegerIdentidade(settings, null)
+          settingsApi.replaceAll(limpos)
+        } else {
+          settingsApi.setAll(protegerIdentidade(settings, readLocal('nt.settings')))
+        }
       }
+      // ESTA É A REGRA DA CASA, e ela tem duas metades que NUNCA se misturam.
+      //
+      // Mesma conta (trocar === false): contadores e listas SÓ CRESCEM. Aqui a
+      // união pelo maior é a resposta certa — perder moedas porque o outro
+      // aparelho ainda tem a cópia antiga do saldo é pior do que qualquer
+      // duplicata.
+      //
+      // Troca de conta (trocar === true): SUBSTITUIÇÃO ESTRITA, SEM EXCEÇÃO.
+      // Nada do que está na memória pode sobreviver, porque a memória é da conta
+      // que SAIU. Aqui a união é o vazamento: as moedas, o pet, os brinquedos e
+      // as conquistas da conta A ficavam na conta B. A suposição de que "o
+      // estado antigo já foi apagado antes daqui" era FALSA — o estado React da
+      // conta antiga continua inteiro até este ponto.
+      //
+      // Na troca, o que manda é SEMPRE a conta nova. Se a conta nova não tem
+      // aquele dado, o certo é não ter nada — nunca herdar o da antiga.
       if (merged.petstats) {
-        if (trocar) restorePetStats(merged.petstats)
+        // Na troca o gatinho e SUBSTITUIDO: fundir mantinha compras e banhos da
+        // conta anterior, que destravavam conquistas sozinhas na conta nova.
+        if (trocar) replacePetStats(merged.petstats)
+        else if (!temPetStatsLocal()) restorePetStats(merged.petstats)
         else applyPetStats(merged.petstats)
       }
-      if (merged.inv) setInv(trocar ? merged.inv : (cur) => mergeCounters(cur, merged.inv))
-      if (merged.toys) setToys(trocar ? merged.toys : (cur) => mergeStrings(cur, merged.toys))
-      if (merged.bath) setBath(trocar ? merged.bath : (cur) => mergeCounters(cur, merged.bath))
+      // Cada um destes devolve o valor ATUAL quando o resultado da sync é igual
+      // ao que já estava aqui. O React não redesenha quando o estado é o mesmo
+      // objeto, então a sync para de produzir mudanças falsas — que era o que
+      // fazia a conta "se editar sozinha" e o laço de sincronização não parar.
+      if (merged.inv) {
+        setInv((cur) => {
+          const proximo = trocar ? (merged.inv || {}) : mergeCounters(cur, merged.inv)
+          return deepEqual(cur, proximo) ? cur : proximo
+        })
+      }
+      if (merged.toys) setToys((cur) => (trocar ? listaOuVazia(merged.toys) : mergeStrings(cur, merged.toys)))
+      if (merged.bath) setBath((cur) => (trocar ? (merged.bath || {}) : mergeCounters(cur, merged.bath)))
       // Os razões de consumo também são "o maior dos dois": eles só crescem, e
       // é justamente por isso que o gasto não volta quando o outro aparelho
       // ainda tem a cópia antiga do saldo.
       if (merged.invUsado) {
-        setInvUsado(trocar ? merged.invUsado : (cur) => juntaConsumido(cur, merged.invUsado))
+        setInvUsado((cur) => (trocar ? (merged.invUsado || {}) : juntaConsumido(cur, merged.invUsado)))
       }
       if (merged.bathUsado) {
-        setBathUsado(trocar ? merged.bathUsado : (cur) => juntaConsumido(cur, merged.bathUsado))
+        setBathUsado((cur) => (trocar ? (merged.bathUsado || {}) : juntaConsumido(cur, merged.bathUsado)))
       }
-      if (merged.achSeen) setAchSeen(trocar ? merged.achSeen : (cur) => mergeStrings(cur, merged.achSeen))
-      if (merged.playlists) setPlaylists(trocar ? merged.playlists : (cur) => applyPlaylists(cur, merged.playlists))
+      if (merged.achSeen) setAchSeen((cur) => (trocar ? listaOuVazia(merged.achSeen) : mergeStrings(cur, merged.achSeen)))
+      if (merged.playlists) setPlaylists((cur) => (trocar ? merged.playlists : applyPlaylists(cur, merged.playlists)))
       if (merged.playedRecent) {
-        if (trocar) setPlayedRecent(Array.isArray(merged.playedRecent) ? merged.playedRecent : [])
-        else setPlayedRecent((cur) => mergeStrings(cur, merged.playedRecent).slice(0, 10))
+        setPlayedRecent((cur) =>
+          deepEqual(cur, trocar ? (Array.isArray(merged.playedRecent) ? merged.playedRecent : []) : mergeStrings(cur, merged.playedRecent).slice(0, 10))
+            ? cur
+            : trocar
+              ? (Array.isArray(merged.playedRecent) ? merged.playedRecent : [])
+              : mergeStrings(cur, merged.playedRecent).slice(0, 10),
+        )
       }
-      if (merged.library) setLibrary((cur) => aplicarBiblioteca(cur, merged.library, trocar))
+      if (merged.library) aplicarBibliotecaDaConta(merged.library, trocar)
       // Recordes dos minijogos, diário, equalizador... ficam guardados direto no
       // storage e aparecem na hora em que cada tela for aberta.
       if (merged.extras) applyExtras(merged.extras, { trocar })
+      // A partir daqui este estado pertence a esta conta. Se a próxima
+      // sincronização for de outra conta, ela vai substituir — nunca juntar.
+      contaDoEstadoRef.current = accountUserId
     },
-    [settingsApi, applyPetStats, restorePetStats],
+    [settingsApi, applyPetStats, restorePetStats, replacePetStats, aplicarBibliotecaDaConta, temPetStatsLocal, accountUserId, ehTrocaDeConta],
   )
 
   // Aplica no estado qualquer sync pendente (resultado salvo por syncNow).
   useEffect(() => {
     if (!libraryHydrated) return undefined
+    // Sem conta logada não há a quem aplicar: o resultado que sobrou de antes do
+    // logout é DESCARTADO, e não guardado para a próxima conta. Aplicá-lo
+    // depois repovoava a tela de login com o nome, a bio e a foto da conta
+    // anterior.
+    if (!accountUserId) {
+      takePendingSync()
+      return undefined
+    }
     let alive = true
     // takePendingSync é assíncrono (confere de quem é o resultado antes de
     // devolver): sem esta trava, uma resposta antiga chegaria depois de a conta
@@ -913,10 +1248,9 @@ function App() {
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [libraryHydrated])
+  }, [libraryHydrated, accountUserId])
 
   // Ao entrar (ou ao abrir o app já logado), sincroniza uma vez.
-  const accountUserId = account && account.user ? account.user.id : null
   useEffect(() => {
     if (!accountUserId || !libraryHydrated) return undefined
     let alive = true
@@ -1046,8 +1380,30 @@ function App() {
   // play, gatinho, moedas) agenda uma sincronização; ao voltar para o app também.
   const syncDirtyRef = useRef(false)
   const syncAgendarRef = useRef(null)
+  // O instante em que a sync aplicou o resultado. A aplicação muda o estado,
+  // e mudança de estado agenda outra sync — se ela contasse, a sync ficaria
+  // pedido a si mesma para sempre (2 s entre uma rodada e outra), sem parar.
+  const syncAplicouRef = useRef(0)
+  const syncAdiadoRef = useRef(null)
   useEffect(() => {
     if (!accountUserId) return
+    const suprimir = () => Date.now() - syncAplicouRef.current < 3000
+    // O que mudou nos últimos instantes foi a própria sync escrevendo o que a
+    // pessoa já tem. Não é mudança da pessoa, então não agenda outra sync agora
+    // — senão a sync ficava pedindo a si mesma para sempre.
+    if (suprimir()) {
+      // ...MAS a alteração da pessoa NÃO pode ser engolida junto. Ela só foi
+      // adiada: quando a janela acaba, a sync é marcada e sobe. Antes isto era
+      // um "return" seco, e a pessoa tocava o gatinho logo depois de um sync e
+      // a alteração nunca ia para a nuvem — sumia no F5 seguinte.
+      clearTimeout(syncAdiadoRef.current)
+      syncAdiadoRef.current = setTimeout(() => {
+        syncAdiadoRef.current = null
+        syncDirtyRef.current = true
+        if (syncAgendarRef.current) syncAgendarRef.current()
+      }, Math.max(50, 3000 - (Date.now() - syncAplicouRef.current)))
+      return
+    }
     syncDirtyRef.current = true
     // Chamado pelo efeito acima logo depois: agenda o envio rápido.
     if (syncAgendarRef.current) syncAgendarRef.current()
@@ -1102,6 +1458,14 @@ function App() {
 
   const progressSink = useRef(null)
 
+  // Arquivo sumiu no meio da sessão (apagar dados do app, cota do navegador).
+  // Antes isso tocava um som de sintetizador no lugar da música; agora o app
+  // cala e explica. Só chega aqui em dado corrompido: pela regra da biblioteca,
+  // faixa sem áudio nem entra na lista.
+  const onMusicaSemArquivo = useCallback((t) => {
+    setToast(`O arquivo de "${(t && t.title) || 'uma música'}" não está mais neste aparelho.`)
+  }, [])
+
   const {
     currentIndex,
     playing,
@@ -1125,7 +1489,7 @@ function App() {
     playQueueItem,
     queueAdd,
     queueNext,
-  } = usePlayer(library, appSettings.speed, countPlay, progressSink)
+  } = usePlayer(library, appSettings.speed, countPlay, progressSink, onMusicaSemArquivo)
 
   const onlinePlayer = useOnlinePlayer(appSettings.speed, progressSink)
   const {
@@ -1196,11 +1560,14 @@ function App() {
   const hasNotif =
     !!updatePrompt || !!petReminder || library.some((t) => t.audioMissing)
 
-  const showToast = useCallback((msg) => {
+  const showToast = useCallback((msg, ms = 2200) => {
     setToast(msg)
     clearTimeout(toastTimerRef.current)
-    toastTimerRef.current = setTimeout(() => setToast(''), 2200)
+    toastTimerRef.current = setTimeout(() => setToast(''), ms)
   }, [])
+  useEffect(() => {
+    toastRef.current = showToast
+  }, [showToast])
 
   const buyShopItem = useCallback(
     (it, offerPrice) => {
@@ -1558,6 +1925,10 @@ function App() {
       if (!t) return
       stopAndReset()
       marcarMusicaApagada(t.sid || t.id)
+      // Sai do catálogo junto: ele é o que é reescrito no `nt.library`, então
+      // deixar a linha lá devolveria a música apagada no próximo salvamento.
+      tirarDoCatalogo(catalogoRef.current, id)
+      delete savedBlobsRef.current[id]
       setLibrary((prev) => prev.filter((x) => x.id !== id))
       setPlaylists((prev) => prev.map((p) => ({ ...p, trackIds: p.trackIds.filter((x) => x !== id) })))
       if (t.src) URL.revokeObjectURL(t.src)
@@ -1574,6 +1945,8 @@ function App() {
       if (t.src) URL.revokeObjectURL(t.src)
       if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl)
       marcarMusicaApagada(t.sid || t.id)
+      tirarDoCatalogo(catalogoRef.current, t.id)
+      delete savedBlobsRef.current[t.id]
     })
     setLibrary([])
   }, [library, stopAndReset, marcarMusicaApagada])
@@ -1683,12 +2056,15 @@ setInstallEvt(null)
   }, [])
 
   /* Limpa só o que sobrou: blobs de músicas que foram apagadas da biblioteca.
-     A "limpar cache" de cima não podia apagar isso (senão a música sumia). */
+     A "limpar cache" de cima não podia apagar isso (senão a música sumia).
+     A limpeza de espaço NÃO apaga o arquivo de uma conta só porque outra está
+     na tela: o arquivo é do aparelho, e a música da conta que saiu volta
+     intacta quando ela entrar de novo. */
   const freeSpace = useCallback(async () => {
     setFreeSpaceMsg('Procurando espaço perdido…')
     const antes = await mediaStorageInfo().catch(() => ({ bytes: 0 }))
     try {
-      const quantos = await purgeOrphanMedia(library.map((x) => x.id))
+      const quantos = await purgeOrphanMedia(idsDeTodasAsContas(linhasDoCatalogo(catalogoRef.current).map((x) => x.id)))
       const depois = await mediaStorageInfo().catch(() => ({ bytes: 0 }))
       const liberados = Math.max(0, antes.bytes - depois.bytes)
       setFreeSpaceMsg(
@@ -1701,6 +2077,14 @@ setInstallEvt(null)
     }
   }, [library])
 
+  // RECUPERAR MÚSICAS — o antídoto do apagão.
+  //
+  // Os arquivos de áudio NUNCA foram apagados: eles ficam no IndexedDB, com a
+  // chave `${id}:audio`, independentes da lista. O que o apagão levou foi só o
+  // `nt.library`. Então a recuperação é uma varredura: cada áudio que estiver
+  // no aparelho sem linha no catálogo vira uma música de novo na lista.
+  //
+  // O título vem do nome do arquivo (é o que sobrou sem a linha); o app tenta
   const queueItemLocal = useCallback(
     (id) => {
       stopOnline()
@@ -1711,9 +2095,29 @@ setInstallEvt(null)
 
   const importLibrary = useCallback((tracks, extra) => {
     if (tracks && tracks.length) {
+      // Restaurar um backup é IMPORTAR de verdade: o arquivo de cada música tem
+      // que entrar no IndexedDB e a linha no catálogo.
+      //
+      // Antes esta função só acrescentava na tela. E a tela não é o que é
+      // gravado: o `nt.library` vem do CATÁLOGO. Uma música que estava só na
+      // tela nunca entrava no registro, então o arquivo sumia no primeiro
+      // F5 — "restaurei e as músicas desapareceram".
+      for (const t of tracks) {
+        if (!t || !t.id) continue
+        const blobs = {}
+        if (t.audioBlob && (t.audioBlob.size || t.audioBlob.type)) blobs.audio = t.audioBlob
+        if (t.coverBlob && t.coverBlob.size) blobs.cover = t.coverBlob
+        if (blobs.audio || blobs.cover) {
+          saveMediaBlobs(t.id, blobs)
+          savedBlobsRef.current[t.id] = `${
+            t.audioBlob ? String(t.audioBlob.size) + ':' + String(t.audioBlob.type) : ''
+          }|${t.coverBlob ? String(t.coverBlob.size) + ':' + String(t.coverBlob.type) : ''}`
+        }
+        guardarNoCatalogo(catalogoRef.current, t)
+      }
       setLibrary((prev) => {
         const byId = new Set(prev.map((t) => t.id))
-        const fresh = ensureSids(tracks.filter((t) => !byId.has(t.id)))
+        const fresh = ensureSids(tracks.filter((t) => t && t.id && !byId.has(t.id)))
         return fresh.length ? [...prev, ...fresh] : prev
       })
     }
@@ -1932,15 +2336,26 @@ const shareTrack = useCallback(
 
     const batch = Date.now()
     const now = Date.now()
-    const newTracks = files.map((file, i) => {
+
+    // Importar o MESMO arquivo de novo não pode criar uma segunda linha. O
+    // usuário pediu para ignorar a entrada repetida. Aqui ainda não sabemos os
+    // metadados definitivos (eles chegam com music-metadata, logo abaixo), então
+    // a comparação usa título/artista do nome do arquivo — e o caso mais comum,
+    // reimportar exatamente o que já está na biblioteca, é barrado aqui.
+    const jaImportadas = libraryRef.current || []
+    const novos = []
+    let ignoradas = 0
+    files.forEach((file, i) => {
       const { title, artist } = parseFileName(file.name)
       const img = sidecar.get(baseName(file.name))
-      return {
+      const candidata = { title, artist, album: 'Meus Arquivos', duration: 0 }
+      if (mesmaMusica(jaImportadas, candidata) || mesmaMusica(novos, candidata)) {
+        ignoradas += 1
+        return
+      }
+      novos.push({
         id: `file-${batch}-${i}`,
-        title,
-        artist,
-        album: 'Meus Arquivos',
-        duration: 0,
+        ...candidata,
         cover: COVERS[(Math.floor(Math.random() * COVERS.length) + i) % COVERS.length],
         audioBlob: file,
         coverBlob: img || null,
@@ -1948,15 +2363,39 @@ const shareTrack = useCallback(
         coverUrl: img ? URL.createObjectURL(img) : null,
         src: URL.createObjectURL(file),
         addedAt: now + i,
-      }
+      })
     })
+    if (ignoradas) {
+      showToast(
+        ignoradas === 1
+          ? 'Essa música já está na sua biblioteca'
+          : `${ignoradas} músicas já estavam na sua biblioteca`,
+      )
+    }
+    if (!novos.length) return
 
+    const newTracks = novos
+    // O arquivo entra no IndexedDB AGORA, e não no efeito de salvamento (que é
+    // adiado 600ms). Se ele esperasse, uma sincronização que chegasse nesse
+    // intervalo não encontraria o blob, a música não entraria na tela e a
+    // biblioteca reescrita a apagaria do `nt.library`: o usuário importava e a
+    // música sumia.
+    newTracks.forEach((t) => {
+      const blobs = {}
+      if (t.audioBlob && (t.audioBlob.size || t.audioBlob.type)) blobs.audio = t.audioBlob
+      if (t.coverBlob && t.coverBlob.size) blobs.cover = t.coverBlob
+      saveMediaBlobs(t.id, blobs)
+      savedBlobsRef.current[t.id] = `${t.audioBlob ? String(t.audioBlob.size) + ':' + String(t.audioBlob.type) : ''}|${t.coverBlob ? String(t.coverBlob.size) + ':' + String(t.coverBlob.type) : ''}`
+      guardarNoCatalogo(catalogoRef.current, t)
+    })
     setLibrary((prev) => [...prev, ...newTracks])
     setView('biblioteca')
 
-    files.forEach((file, i) => {
-      const id = newTracks[i].id
-      const fallback = newTracks[i]
+    files.forEach((file) => {
+      const track = newTracks.find((t) => t.audioBlob === file)
+      if (!track) return
+      const id = track.id
+      const fallback = track
 
       const applyPatch = (patch) =>
         setLibrary((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)))
@@ -2015,7 +2454,7 @@ const shareTrack = useCallback(
       })
       })
     },
-    [fetchCovers],
+    [fetchCovers, showToast],
   )
 
   const openDeviceImport = useCallback(async () => {
@@ -2036,6 +2475,7 @@ const shareTrack = useCallback(
     setDeviceImporting(true)
     const batch = Date.now()
     const added = []
+    let ignoradas = 0
     try {
       for (let i = 0; i < selected.length; i += 1) {
         const dm = selected[i]
@@ -2058,7 +2498,19 @@ const shareTrack = useCallback(
             src: URL.createObjectURL(blob),
             addedAt: batch + i,
           }
+          // Mesma música já na biblioteca? A entrada é ignorada (o usuário
+          // pediu isso) em vez de criar uma linha invisível que só apareceria
+          // depois, com a contagem errada.
+          if (mesmaMusica(libraryRef.current, fallback) || mesmaMusica(added, fallback)) {
+            ignoradas += 1
+            continue
+          }
           added.push(fallback)
+          // Mesmo motivo da importação por arquivos: o blob entra no IndexedDB
+          // na hora, senão uma sincronização nesse intervalo apagaria a música.
+          saveMediaBlobs(fallback.id, { audio: blob })
+          savedBlobsRef.current[fallback.id] = `${blob.size}:${blob.type}|`
+          guardarNoCatalogo(catalogoRef.current, fallback)
           setLibrary((prev) => [...prev, fallback])
           // Capa do arquivo também na importação pelo aparelho. Sem isso a
           // música entrava sem capa nenhuma e o amigo nunca via capa nenhuma:
@@ -2103,6 +2555,12 @@ const shareTrack = useCallback(
       if (added.length) {
         setView('biblioteca')
         showToast(`${added.length} ${added.length === 1 ? 'música importada' : 'músicas importadas'}!`)
+      } else if (ignoradas) {
+        showToast(
+          ignoradas === 1
+            ? 'Essa música já está na sua biblioteca'
+            : `As ${ignoradas} músicas já estavam na sua biblioteca`,
+        )
       }
     } finally {
       setDeviceImporting(false)
@@ -2328,17 +2786,10 @@ const shareTrack = useCallback(
                     onClick: () => go('inicio'),
                   })
                 }
-                const missingAudio = library.filter((t) => t.audioMissing).length
-                if (missingAudio > 0) {
-                  items.push({
-                    id: 'noaudio',
-                    icon: (
-                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
-                    ),
-                    text: <>{missingAudio} {missingAudio === 1 ? 'música sem áudio' : 'músicas sem áudio'} na biblioteca.</>,
-                    onClick: () => go('biblioteca'),
-                  })
-                }
+                // Não existe mais o aviso de "música sem áudio": a biblioteca é
+                // filtrada na entrada (só entra o que tem arquivo), então a
+                // contagem seria sempre zero e o card só existiria para
+                // lembrar de um problema que não acontece mais.
                 const lastAchId = achSeen[achSeen.length - 1]
                 const lastAch = lastAchId
                   ? getAchievements(library, petStats?.touches || 0, {
@@ -2743,7 +3194,7 @@ onPetAction={handlePetAction}
         )}
       {view === 'perfil' && (
           <Suspense fallback={<TelaCarregando />}>
-            <Profile settings={appSettings} api={settingsApi} library={library} onPlay={playById} petStats={petStats} />
+            <Profile settings={appSettings} api={settingsApi} library={library} onPlay={playById} petStats={petStats} toys={toys} />
           </Suspense>
         )}
       {view === 'online' && (

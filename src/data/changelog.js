@@ -1,5 +1,27 @@
 export const CHANGELOG = [
   {
+    version: '3.2.17',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'novo',
+        text: 'O Perfil mostra agora o tempo total que você ouviu, junto com o número de reproduções. É uma estimativa: multiplicamos o tamanho de cada música por quantas vezes ela tocou, então pulos no meio inflam um pouco o número. As músicas que entraram sem duração são contadas e avisadas, em vez de sumirem do total.',
+      },
+      {
+        type: 'novo',
+        text: 'Ao importar do aparelho, agora dá para escolher só uma pasta do celular em vez de pegar tudo. As músicas ficam separadas por pasta, com a opção de trazer todas de uma vez. Se o app estiver numa versão antiga, a importação continua funcionando igual, sem pasta.',
+      },
+      {
+        type: 'correcao',
+        text: 'Sair da conta e trocar de conta não trava mais com a tela preta. O que estava quebrando era um detalhe interno do perfil, que agora tem um botão "Tentar de novo" se qualquer coisa der errado.',
+      },
+      {
+        type: 'correcao',
+        text: 'O botão de enviar pedido de amizade mostra na tela o que deu errado, em vez de falhar em silêncio. Os títulos dos pedidos ficaram mais claros: "Pedidos para você" é quem te procurou, "Seus pedidos enviados" é quem espera resposta.',
+      },
+    ],
+  },
+  {
     version: '3.2.16',
     date: 'Outubro de 2026',
     items: [

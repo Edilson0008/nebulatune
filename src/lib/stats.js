@@ -19,6 +19,39 @@ export function playsInPeriod(track, period) {
   return track?.plays || 0
 }
 
+// Tempo total ouvido, ESTIMADO: reproduções do período × duração da música.
+//
+// Por que estimativa e não tempo real: `countPlay` soma +1 quando a música
+// COMEÇA a tocar, não quando acaba. Se a pessoa pula muito, o número real seria
+// bem menor. Não guardar segundos reais exigiria um campo novo entrando em
+// ~8 pontos do `sync.js` (mesclagem, nuvem e o reset da troca de conta) — que é
+// justamente a parte que já quebrou. Então o app diz "estimados" na tela em vez
+// de fingir uma precisão que não tem.
+//
+// `semDuracao` conta quantas faixas foram ignoradas (sem duração válida) para
+// a tela poder avisar em vez de mostrar um total calado e incompleto.
+export function tempoOuvido(plays, duration) {
+  const rep = plays > 0 && Number.isFinite(plays) ? plays : 0
+  const dur = duration != null && Number.isFinite(duration) && duration > 0 ? duration : 0
+  return rep * dur
+}
+
+export function tempoDaBiblioteca(library, period) {
+  let segundos = 0
+  let semDuracao = 0
+  for (const t of library || []) {
+    const rep = playsInPeriod(t, period)
+    if (rep <= 0) continue
+    const dur = t?.duration
+    if (dur == null || !Number.isFinite(dur) || dur <= 0) {
+      semDuracao += 1
+      continue
+    }
+    segundos += tempoOuvido(rep, dur)
+  }
+  return { segundos, semDuracao }
+}
+
 export const PERIOD_LABELS = [
   ['week', 'Semana'],
   ['month', 'Mês'],

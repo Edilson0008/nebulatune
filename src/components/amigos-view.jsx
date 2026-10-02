@@ -34,7 +34,10 @@ function Linha({ perfil, subtitulo, onAbrir, acoes }) {
 
 // Caixa para escrever junto do pedido. Opcional de propósito: dá para mandar
 // sem digitar nada, e o botão fica esperando para não mandar pedido sem querer.
-function CaixaMensagem({ valor, onChange, onCancelar, onEnviar, ocupado }) {
+// O erro do envio aparece AQUI, dentro da caixa: antes ele ia só para
+// `previaMsg`, que fica escondido atrás da linha do perfil — por isso o pedido
+// "não era enviado" sem explicar nada.
+function CaixaMensagem({ valor, onChange, onCancelar, onEnviar, ocupado, erro }) {
   return (
     <div className="amigos-msgbox">
       <input
@@ -53,6 +56,7 @@ function CaixaMensagem({ valor, onChange, onCancelar, onEnviar, ocupado }) {
         {ocupado ? 'Enviando…' : 'Enviar'}
       </button>
       <button className="btn-ghost" onClick={onCancelar} disabled={ocupado}>Cancelar</button>
+      {erro && <p className="amigos-erro amigos-msgbox-erro">{erro}</p>}
     </div>
   )
 }
@@ -323,10 +327,16 @@ export function AmigosView({ account, settings, sinal, onOpenAccount, onToast })
         setPrevia(null)
         setResultados([])
         setMsgPedido('')
+        setMsgPara('')
+        setPreviaMsg('')
         carregar()
       } else {
+        // Deixa a caixa aberta com o motivo: fechar o erro atrás da linha do
+        // perfil é o que fazia parecer que o botão não funcionava.
         setPreviaMsg(r.error || 'Não deu para enviar o pedido.')
       }
+    } catch {
+      setPreviaMsg('Sem conexão. Tente de novo.')
     } finally {
       setOcupadoMsg(false)
     }
@@ -378,6 +388,7 @@ export function AmigosView({ account, settings, sinal, onOpenAccount, onToast })
                     }}
                     onEnviar={() => pedir(previa, msgPedido)}
                     ocupado={ocupadoMsg}
+                    erro={previaMsg}
                   />
                 ) : (
                   <button
@@ -421,6 +432,7 @@ export function AmigosView({ account, settings, sinal, onOpenAccount, onToast })
                         }}
                         onEnviar={() => pedir(p, msgPedido)}
                         ocupado={ocupadoMsg}
+                        erro={previaMsg}
                       />
                     ) : (
                       <button
@@ -449,7 +461,10 @@ export function AmigosView({ account, settings, sinal, onOpenAccount, onToast })
         <>
           {recebidos.length > 0 && (
             <div className="settings-card">
-              <h2 className="section-title">Pedidos para você</h2>
+              <h2 className="section-title">Pedidos pendentes</h2>
+              <p className="amigos-vazio amigos-pendentes-dica">
+                Quem mandou pedido para você. Aceita e a amizade começa.
+              </p>
               {recebidos.map((p) => (
                 <Linha
                   key={p.id}
@@ -469,7 +484,11 @@ export function AmigosView({ account, settings, sinal, onOpenAccount, onToast })
 
           {enviados.length > 0 && (
             <div className="settings-card">
-              <h2 className="section-title">Esperando resposta</h2>
+              <h2 className="section-title">Seus pedidos enviados</h2>
+              <p className="amigos-vazio amigos-pendentes-dica">
+                Enviados por você. Não são pedidos pendentes: aqui é quem espera
+                a resposta. Eles aparecem na tela da outra pessoa.
+              </p>
               {enviados.map((p) => (
                 <Linha
                   key={p.id}

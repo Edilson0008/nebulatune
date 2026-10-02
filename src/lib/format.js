@@ -14,6 +14,20 @@ export function nf(n) {
   return new Intl.NumberFormat('pt-BR').format(n || 0)
 }
 
+// Tempo em palavras, para o Perfil: `52s` · `38min` · `14h 20min` · `1h 05min`.
+// Arredonda ANTES de escolher a unidade, senão 3599s viraria "60min" — que
+// ninguém entende. Por isso o minuto redondo vira hora.
+export function fmtTempo(sec) {
+  if (!Number.isFinite(sec) || sec <= 0) return '0s'
+  const total = Math.round(sec)
+  if (total < 60) return `${total}s`
+  const min = Math.round(total / 60)
+  if (min < 60) return `${min}min`
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return m ? `${h}h ${m.toString().padStart(2, '0')}min` : `${h}h`
+}
+
 // CHANGELOG: manter no MÁXIMO 4 versões (a mais recente no topo).
 // Ao adicionar a próxima versão, REMOVER a mais antiga para entrar a nova.
 

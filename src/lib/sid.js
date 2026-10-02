@@ -64,6 +64,32 @@ export function ensureSids(rows) {
   return out
 }
 
+// Procura, na biblioteca, a faixa que é a MESMA música que `candidata`.
+// Usa o sid (identidade estável) e, como segundo critério, a assinatura
+// (título + artista + álbum + duração) — porque no momento da importação a
+// duração costuma ser 0 e o sid ainda pode mudar quando os metadados chegam.
+// Devolve a linha existente ou null.
+export function mesmaMusica(biblioteca, candidata) {
+  const alvo = baseSid(candidata || {})
+  const lista = Array.isArray(biblioteca) ? biblioteca : []
+  for (const row of lista) {
+    if (!row || typeof row !== 'object') continue
+    if (row.sid && row.sid === alvo) return row
+  }
+  // Segunda passada: assinatura idêntica, SID diferente (importado duas vezes).
+  const chaveAssinatura = (t) => {
+    const dur = Math.round(Number(t.duration) || 0)
+    return `${norm(t.title)}|${norm(t.artist)}|${norm(t.album)}|${dur ? Math.round(dur) : ''}`
+  }
+  const alvoAss = chaveAssinatura(candidata || {})
+  if (!alvoAss.replace(/\|$/, '')) return null
+  for (const row of lista) {
+    if (!row || typeof row !== 'object') continue
+    if (chaveAssinatura(row) === alvoAss) return row
+  }
+  return null
+}
+
 // Converte uma lista de ids antigos (aleatórios) para sids, usando o mapa
 // id → sid da biblioteca. Quem não tem mais música correspondente é descartado.
 export function idsToSids(ids, idToSid) {

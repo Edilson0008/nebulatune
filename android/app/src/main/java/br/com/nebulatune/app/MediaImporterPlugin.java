@@ -57,17 +57,50 @@ public class MediaImporterPlugin extends Plugin {
         }
     }
 
+    // "Download/Music/" -> "Download/Music". No caminho absoluto
+    // ("/storage/emulated/0/Music/x.mp3") sobra so a parte DEPOIS do
+    // armazenamento, para nao vazar nome de pasta do aparelho e o caminho
+    // mudar entre cartao SD e memoria interna.
+    private String lerPasta(String bruto, boolean caminhoRelativo) {
+        if (bruto == null) return "";
+        String caminho = bruto.trim();
+        if (caminho.isEmpty()) return "";
+        while (caminho.endsWith("/") || caminho.endsWith("\\")) {
+            caminho = caminho.substring(0, caminho.length() - 1);
+        }
+        if (!caminhoRelativo) {
+            int marcador = caminho.indexOf("/0/");
+            if (marcador >= 0) caminho = caminho.substring(marcador + 3);
+            int sd = caminho.indexOf("/storage/");
+            if (sd >= 0) {
+                int depois = caminho.indexOf('/', sd + 9);
+                caminho = depois >= 0 ? caminho.substring(depois + 1) : "";
+            }
+        }
+        return caminho;
+    }
+
     private void listTracks(PluginCall call) {
         new Thread(() -> {
             try {
                 JSArray out = new JSArray();
                 Uri collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+                // A PASTA de cada faixa. `RELATIVE_PATH` (Android 10+) e o jeito
+                // certo de ler isso hoje; `DATA` e o caminho absoluto e serve so
+                // para celular mais antigo, porque no Android 10+ ele exige
+                // permissao extra. Nos dois casos devolvemos a PASTA
+                // ("Download/Music"), e nao o caminho inteiro do aparelho.
+                boolean caminhoRelativo = Build.VERSION.SDK_INT >= 29;
+                String colunaPasta = caminhoRelativo
+                    ? MediaStore.Audio.Media.RELATIVE_PATH
+                    : MediaStore.Audio.Media.DATA;
                 String[] projection = {
                     MediaStore.Audio.Media._ID,
                     MediaStore.Audio.Media.TITLE,
                     MediaStore.Audio.Media.ARTIST,
                     MediaStore.Audio.Media.ALBUM,
-                    MediaStore.Audio.Media.DURATION
+                    MediaStore.Audio.Media.DURATION,
+                    colunaPasta
                 };
                 try (Cursor cur = getContext().getContentResolver().query(
                         collection, projection, null, null, MediaStore.Audio.Media.TITLE + " ASC")) {
@@ -77,6 +110,7 @@ public class MediaImporterPlugin extends Plugin {
                         int artistCol = cur.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
                         int albumCol = cur.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM);
                         int durCol = cur.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION);
+                        int pastaCol = cur.getColumnIndex(colunaPasta);
                         while (cur.moveToNext()) {
                             JSObject o = new JSObject();
                             o.put("id", String.valueOf(cur.getLong(idCol)));
@@ -84,6 +118,7 @@ public class MediaImporterPlugin extends Plugin {
                             o.put("artist", cur.getString(artistCol));
                             o.put("album", cur.getString(albumCol));
                             o.put("duration", Math.round(cur.getLong(durCol) / 1000.0));
+                            o.put("folder", lerPasta(pastaCol >= 0 ? cur.getString(pastaCol) : null, caminhoRelativo));
                             out.put(o);
                         }
                     }

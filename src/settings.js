@@ -6,10 +6,16 @@ import { readLocal, writeLocal } from './localstore'
 // cópias com "o maior dos dois" sem que a compra seja desfeita.
 const PSTAT_DEFAULTS = { touches: 0, hearts: 0, sleeps: 0, scares: 0, meows: 0, coins: 0, coinsGastos: 0 }
 
+// Campos do gatinho que NAO estao nos defaults acima. Sem esta lista eles
+// continuariam vindo do estado anterior, porque um objeto sem o campo nao
+// sobrescreve nada numa fusao.
+const CAMPOS_DO_GATINHO = ['buys', 'buysBath', 'bathsFeitos', 'toysBrincados', 'lt']
+
 // Sistema de humores do gatinho: barras de necessidade que caem com o tempo.
 // As listas (e o quanto cada barra cai por hora) vivem em lib/pet.js porque a
 // sincronização precisa saber quais campos DIMINUEM, para não usar "pega o
 // maior dos dois" neles e reidratar a barra.
+import { deepEqual } from './lib/equal.js'
 import { MOOD_DECAY, MOOD_DEFAULTS, MOOD_KEYS, taxaDeDecaimento } from './lib/pet.js'
 export { MOOD_KEYS, MOOD_DEFAULTS, MOOD_DECAY }
 
@@ -121,6 +127,11 @@ export function useSettings() {
   // novo e traria o tema/foto antigo de volta para a tela.
   const aplica = useCallback((mudar, carimbado = true) => {
     const proximo = mudar(atualRef.current)
+    // Se o resultado é IGUAL ao que já está aqui, isto não é uma edição: é a
+    // sincronização devolvendo o mesmo valor. Sem esta guarda, cada sync
+    // redesenhava a tela, o estado "mudava" e agendava a próxima sync — laço
+    // infinito que ainda sobrescrevia os ajustes da pessoa pelo padrão.
+    if (deepEqual(proximo, atualRef.current)) return
     if (carimbado) carimba()
     atualRef.current = proximo
     writeLocal('nt.settings', proximo)
@@ -148,6 +159,19 @@ export function useSettings() {
       // edição da pessoa, então não carimba nada (senão o aparelho "antigo" se
       // firmaria como o mais novo e o cambio nunca entraria).
       setAll: (value) => aplica((s) => ({ ...s, ...(value || {}) }), false),
+      // SUBSTITUI o ajuste inteiro, sem fundir com o que já estava aqui.
+      //
+      // `setAll` FUNDE de propósito: ao restaurar um backup, um campo que não
+      // veio no arquivo tem de continuar como estava. Essa fusão é exatamente o
+      // que vazava conta: deslogar chamava `setAll({})`, que não apaga NADA —
+      // o nome, a bio e a foto da conta que saiu ficavam na tela, e ainda eram
+      // gravados de volta no aparelho. Trocar de conta tinha o mesmo problema:
+      // a conta que entrava só sobrescrevia os campos que ela tinha, e herdava
+      // o resto da conta anterior.
+      //
+      // Aqui a conta nova (ou a falta de conta) manda em TODOS os campos. O que
+      // ela não tem, fica sem valor.
+      replaceAll: (value) => aplica(() => (value && typeof value === 'object' ? { ...value } : {}), false),
     }),
     [aplica],
   )
@@ -283,6 +307,33 @@ export function usePetStats() {
     [],
   )
 
+  // SUBSTITUI o estado do gatinho inteiro.
+  //
+  // `restorePetStats` funde, e a fusão aqui era um vazamento silencioso: os
+  // campos `buys`, `buysBath`, `bathsFeitos` e `toysBrincados` NÃO estão nos
+  // defaults, então o `{ ...s, ...next }` mantinha o valor da conta que saiu
+  // sempre que a conta que entra não tivesse o campo. O sintoma era quatro
+  // conquistas destravadas numa conta recém-criada, sem a pessoa ter feito
+  // nada: "Primeira compra", "Freguês da lojinha", "Primeira loção" e "Spa do
+  // gatinho" — as quatro medem compras e banhos, exatamente os campos órfãos.
+  //
+  // Aqui a conta nova manda em TODOS os campos, e o que ela não tem é zero.
+  const replacePetStats = useMemo(
+    () => (value) => {
+      const v = value && typeof value === 'object' ? value : {}
+      // Todos os campos conhecidos entram com zero quando faltam. Sem esta
+      // lista, um campo que a conta nova não tem continuaria vindo do
+      // `setPetStats` anterior — que é exatamente o que voltava.
+      const limpo = { ...PSTAT_DEFAULTS, ...MOOD_DEFAULTS }
+      for (const k of CAMPOS_DO_GATINHO) limpo[k] = 0
+      for (const [k, val] of Object.entries(v)) {
+        if (val !== undefined) limpo[k] = val
+      }
+      setPetStats(limpo)
+    },
+    [],
+  )
+
   // Adota um estado vindo de fora (hoje: o alarme nativo, que decays as
   // barras com o app fechado). Mantem os defaults para nao perder campo se o
   // estado de origem for parcial.
@@ -294,5 +345,8 @@ export function usePetStats() {
     [],
   )
 
-  return { petStats, bumpPet, settlePet, applyPetStats, restorePetStats, adotePetStats }
+  // `replacePetStats` precisa estar AQUI. Sem ele no retorno, o App recebia
+  // `undefined`, e a troca de conta quebrava ao tentar substituir o gatinho —
+  // o reset parava no meio e os dados ficavam na tela.
+  return { petStats, bumpPet, settlePet, applyPetStats, restorePetStats, adotePetStats, replacePetStats }
 }
