@@ -1,5 +1,35 @@
 export const CHANGELOG = [
   {
+    version: '3.2.23',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'A tela de tocando agora e a do equalizador travavam. O botão de tocar pulsava uma sombra verde infinitamente, o visualizador do equalizador criava milhares de gradientes por segundo, a barra de progresso forçava layout a cada avanço, e arrastar uma faixa do equalizador media a tela a cada movimento. Tudo isso somado travava o celular.',
+      },
+      {
+        type: 'correcao',
+        text: 'O botão de tocar agora pulsa por transform+opacity (GPU), não por box-shadow (CPU). Visual igual, custo zero.',
+      },
+      {
+        type: 'correcao',
+        text: 'O visualizador do equalizador reaproveita 24 gradientes e roda a 30 fps — antes criava 44 gradientes novos por quadro (2.640/s) a 60 fps.',
+      },
+      {
+        type: 'correcao',
+        text: 'As partículas decorativas da tela de tocando agora também rodam a 30 fps com medição cacheada.',
+      },
+      {
+        type: 'correcao',
+        text: 'A barra de progresso cresce por scaleX (GPU) em vez de width (layout).',
+      },
+      {
+        type: 'correcao',
+        text: 'Arrastar uma faixa do equalizador mede a trilha uma vez no pointerDown — antes media a cada movimento do dedo.',
+      },
+    ],
+  },
+  {
     version: '3.2.21',
     date: 'Outubro de 2026',
     items: [

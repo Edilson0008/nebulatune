@@ -3516,13 +3516,20 @@ button {
   background: rgba(255, 255, 255, 0.13);
 }
 
+/* A barra cresce por scaleX, nunca por width/left.
+   width e left mudam o TAMANHO/posicao do elemento: o navegador tem de refazer
+   o layout inteiro a cada tique. scaleX mexe so na matriz de transform, que a
+   GPU aplica sem recalcular nada. Visualmente e identico. */
 .np-bar-fill {
   position: absolute;
   left: 0;
+  width: 100%;
   height: 5px;
   border-radius: 999px;
   background: linear-gradient(90deg, #00ff87, #3dffc2);
   box-shadow: 0 0 12px rgba(0, 255, 135, 0.45);
+  transform: scaleX(0);
+  transform-origin: left center;
   pointer-events: none;
 }
 
@@ -3676,10 +3683,20 @@ button {
   background: radial-gradient(circle at 50% 32%, #6bffbe 0%, #00ff87 52%, #00d276 100%);
   color: #04140c;
   cursor: pointer;
-  box-shadow:
-    0 12px 34px rgba(0, 255, 135, 0.4),
-    0 0 0 7px rgba(0, 255, 135, 0.08);
-  transition: transform 0.14s, box-shadow 0.2s, filter 0.15s;
+  /* Sombra FIXA (nunca muda): GPU pinta uma vez e pronto. */
+  box-shadow: 0 12px 34px rgba(0, 255, 135, 0.4);
+  transition: transform 0.14s, filter 0.15s;
+}
+
+/* O anel que pulsava era box-shadow — forçava repintura a 60 fps.
+   Agora é um ::after animado por transform+opacity: GPU faz sozinha. */
+.np-play::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 7px solid rgba(0, 255, 135, 0.1);
+  pointer-events: none;
 }
 
 .np-play:hover {
@@ -3687,22 +3704,13 @@ button {
   filter: brightness(1.06);
 }
 
-.np-play.playing {
+.np-play.playing::after {
   animation: np-pulse 2.6s ease-in-out infinite;
 }
 
 @keyframes np-pulse {
-  0%,
-  100% {
-    box-shadow:
-      0 12px 34px rgba(0, 255, 135, 0.4),
-      0 0 0 7px rgba(0, 255, 135, 0.08);
-  }
-  50% {
-    box-shadow:
-      0 12px 40px rgba(0, 255, 135, 0.55),
-      0 0 0 14px rgba(0, 255, 135, 0.04);
-  }
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.2); opacity: 0.45; }
 }
 
 /* ---------- Painel de sincronia ---------- */
