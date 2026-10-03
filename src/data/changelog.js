@@ -1,5 +1,23 @@
 export const CHANGELOG = [
   {
+    version: '3.2.18',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'A tela do gatinho parou de travar. Ela redesenhava ~290 elementos da tela duas vezes por segundo só para mostrar o contador de "Xs" das ações, quando esse número só muda uma vez por segundo. Agora o relógio só existe enquanto há alguma ação recarregando.',
+      },
+      {
+        type: 'correcao',
+        text: 'As animações da tela do gatinho não continuam rodando depois que você sai dela. O desenho das partículas não era mais capaz de parar ao fechar a tela, e ficava gastando bateria e deixando o app inteiro mais lento pelo resto da sessão.',
+      },
+      {
+        type: 'correcao',
+        text: 'A bolinha agora para de simular física quando ela descansa no chão, em vez de acordar 60 vezes por segundo à toa. O tamanho do gatinho também não some mais se o aparelho não informar o tamanho da tela.',
+      },
+    ],
+  },
+  {
     version: '3.2.17',
     date: 'Outubro de 2026',
     items: [

@@ -172,6 +172,9 @@ export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, 
   const interactRef = useRef(null)
   const dragHistRef = useRef([])
   const ballVelRef = useRef({ vx: 0, vy: 0 })
+  // Desliga/liga o loop de física da bolinha. Criado aqui porque o próprio loop
+  // se registra nele (ele para de se agendar sozinho quando a bolinha para).
+  const ballLoopRef = useRef(null)
   const ballRef = useRef(null)
   const foodIdRef = useRef(0)
   const ballIdRef = useRef(0)
@@ -217,9 +220,17 @@ export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, 
   const spongeProgRef = useRef(0)
   const spongeLastRef = useRef(0)
   const spongeSoundRef = useRef(0)
-  const [petSize] = useState(() =>
-    typeof window === 'undefined' ? 200 : Math.max(130, Math.min(window.innerWidth * 0.55, window.innerHeight * 0.28, 240))
-  )
+  const [petSize] = useState(() => {
+    if (typeof window === 'undefined') return 200
+    // `innerWidth/innerHeight` podem não existir (o smoke test roda sem
+    // janela de verdade). Sem este guarda, um deles virando `undefined`
+    // transforma o `Math.min` em NaN e o `Math.max` continua NaN — aí o
+    // gatinho era desenhado com tamanho NaN e sumia da tela.
+    const w = Number(window.innerWidth)
+    const hgt = Number(window.innerHeight)
+    if (!Number.isFinite(w) || !Number.isFinite(hgt)) return 200
+    return Math.max(130, Math.min(w * 0.55, hgt * 0.28, 240))
+  })
 
   // Computed values
   const tag = MOOD_TAGS[mood] || MOOD_TAGS.neutral
@@ -698,6 +709,8 @@ export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, 
           }
         }
         ballVelRef.current = { vx, vy }
+        // Acorda a física: o loop fica parado enquanto a bolinha não se move.
+        ballLoopRef.current?.()
         fireReaction('play')
       } else {
         ballVelRef.current = { vx: 0, vy: 0 }
@@ -714,8 +727,13 @@ export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, 
       const def = ACTIONS.find((a) => a.id === action)
       if (!def || !onPetAction) return
       const until = cooldowns[def.id] || 0
-      if (until && now < until) {
-        setCdToast({ label: def.label, sec: Math.max(1, Math.ceil((until - now) / 1000)) })
+      // `Date.now()` e não o `now` da tela: o relógio de cooldown só roda
+      // enquanto há cooldown valendo (ver o efeito mais abaixo), então `now`
+      // pode estar velho. Usar ele aqui faria a pessoa tocar numa ação já
+      // liberada e receber "Xs" como se ainda estivesse esperando.
+      const t = Date.now()
+      if (until && t < until) {
+        setCdToast({ label: def.label, sec: Math.max(1, Math.ceil((until - t) / 1000)) })
         clearTimeout(cdToastTimer.current)
         cdToastTimer.current = setTimeout(() => setCdToast(null), 1500)
         return
@@ -768,7 +786,7 @@ export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, 
       onPetAction(def.action)
       fireReaction(def.id)
     },
-    [onPetAction, now, cooldowns, food, ball, pillow, sponge, bubbles, foodMenu, playMenu, spawnBall, spawnBubbles, spawnPillow, showHint, fireReaction, sayPet, pickPhrase, soundOn, bathMenu],
+    [onPetAction, cooldowns, food, ball, pillow, sponge, bubbles, foodMenu, playMenu, spawnBall, spawnBubbles, spawnPillow, showHint, fireReaction, sayPet, pickPhrase, soundOn, bathMenu],
   )
 
   useEffect(() => {
@@ -776,10 +794,25 @@ export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, 
     return () => clearInterval(id)
   }, [])
 
+  // O relógio do cooldown é a ÚNICA coisa que lê `now`, e ele só mostra
+  // segundos inteiros. Rodar isso a cada 500ms re-renderizava os 287 nós da
+  // tela duas vezes por segundo para um número que muda uma vez por segundo:
+  // ~12ms de CPU por render, o suficiente para a tela travar num celular mais
+  // fraco. Agora o relógio só existe enquanto há cooldown valendo.
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 500)
+    const vencendo = (t) => Object.values(cooldowns).some((until) => until && until > t)
+    const agora = Date.now()
+    if (!vencendo(agora)) return undefined
+    setNow(agora)
+    const id = setInterval(() => {
+      const t = Date.now()
+      setNow(t)
+      // Último cooldown acabou: o relógio se desliga sozinho em vez de ficar
+      // batendo no vazio para sempre.
+      if (!vencendo(t)) clearInterval(id)
+    }, 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [cooldowns])
 
   useEffect(() => {
     ballRef.current = ball
@@ -839,20 +872,26 @@ userNameRef.current = userName
       canvas.width = (rect.width || 400) * dpr
       canvas.height = (rect.height || 400) * dpr
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      medir()
     }
-    // Initial resize with fallback
-    const initialRect = canvas.getBoundingClientRect()
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = (initialRect.width || 400) * dpr
-    canvas.height = (initialRect.height || 400) * dpr
-    ctx.scale(dpr, dpr)
+    // O tamanho é medido uma vez (e a cada resize), e NÃO a cada quadro.
+    // Ler `clientWidth` dentro do `draw` obriga o navegador a recalcular o
+    // layout inteiro 60 vezes por segundo; como o React desta tela monta ~290
+    // nós, cada recálculo tinha que refazer tudo. Em celular isso aparece
+    // exatamente como a tela "pesada" que trava ao mexer.
+    let w = 400
+    let hgt = 400
+    const medir = () => {
+      const r = canvas.getBoundingClientRect()
+      w = r.width || 400
+      hgt = r.height || 400
+    }
+    resize()
     window.addEventListener('resize', resize)
 
     const draw = (now) => {
       const t = (now - startTime) / 1000
-      const w = canvas.clientWidth
-      const h = canvas.clientHeight
-      ctx.clearRect(0, 0, w, h)
+      ctx.clearRect(0, 0, w, hgt)
 
       const isNight = scene.key === 'noite'
 
@@ -861,7 +900,7 @@ userNameRef.current = userName
         ctx.fillStyle = '#fff'
         for (let i = 0; i < 12; i++) {
           const px = w * 0.7 + (i * 73 % 19) / 100 * w * 0.3
-          const py = h * 0.15 + (i * 41 % 53) / 100 * (h * 0.62 - h * 0.15)
+          const py = hgt * 0.15 + (i * 41 % 53) / 100 * (hgt * 0.62 - hgt * 0.15)
           const pt = (t * 0.3 + i * 0.5) % 2
           const alpha = 0.08 + Math.sin(pt * Math.PI) * 0.08
           ctx.globalAlpha = alpha
@@ -874,7 +913,7 @@ userNameRef.current = userName
         const fireflyCount = scene.key === 'noite' ? 18 : 8
         for (let i = 0; i < fireflyCount; i++) {
           const fx = (5 + (i * 43 % 89) / 100) * w / 100
-          const fy = (10 + (i * 37 % 72) / 100) * (h * 0.6) / 100
+          const fy = (10 + (i * 37 % 72) / 100) * (hgt * 0.6) / 100
           const pulse = Math.sin(t * 1.5 + i * 2) * 0.5 + 0.5
           const alpha = 0.3 + pulse * 0.4
           ctx.globalAlpha = alpha
@@ -886,9 +925,14 @@ userNameRef.current = userName
         ctx.globalAlpha = 1
       }
 
-      requestAnimationFrame(draw)
+      // O id do quadro PRECISA ser guardado. Sem isso, `raf` continuava 0 e o
+      // `cancelAnimationFrame(raf)` da limpeza cancelava o zero: o loop
+      // continuava rodando 60x por segundo DEPOIS de você sair da tela do
+      // habitat, desenhando num canvas solto e queimando bateria/CPU pelo resto
+      // da vida do app.
+      raf = requestAnimationFrame(draw)
     }
-    requestAnimationFrame(draw)
+    raf = requestAnimationFrame(draw)
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
@@ -1096,17 +1140,26 @@ userNameRef.current = userName
   }, [bubbles.length])
 
   // Física da bolinha: perde velocidade e quica nas bordas da tela
+  //
+  // O loop só existe enquanto a bolinha está se mexendo. Antes ele se
+  // reagendava sozinho para sempre: `requestAnimationFrame` era a PRIMEIRA
+  // linha, então os dois `return` de "não tem bolinha / velocidade zero"
+  // aconteciam DEPOIS de já ter marcado o próximo quadro. Resultado: 60
+  //Callbacks por segundo, o tempo inteiro, com a bolinha parada no chão.
+  // Agora ele para sozinho, e quem arremessa acorda.
   useEffect(() => {
     let raf = 0
     let last = performance.now()
     const loop = (now) => {
-      raf = requestAnimationFrame(loop)
       const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000))
       last = now
       const b = ballRef.current
-      if (!b || b.dragging) return
       const v = ballVelRef.current
-      if (!v || (v.vx === 0 && v.vy === 0)) return
+      if (!b || b.dragging || !v || (v.vx === 0 && v.vy === 0)) {
+        raf = 0
+        return
+      }
+      raf = requestAnimationFrame(loop)
       const rect = sceneRect()
       const w = rect.width
       const h = rect.height - 96
@@ -1131,12 +1184,22 @@ userNameRef.current = userName
         v.vx = 0
         v.vy = 0
         setBall((prev) => (prev && prev.id === b.id ? { ...prev, moving: false } : prev))
+        raf = 0
         return
       }
       setBall((prev) => (prev && prev.id === b.id ? { ...prev, x, y, moving: true } : prev))
     }
-    raf = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(raf)
+    // Quem chama isto acorda a física: o arremesso e o toque na bolinha.
+    ballLoopRef.current = () => {
+      if (raf) return
+      last = performance.now()
+      raf = requestAnimationFrame(loop)
+    }
+    return () => {
+      raf = 0
+      cancelAnimationFrame(raf)
+      ballLoopRef.current = null
+    }
   }, [])
 
   return (

@@ -1709,5 +1709,78 @@ caso('tempo ouvido: uma faixa quebrada nao derruba o total', () => {
   assert.equal(r.semDuracao, 2, 'as duas quebradas sao avisadas, nao somadas em zero calado')
 })
 
+caso('habitat: o relogio do cooldown nao roda a toa', () => {
+  // A tela do habitat tem ~290 nos e ~12ms por render. Um setInterval de 500ms
+  // para mostrar "Xs" de cooldown queimava 24ms de CPU por SEGUNDO, mesmo sem
+  // nenhum cooldown valendo, e era o que deixava a tela travada. O relogio
+  // agora so existe enquanto ha cooldown, e de 1 em 1 segundo.
+  const codigo = fs.readFileSync(new URL('../src/components/pet-habitat-view.jsx', import.meta.url), 'utf8')
+  assert.ok(
+    !/setInterval\(\(\) => setNow\(Date\.now\(\)\),\s*500\)/.test(codigo),
+    'o tick de 500ms do cooldown nao pode voltar',
+  )
+  assert.ok(/const vencendo = \(t\)/.test(codigo), 'o relogio so liga se tem cooldown valendo')
+  assert.ok(/}, 1000\)/.test(codigo), 'e bate de 1 em 1 segundo (o contador e inteiro)')
+})
+
+caso('habitat: acao liberada nao e barrada por um relogio velho', () => {
+  // Se `handleAction` usasse o `now` da tela, ele pararia de correr enquanto
+  // nao houvesse cooldown. Depois que o cooldown acabasse, o `now` ficaria
+  // velho e a pessoa tocaria numa acao JA LIBERADA e veria "Xs" como se
+  // ainda estivesse esperando.
+  const codigo = fs.readFileSync(new URL('../src/components/pet-habitat-view.jsx', import.meta.url), 'utf8')
+  const bloco = codigo.slice(codigo.indexOf('const handleAction'), codigo.indexOf('const handleAction') + 900)
+  assert.ok(!/if \(until && now < until\)/.test(bloco), 'a checagem de cooldown nao pode usar o now da tela')
+  assert.ok(/const t = Date\.now\(\)/.test(bloco), 'a checagem tem que usar a hora real')
+  assert.ok(!/\[onPetAction, now, cooldowns/.test(codigo), 'e `now` nao fica mais na dependencia do callback')
+})
+
+caso('habitat: o gato nunca e desenhado com tamanho NaN', () => {
+  // Sem o guarda, um `innerWidth`/`innerHeight` ausente (o smoke test roda sem
+  // janela de verdade) virava NaN no Math.min, o Math.max devolvia NaN, e o
+  // gato saia da tela sem explicacao.
+  const codigo = fs.readFileSync(new URL('../src/components/pet-habitat-view.jsx', import.meta.url), 'utf8')
+  assert.ok(/if \(!Number\.isFinite\(w\) \|\| !Number\.isFinite\(hgt\)\) return 200/.test(codigo),
+    'o tamanho do gato tem guarda contra tela sem dimensao')
+})
+
+caso('habitat: o laco de particulas para quando voce sai da tela', () => {
+  // O `raf` nunca era salvo: o `cancelAnimationFrame(raf)` da limpeza cancelava
+  // o zero e o laco continuava rodando 60x/s DEPOIS de sair da tela, pintando
+  // num canvas solto. Isso queimava CPU e bateria pelo resto da vida do app e
+  // deixava o resto do aplicativo lento.
+  const codigo = fs.readFileSync(new URL('../src/components/pet-habitat-view.jsx', import.meta.url), 'utf8')
+  const bloco = codigo.slice(codigo.indexOf('const draw = (now)'), codigo.indexOf('// Time & tips'))
+  assert.ok(!/^\s*requestAnimationFrame\(draw\)/m.test(bloco),
+    'o laco de particulas nao pode pedir quadro sem guardar o id')
+  assert.ok(bloco.includes('raf = requestAnimationFrame(draw)'),
+    'o quadro precisa ser guardado para a limpeza poder cancelar')
+})
+
+caso('habitat: o canvas nao mede a tela a cada quadro', () => {
+  // Ler `clientWidth` dentro do `draw` forca o navegador a recalcular o layout
+  // inteiro 60 vezes por segundo. Como a tela monta ~290 nos, e o proprio app
+  // re-renderiza, isso e o que faz a tela travar ao mexer.
+  const codigo = fs.readFileSync(new URL('../src/components/pet-habitat-view.jsx', import.meta.url), 'utf8')
+  const bloco = codigo.slice(codigo.indexOf('const draw = (now)'), codigo.indexOf('// Time & tips'))
+  assert.ok(!bloco.includes('canvas.clientWidth') && !bloco.includes('canvas.clientHeight'),
+    'o draw nao pode medir a tela a cada quadro')
+})
+
+caso('habitat: a fisica da bolinha dorme em vez de acordar 60x por segundo', () => {
+  // `requestAnimationFrame(loop)` era a PRIMEIRA linha do laco, entao os dois
+  // "nao tem bolinha / velocidade zero" aconteciam depois de ja ter marcado o
+  // proximo quadro: a bolinha parada no chao mantinha o laco acordado.
+  const codigo = fs.readFileSync(new URL('../src/components/pet-habitat-view.jsx', import.meta.url), 'utf8')
+  const bloco = codigo.slice(codigo.indexOf('Física da bolinha') - 3, codigo.indexOf('Física da bolinha') + 1600)
+  const corpo = bloco.slice(bloco.indexOf('const loop = (now)'))
+  assert.ok(!/const loop = \(now\) => \{\s*raf = requestAnimationFrame\(loop\)/.test(corpo),
+    'o agendamento nao pode vir antes da checagem de movimento')
+  assert.ok(corpo.includes('raf = 0'), 'o laco precisa se desligar quando a bolinha para')
+  assert.ok(/ballLoopRef\.current = \(\) => \{/.test(codigo), 'e precisa existir quem acorde a bolinha')
+  assert.ok(codigo.includes('ballLoopRef.current?.()'),
+    'o arremesso tem que acordar a fisica, senao a bolinha nao quica mais')
+})
+
 console.log(`\n${ok.length} ok, ${falhas} falhando`)
 if (falhas) process.exit(1)
