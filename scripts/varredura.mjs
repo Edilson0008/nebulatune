@@ -1884,5 +1884,90 @@ caso('habitat: nenhum laco de quadro sobrevive a saida da tela', () => {
     'os tres loops (particulas, bolhas e bolinha) passam pelo agendador')
 })
 
+caso('nenhuma animacao infinita repinta a tela (box-shadow/filter nao usam GPU)', () => {
+  // Estas duas telas ("tocando agora" e equalizador) travavam porque
+  // animavam propriedades que a GPU nao acelera. `box-shadow` e `filter` nao
+  // fazem parte da composicao: animar qualquer um deles obriga o navegador a
+  // REPINTAR o elemento a cada quadro, 60x por segundo, para sempre.
+  // O pulso do botao de tocar (`np-pulse`), o do microfone (`mic-pulse`) e a
+  // aura do carinho (`habitat-pet-ring`) faziam exatamente isso.
+  // Animacao infinita so pode mexer em transform, opacity ou cor: sao as
+  // propriedades que o navegador entrega para a GPU sem repintar.
+  const css = fs.readFileSync(new URL('../src/App.css', import.meta.url), 'utf8')
+  const semComentario = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const CARAS = /\b(box-shadow|filter|background-position|width|height|top|left|right|bottom)\s*:/
+  const keyframes = new Map()
+  for (const m of semComentario.matchAll(/@keyframes\s+([\w-]+)\s*\{/g)) {
+    const nome = m[1]
+    const abre = m.index + m[0].length
+    let prof = 1
+    let fecha = abre
+    while (prof && fecha < semComentario.length) {
+      if (semComentario[fecha] === '{') prof += 1
+      else if (semComentario[fecha] === '}') prof -= 1
+      fecha += 1
+    }
+    keyframes.set(nome, semComentario.slice(abre, fecha))
+  }
+  // Qualquer regra que roda um keyframe caro em LOOP INFINITO e um travamento
+  // esperando a pessoa abrir aquela tela.
+  const infratores = []
+  for (const m of semComentario.matchAll(/([^{}]*)\{([^}]*animation\s*:[^}]*)\}/g)) {
+    const sel = m[1].replace(/\s+/g, ' ').trim()
+    const decl = m[2]
+    if (!/\binfinite\b/.test(decl)) continue
+    for (const kf of decl.matchAll(/([\w-]+)\s+[\d.]+s/g)) {
+      const corpo = keyframes.get(kf[1])
+      if (corpo && CARAS.test(corpo)) infratores.push(`${sel} -> @keyframes ${kf[1]}`)
+    }
+  }
+  assert.deepEqual(infratores, [],
+    `animacao infinita repintando a tela: ${infratores.join(' | ')} — use transform/opacity`)
+})
+
+caso('a barra de progresso e o anel do botao de tocar nao usam layout nem pintura', () => {
+  // A barra usava `width`, que muda o tamanho do elemento: o navegador refaz
+  // o layout inteiro a cada tique. Hoje cresce por `scaleX`.
+  // O botao de tocar pulsava `box-shadow`: repintura por quadro. Hoje pulsa um
+  // `::after` por transform+opacity.
+  assert.ok(/\.np-bar-fill\s*\{[^}]*transform-origin/.test(fs.readFileSync(new URL('../src/App.css', import.meta.url), 'utf8')),
+    'a barra de progresso tem que crescer por transform (scaleX), nao por width')
+  const jsx = fs.readFileSync(new URL('../src/components/now-playing.jsx', import.meta.url), 'utf8')
+  assert.ok(!/np-bar-fill[^>]*style=\{\{\s*width:/.test(jsx),
+    'a barra nao pode serFill por width no JSX: use transform')
+  const css = fs.readFileSync(new URL('../src/App.css', import.meta.url), 'utf8')
+  assert.ok(/@keyframes np-pulse\s*\{[^}]*transform/.test(css),
+    'o pulso do botao tem que mexer em transform, nao em box-shadow')
+})
+
+caso('nenhum canvas mede o proprio tamanho dentro do laco de desenho', () => {
+  // `canvas.getBoundingClientRect()` dentro do `draw` forca layout 60x por
+  // segundo. O tamanho do canvas so muda quando a janela gira: medimos uma
+  // vez e o ResizeObserver avisa quando precisa refazer.
+  for (const arq of ['../src/components/visualizer.jsx', '../src/components/background.jsx']) {
+    const codigo = fs.readFileSync(new URL(arq, import.meta.url), 'utf8')
+    for (const m of codigo.matchAll(/const draw\s*=\s*\(\)\s*=>\s*\{/g)) {
+      const abre = m.index + m[0].length
+      let prof = 1
+      let fecha = abre
+      while (prof && fecha < codigo.length) {
+        if (codigo[fecha] === '{') prof += 1
+        else if (codigo[fecha] === '}') prof -= 1
+        fecha += 1
+      }
+      const corpo = codigo.slice(abre, fecha)
+      assert.ok(!corpo.includes('getBoundingClientRect'),
+        `${arq}: getBoundingClientRect dentro do laco de desenho forca layout a cada quadro`)
+    }
+  }
+  const viz = fs.readFileSync(new URL('../src/components/visualizer.jsx', import.meta.url), 'utf8')
+  const criaGrad = (viz.match(/createLinearGradient/g) || []).length
+  assert.ok(criaGrad <= 1,
+    'o visualizador nao pode criar gradiente novo por quadro: use o cache')
+  // ...e o cache tem que existir de verdade, senao o desenho fica sem gradiente.
+  assert.ok(/const gradientes = /.test(viz), 'o cache de gradientes tem que existir')
+  assert.ok(viz.includes('grads[nivel]'), 'o desenho tem que usar o gradiente do cache')
+})
+
 console.log(`\n${ok.length} ok, ${falhas} falhando`)
 if (falhas) process.exit(1)

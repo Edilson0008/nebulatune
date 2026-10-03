@@ -6,12 +6,18 @@ import { Visualizer } from './visualizer.jsx'
 export function VSlider({ value, onChange, min = -12, max = 12, step = 1, label, suffix }) {
   const trackRef = useRef(null)
   const draggingRef = useRef(false)
+  // Medir a trilha a cada pointermove obriga o navegador a refazer o layout a
+  // cada evento do dedo — dozens por segundo enquanto se arrasta. A medida só
+  // muda se a janela girar, e isso acontece no meio do arrasto raramente. O
+  // habitat ja faz assim (rect cacheado no pointerDown); aqui e o mesmo.
+  const rectRef = useRef(null)
   const pct = ((value - min) / (max - min)) * 100
 
   const setFromPointer = (clientY) => {
     const el = trackRef.current
     if (!el) return
-    const r = el.getBoundingClientRect()
+    const r = rectRef.current
+    if (!r || !r.height) return
     const ratio = 1 - (clientY - r.top) / r.height
     const raw = min + Math.max(0, Math.min(1, ratio)) * (max - min)
     onChange(Math.max(min, Math.min(max, Math.round(raw / step) * step)))
@@ -28,6 +34,7 @@ export function VSlider({ value, onChange, min = -12, max = 12, step = 1, label,
         onPointerDown={(e) => {
           draggingRef.current = true
           e.currentTarget.setPointerCapture?.(e.pointerId)
+          rectRef.current = trackRef.current?.getBoundingClientRect() || null
           setFromPointer(e.clientY)
         }}
         onPointerMove={(e) => {

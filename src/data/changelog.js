@@ -1,5 +1,31 @@
 export const CHANGELOG = [
   {
+    version: '3.2.22',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'A tela de tocando agora e a do equalizador travavam. O botão de tocar pulsava uma sombra verde infinitamente enquanto a música tocava, e o brilho do microfone e a aura do carinho faziam o mesmo. Sombra não é desenhada pelo processador de imagens do celular, então cada um desses brilhos obrigava a redesenhar a tela inteira 60 vezes por segundo, para sempre, sem parar. Agora os três brilhos são desenhados pelo processador de imagens, que é rápido, e o efeito é igual.',
+      },
+      {
+        type: 'correcao',
+        text: 'O visualizador do equalizador criava 44 brilhos de cor novos por quadro, mais de 2 mil por segundo. Agora os brilhos são reaproveitados e ele desenha a 30 quadros por segundo em vez de 60 — o olho não percebe a diferença.',
+      },
+      {
+        type: 'correcao',
+        text: 'A barra de progresso da música era redesenhada mudando o tamanho dela, o que faz o celular recalcular a tela inteira a cada avanço. Agora ela cresce do mesmo jeito, só que sem recalcular nada.',
+      },
+      {
+        type: 'correcao',
+        text: 'Arrastar uma faixa do equalizador ou girar o celular não mede mais a posição da tela a cada movimento do dedo. É a mesma correção que já foi feita no gato: a medida é feita uma vez e só se repete se a tela mudar de tamanho.',
+      },
+      {
+        type: 'melhoria',
+        text: 'Feito para funcionar bem em aparelhos fracos, com pouca memória.',
+      },
+    ],
+  },
+  {
     version: '3.2.21',
     date: 'Outubro de 2026',
     items: [

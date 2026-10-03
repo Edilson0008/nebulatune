@@ -434,7 +434,10 @@ export const NowPlaying = memo(function NowPlaying({
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
           >
-            <div className="np-bar-fill" style={{ width: `${shown * 100}%` }} />
+            <div
+              className="np-bar-fill"
+              style={{ transform: `scaleX(${shown})` }}
+            />
             <div className="np-bar-thumb" style={{ left: `${shown * 100}%` }} />
           </div>
           <span className="np-time">{formatTime(duration)}</span>
