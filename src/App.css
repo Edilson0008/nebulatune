@@ -8269,7 +8269,9 @@ button.pet-pill {
   width: 0;
   height: 0;
   z-index: 10;
-  transform: translate(-50%, -50%);
+  /* fica na GPU: o arrasto escreve direto aqui */
+  will-change: transform;
+  transform: translate3d(-50%, -50%, 0);
   pointer-events: none;
 }
 
@@ -8318,9 +8320,7 @@ button.pet-pill {
   flex: none;
   border-radius: 50%;
   border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(16,12,30,0.85);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
+  background: rgba(16,12,30,0.93);
   color: #fff;
   cursor: pointer;
   transition: transform 0.1s ease, box-shadow 0.12s ease, background 0.2s;
@@ -8344,7 +8344,7 @@ button.pet-pill {
 }
 .habitat-shop-btn:hover { transform: scale(1.03); }
 .habitat-shop-btn:active { transform: scale(0.94); }
-.habitat-clock { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: #fff; padding: 5px 10px; border-radius: 999px; background: rgba(16,12,30,0.7); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.14); }
+.habitat-clock { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: #fff; padding: 5px 10px; border-radius: 999px; background: rgba(16,12,30,0.84); border: 1px solid rgba(255,255,255,0.14); }
 .habitat-mood { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: #fff; background: color-mix(in srgb, var(--mc) 26%, rgba(16,12,30,0.75)); border: 1px solid color-mix(in srgb, var(--mc) 50%, transparent); box-shadow: 0 0 16px color-mix(in srgb, var(--mc) 30%, transparent); white-space: nowrap; }
 
 /* Action feedback toast */
@@ -8411,7 +8411,7 @@ button.pet-pill {
   border-top: 1px solid rgba(255,255,255,0.06);
   pointer-events: auto;
 }
-.habitat-action-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 4px 8px; border: none; border-right: 1px solid rgba(255,255,255,0.05); background: rgba(255,255,255,0.02); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); cursor: pointer; transition: background 0.1s ease, transform 0.08s ease, box-shadow 0.12s; min-width: 0; position: relative; border-radius: 16px 16px 0 0; margin: 2px; }
+.habitat-action-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 4px 8px; border: none; border-right: 1px solid rgba(255,255,255,0.05); background: rgba(22,18,40,0.74); cursor: pointer; transition: background 0.1s ease, transform 0.08s ease, box-shadow 0.12s; min-width: 0; position: relative; border-radius: 16px 16px 0 0; margin: 2px; }
 .habitat-action-btn:last-child { border-right: none; }
 .habitat-action-btn:hover { background: rgba(255,255,255,0.08); box-shadow: 0 0 20px color-mix(in srgb, var(--ac) 40%, transparent); }
 .habitat-action-btn:active { transform: scale(0.92); }
@@ -8527,15 +8527,13 @@ button.pet-pill {
 
 /* --- Habitat: balão de fala com contraste contra a parede roxa --- */
 .habitat-cat-stage .pet-bubble {
-  background: rgba(11, 8, 30, 0.92);
+  background: rgba(11, 8, 30, 0.97);
   color: #ffe9f5;
   border: 1.5px solid rgba(255, 255, 255, 0.42);
   border-radius: 14px;
   padding: 6px 12px;
   font-size: 12px;
   max-width: 200px;
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55),
     0 0 0 1.5px rgba(190, 160, 255, 0.35),
     0 0 18px rgba(120, 90, 220, 0.22),
@@ -8589,9 +8587,7 @@ button.pet-pill {
   color: #ffe08a;
   padding: 5px 10px;
   border-radius: 999px;
-  background: rgba(16, 12, 30, 0.72);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  background: rgba(16, 12, 30, 0.86);
   border: 1px solid rgba(255, 224, 138, 0.35);
   box-shadow: 0 0 14px rgba(255, 224, 138, 0.25);
   font-variant-numeric: tabular-nums;
@@ -9024,7 +9020,6 @@ button.pet-pill {
   background: rgba(20,16,42,0.96);
   border: 1px solid rgba(255,255,255,0.14);
   box-shadow: 0 12px 32px rgba(0,0,0,0.5);
-  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   max-width: none;
   overflow-x: auto; overflow-y: hidden;
   -webkit-overflow-scrolling: touch;

@@ -1812,5 +1812,44 @@ caso('habitat: nenhum efeito de relogio/dica fica duplicado', () => {
   assert.equal((codigo.match(/setTipIdx\(\(i\)/g) || []).length, 1, 'uma so dica rodando')
 })
 
+caso('habitat: arrastar o gato nao redesenha a tela a cada toque', () => {
+  // handleDrag roda na frequencia do touchmove. Com setCatPos dentro dela, cada
+  // evento redesenhava os ~290 nos da tela. Agora o arrasto escreve direto no
+  // style (transform) e o setState acontece uma vez so, no fim.
+  const codigo = fs.readFileSync(new URL('../src/components/pet-habitat-view.jsx', import.meta.url), 'utf8')
+  const arrasto = codigo.slice(codigo.indexOf('const handleDrag = '), codigo.indexOf('const handleDragStart'))
+  assert.ok(!/setCatPos/.test(arrasto), 'o arrasto nao pode chamar setCatPos por evento')
+  assert.ok(/el\.style\.transform\s*=/.test(arrasto), 'o arrasto tem que escrever o transform direto no DOM')
+  const fim = codigo.slice(codigo.indexOf('const handleDragEnd'), codigo.indexOf('// Sai do modo afago'))
+  assert.ok(/setCatPos/.test(fim), 'a posicao final precisa ser commitada no fim do arrasto')
+  // e o rect nao pode ser medido a cada evento (forca layout)
+  assert.ok(!arrasto.includes('getBoundingClientRect'), 'o arrasto nao pode medir a cena a cada evento')
+  assert.ok(/dragRectRef\.current/.test(arrasto), 'a medida do rect tem que ficar presa no inicio do arrasto')
+  assert.ok(/dragRectRef\.current\s*=\s*habitatRef\.current\?\.getBoundingClientRect\(\)/.test(codigo), 'o rect precisa ser medido uma vez so, no drag start')
+})
+
+caso('habitat: afagar so redesenha quando o olhar muda de lado', () => {
+  // petMove roda a cada pointermove; setWatchDir sem comparacao disparava um
+  // render mesmo quando o gato continuava olhando para o mesmo lado.
+  const codigo = fs.readFileSync(new URL('../src/components/pet-habitat-view.jsx', import.meta.url), 'utf8')
+  const base = codigo.slice(codigo.indexOf('const petMove = '), codigo.indexOf('const petReward'))
+  assert.ok(/petRectRef\.current\s*\|\|\s*sceneRect\(\)/.test(base), 'a medida da cena precisa ficar presa, nao medida a cada evento')
+  assert.ok(!/const r = sceneRect\(\)/.test(base), 'petMove nao pode medir a cena a cada evento')
+  assert.ok(/if \(dir !== watchDirRef\.current\)/.test(base), 'o olhar so vira estado quando muda de lado')
+  assert.ok(/petRectRef\.current\s*=\s*null/.test(codigo), 'a medida tem que ser descartada ao fim do afago')
+})
+
+caso('habitat: nada de backdrop-filter sobre a cena que anima', () => {
+  // 6 elementos do habitat (botao voltar, relogio, 5 botoes de acao, moedas,
+  // balão do gato, menu de brincar) tinham backdrop-filter: blur() por cima da
+  // cena que redesenha a 60 fps. Cada quadro o navegador refazia 6 borrões de
+  // GPU, e o fundo deles ja era 70-96% opaco, entao o borrão quase nao aparecia.
+  const css = fs.readFileSync(new URL('../src/App.css', import.meta.url), 'utf8')
+  const comBorrão = [...css.matchAll(/([^{}]*\.habitat[^{}]*)\{([^}]*backdrop-filter:\s*blur[^}]*)\}/g)]
+    .map((m) => m[1].replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+  assert.deepEqual(comBorrão, [], `blur ainda presente no habitat: ${comBorrão.join(' | ')}`)
+})
+
 console.log(`\n${ok.length} ok, ${falhas} falhando`)
 if (falhas) process.exit(1)

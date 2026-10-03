@@ -1,5 +1,23 @@
 export const CHANGELOG = [
   {
+    version: '3.2.20',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'A tela do gatinho parou de travar quando você mexe nele. Arrastar o gato ou fazer carinho chamava um redesenho da tela inteira a cada dedo que se movia na tela — agora o movimento vai direto para a placa de vídeo e a tela só se redesenha quando você solta.',
+      },
+      {
+        type: 'correcao',
+        text: 'A tela do gatinho tinha seis(brincos, relógio, moedas, botão de voltar, balão e menu de brincar) com desfoque de fundo por cima da cena que se mexe sozinha. Isso fazia o celular refazer seis borrões a cada quadro, sem mudar quase nada na imagem. O desfoque foi trocado por um fundo um pouco mais escuro, e o gato agora é desenhado pela placa de vídeo em vez de refazer o layout da tela.',
+      },
+      {
+        type: 'correcao',
+        text: 'Fazer carinho agora só redesenha a tela quando o gato muda o lado para onde está olhando, em vez de a cada toque.',
+      },
+    ],
+  },
+  {
     version: '3.2.19',
     date: 'Outubro de 2026',
     items: [

@@ -212,6 +212,15 @@ export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, 
   const petPtrRef = useRef(null)
   const tapSayRef = useRef(0)
   const catPosRef = useRef({ x: 0.5, y: 0.62 })
+  // Arrasto do gatinho sem React: enquanto o dedo mexe, escrevemos o
+  // deslocamento direto no style (transform = só GPU). O `left/top` só é
+  // recommitado no fim do arrasto, num único setCatPos. Antes, cada
+  // touchmove redesenhava os ~290 nós da tela.
+  const catStageRef = useRef(null)
+  const dragRectRef = useRef(null)
+  const dragPosRef = useRef(null)
+  const watchDirRef = useRef('')
+  const petRectRef = useRef(null)
   // Bolhas de sabão
   const [bubbles, setBubbles] = useState([])
   const bubblesRef = useRef([])
@@ -948,7 +957,8 @@ userNameRef.current = userName
   // Modo afago: gatinho fica fixo e o dedo deslizando faz carinho
   const petMove = (e) => {
     if (!petActiveRef.current) return
-    const r = sceneRect()
+    const r = petRectRef.current || sceneRect()
+    petRectRef.current = r
     const x = e.clientX - r.left
     const y = e.clientY - r.top
     const nowT = performance.now()
@@ -958,7 +968,12 @@ userNameRef.current = userName
     movedRef.current = true
     const cx = catPos.x * r.width
     const cy = catPos.y * r.height + petSize * 0.18
-    setWatchDir((x < cx ? 'l' : 'r') + (y > cy + 8 ? 'd' : ''))
+    const dir = (x < cx ? 'l' : 'r') + (y > cy + 8 ? 'd' : '')
+    // so redesenha quando o OLHAR realmente muda de lado
+    if (dir !== watchDirRef.current) {
+      watchDirRef.current = dir
+      setWatchDir(dir)
+    }
     if (overCat(x, y, 0.95)) {
       petProgRef.current += Math.min(dt, 60)
       petLastActiveRef.current = nowT
@@ -987,6 +1002,7 @@ userNameRef.current = userName
     const award = petActiveRef.current && petProgRef.current >= 900
     petActiveRef.current = false
     petPtrRef.current = null
+    petRectRef.current = null
     if (award) petReward()
   }
 
@@ -996,6 +1012,7 @@ userNameRef.current = userName
     try { e.preventDefault() } catch { /* sem preventDefault */ }
     petPtrRef.current = { id: e.pointerId }
     petActiveRef.current = true
+    petRectRef.current = habitatRef.current?.getBoundingClientRect() || null
     petLastRef.current = 0
     petLastActiveRef.current = performance.now()
     draggingRef.current = false
@@ -1020,11 +1037,26 @@ userNameRef.current = userName
       if (!petPtrRef.current && petActiveRef.current) petMove(e)
       return
     }
-    const rect = habitatRef.current?.getBoundingClientRect()
-    if (!rect) return
     if (!draggingRef.current) return
+    // a medida fica presa no inicio do arrasto: medir a cada evento
+    // forca o navegador a recalcular o layout a cada toque
+    let rect = dragRectRef.current
+    if (!rect) {
+      rect = sceneRect()
+      dragRectRef.current = rect
+    }
+    if (!rect || !rect.width) return
     const x = (e.touches?.[0]?.clientX || e.clientX) - rect.left
-    setCatPos({ x: Math.max(0.12, Math.min(0.88, x / rect.width)), y: 0.62 })
+    const nx = Math.max(0.12, Math.min(0.88, x / rect.width))
+    const el = catStageRef.current
+    if (el) {
+      const base = catPosRef.current
+      const dx = (nx - base.x) * rect.width
+      const dy = (0.62 - base.y) * rect.height
+      el.style.transform = `translate3d(calc(-50% + ${dx}px), calc(-50% + ${dy}px), 0)`
+    }
+    dragPosRef.current = { x: nx, y: 0.62 }
+    catPosRef.current = { x: nx, y: 0.62 }
     movedRef.current = true
   }
 
@@ -1043,6 +1075,7 @@ userNameRef.current = userName
     if (isUi) return
     draggingRef.current = true
     movedRef.current = false
+    dragRectRef.current = habitatRef.current?.getBoundingClientRect() || null
     setIsDragging(true)
   }
   const handleDragEnd = () => {
@@ -1051,6 +1084,13 @@ userNameRef.current = userName
       return
     }
     draggingRef.current = false
+    dragRectRef.current = null
+    const el = catStageRef.current
+    if (el) el.style.transform = ''
+    // um unico setState no fim do arrasto, em vez de um por touchmove
+    const fim = dragPosRef.current
+    dragPosRef.current = null
+    if (fim) setCatPos(fim)
     setIsDragging(false)
   }
 
@@ -1295,6 +1335,7 @@ userNameRef.current = userName
 
       {/* CAMADA 10 - O Pet Virtual: mesmo gato da tela principal */}
       <div
+        ref={catStageRef}
         className={`habitat-cat-stage${watching ? ' is-watching' : ''}${watchDir.includes('l') ? ' watch-l' : ''}${watchDir.includes('r') ? ' watch-r' : ''}${watchDir.includes('d') ? ' watch-d' : ''}${eating ? ' is-eating' : ''}${petMode ? ' is-petting' : ''}${sleeping ? ' is-sleeping' : ''}`}
         style={{ left: `${catPos.x * 100}%`, top: `${catPos.y * 100}%` }}
         aria-hidden="true"
