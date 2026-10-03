@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { useProgress } from '../progress-context.js'
 import { Cover } from './Cover.jsx'
 import { formatTime } from '../lib/format.js'
 
-export function QueueSheet({ track, queue, onPlayItem, onRemoveItem, onMoveItem, onClear, onReorder, onClose }) {
+export const QueueSheet = memo(function QueueSheet({ track, queue, onPlayItem, onRemoveItem, onMoveItem, onClear, onReorder, onClose }) {
   const { elapsed, duration } = useProgress()
   const progress = duration ? elapsed / duration : 0
   const listRef = useRef(null)
@@ -151,4 +151,4 @@ export function QueueSheet({ track, queue, onPlayItem, onRemoveItem, onMoveItem,
       </div>
     </div>
   )
-}
+})

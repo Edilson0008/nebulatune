@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { ACCENTS, resolveAccent } from '../settings'
 import { Cover } from './Cover.jsx'
 import { nf, fmtTempo } from '../lib/format.js'
@@ -10,7 +10,7 @@ import {
 } from '../lib/stats.js'
 import { reduzirAvatar } from '../lib/avatar.js'
 
-export function Profile({ settings, api, library, onPlay, petStats, toys }) {
+export const Profile = memo(function Profile({ settings, api, library, onPlay, petStats, toys }) {
   const avatarInputRef = useRef(null)
   const [statsPeriod, setStatsPeriod] = useState('week')
   const [salvandoFoto, setSalvandoFoto] = useState(false)
@@ -298,4 +298,4 @@ export function Profile({ settings, api, library, onPlay, petStats, toys }) {
       </div>
     </section>
   )
-}
+})

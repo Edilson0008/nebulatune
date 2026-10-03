@@ -1,7 +1,7 @@
 // Tela Amigos: meu código, encontrar por código, pedidos com resposta e a
 // lista de amigos. Clicar em qualquer pessoa abre o perfil dela (foto, bio e
 // estatísticas), onde a amizade também se gerencia. Só existe com conta logada.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import * as amigos from '../lib/amigos.js'
 import { watchAmigos } from '../lib/sync.js'
 import { getUserId } from '../lib/account.js'
@@ -61,7 +61,7 @@ function CaixaMensagem({ valor, onChange, onCancelar, onEnviar, ocupado, erro })
   )
 }
 
-export function AmigosView({ account, settings, onOpenAccount, onToast }) {
+export const AmigosView = memo(function AmigosView({ account, settings, onOpenAccount, onToast }) {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [codigo, setCodigo] = useState('')
@@ -540,4 +540,4 @@ export function AmigosView({ account, settings, onOpenAccount, onToast }) {
       )}
     </section>
   )
-}
+})

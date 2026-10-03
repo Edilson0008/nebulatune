@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { memo, useEffect, useState, useRef, useCallback } from 'react'
 import { criarLoop } from '../lib/raf-loop.js'
 import { PetFriend } from './pet.jsx'
 import { Minigames } from './minigames.jsx'
@@ -149,7 +149,7 @@ const PET_TIPS = [
   'Estoure todas as bolhinhas antes de sumirem 🫧',
 ]
 
-export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, mood = 'neutral', userName = '', onPetAction, onFoodEaten = () => {}, onBathUsed = () => {}, onMinigame = () => {}, soundOn = true, cheer: appCheer = null, onOpenShop = () => {}, ..._pet }) {
+export const PetHabitatView = memo(function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, mood = 'neutral', userName = '', onPetAction, onFoodEaten = () => {}, onBathUsed = () => {}, onMinigame = () => {}, soundOn = true, cheer: appCheer = null, onOpenShop = () => {}, ..._pet }) {
   const particlesCanvasRef = useRef(null)
   const habitatRef = useRef(null)
   const [clock, setClock] = useState(() => new Date())
@@ -1637,4 +1637,4 @@ userNameRef.current = userName
       </p>
     </section>
   )
-}
+})

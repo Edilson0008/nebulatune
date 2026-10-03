@@ -1,4 +1,6 @@
-export function Cover({ colors, image, size = 40, radius = 8 }) {
+import { memo } from 'react'
+
+export const Cover = memo(function Cover({ colors, image, size = 40, radius = 8 }) {
   const [c1, c2, c3] =
     Array.isArray(colors) && colors.length ? colors : ['#6b5bd6', '#2a2450', '#b9a7ff']
   if (image) {
@@ -36,4 +38,4 @@ export function Cover({ colors, image, size = 40, radius = 8 }) {
       <span className="cover-star" style={{ left: '72%', top: '62%', background: c3 }} />
     </span>
   )
-}
+})

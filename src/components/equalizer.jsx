@@ -1,9 +1,9 @@
-import { useRef } from 'react'
+import { memo, useRef } from 'react'
 import { PRESETS } from '../audio/equalizer'
 import { EQ_FREQS } from '../audio/graph'
 import { Visualizer } from './visualizer.jsx'
 
-export function VSlider({ value, onChange, min = -12, max = 12, step = 1, label, suffix }) {
+export const VSlider = memo(function VSlider({ value, onChange, min = -12, max = 12, step = 1, label, suffix }) {
   const trackRef = useRef(null)
   const draggingRef = useRef(false)
   // Medir a trilha a cada pointermove obriga o navegador a refazer o layout a
@@ -53,9 +53,9 @@ export function VSlider({ value, onChange, min = -12, max = 12, step = 1, label,
       {suffix && <span className="vslider-sub">{suffix}</span>}
     </div>
   )
-}
+})
 
-export function Equalizer({ eq }) {
+export const Equalizer = memo(function Equalizer({ eq }) {
   const { settings, setBand, setVolume, setPreampDb, applyPreset, toggle, reset } = eq
   return (
     <div className="eq">
@@ -166,4 +166,4 @@ export function Equalizer({ eq }) {
       </div>
     </div>
   )
-}
+})

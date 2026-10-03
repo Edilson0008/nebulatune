@@ -33,7 +33,7 @@ export const QuickTrackGrid = memo(function QuickTrackGrid({ title = '', tracks,
   )
 })
 
-export function Sidebar({ view, setView, onPickFiles }) {
+export const Sidebar = memo(function Sidebar({ view, setView, onPickFiles }) {
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -116,9 +116,9 @@ export function Sidebar({ view, setView, onPickFiles }) {
       </div>
     </aside>
   )
-}
+})
 
-export function NameModal({ title, initial = '', placeholder, onSave, onClose }) {
+export const NameModal = memo(function NameModal({ title, initial = '', placeholder, onSave, onClose }) {
   const [v, setV] = useState(initial)
 
   useEffect(() => {
@@ -160,9 +160,9 @@ export function NameModal({ title, initial = '', placeholder, onSave, onClose })
       </div>
     </div>
   )
-}
+})
 
-export function ChangelogModal({ onClose }) {
+export const ChangelogModal = memo(function ChangelogModal({ onClose }) {
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') {
@@ -206,9 +206,9 @@ export function ChangelogModal({ onClose }) {
       </div>
     </div>
   )
-}
+})
 
-export function PlaylistPicker({ playlists, track, onCreate, onAdd, onClose }) {
+export const PlaylistPicker = memo(function PlaylistPicker({ playlists, track, onCreate, onAdd, onClose }) {
   const [name, setName] = useState('')
 
   const submit = (e) => {
@@ -257,9 +257,9 @@ export function PlaylistPicker({ playlists, track, onCreate, onAdd, onClose }) {
       </div>
     </div>
   )
-}
+})
 
-export function TrackPicker({ tracks, playlist, onAdd, onAddMany, onClose }) {
+export const TrackPicker = memo(function TrackPicker({ tracks, playlist, onAdd, onAddMany, onClose }) {
   const options = (tracks || []).filter(
     (t) => !playlist?.trackIds?.includes(t.id),
   )
@@ -293,9 +293,9 @@ export function TrackPicker({ tracks, playlist, onAdd, onAddMany, onClose }) {
       </div>
     </div>
   )
-}
+})
 
-export function DeviceImport({ tracks, selection, onToggle, onSelectAll, importing, onImport, onClose }) {
+export const DeviceImport = memo(function DeviceImport({ tracks, selection, onToggle, onSelectAll, importing, onImport, onClose }) {
   const selCount = Object.values(selection).filter(Boolean).length
   const todas = tracks || []
   // `pasta` = null significa "escolhendo a pasta". Um caminho significa "dentro
@@ -408,8 +408,8 @@ export function DeviceImport({ tracks, selection, onToggle, onSelectAll, importi
               </button>
             </div>
           </>
-        )}
+)}
       </div>
     </div>
   )
-}
+})

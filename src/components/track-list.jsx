@@ -358,7 +358,7 @@ export const TrackList = memo(function TrackList({
   )
 })
 
-export function TrackEdit({ track, onSave, onClose }) {
+export const TrackEdit = memo(function TrackEdit({ track, onSave, onClose }) {
   const [title, setTitle] = useState(track.title || '')
   const [artist, setArtist] = useState(track.artist || '')
   const [album, setAlbum] = useState(track.album || '')
@@ -412,4 +412,4 @@ export function TrackEdit({ track, onSave, onClose }) {
       </div>
     </div>
   )
-}
+})

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { IS_NATIVE } from '../lib/env.js'
 
 const BG_STARS = Array.from({ length: 80 }, (_, i) => {
@@ -8,7 +8,7 @@ const BG_STARS = Array.from({ length: 80 }, (_, i) => {
   return { x, y, size, delay: (i * 0.19) % 5.5, dur: 2.2 + (i % 4) * 1.4 }
 })
 
-export function SpaceParticles({ count = 16 }) {
+export const SpaceParticles = memo(function SpaceParticles({ count = 16 }) {
   const ref = useRef(null)
 
   useEffect(() => {
@@ -79,9 +79,9 @@ export function SpaceParticles({ count = 16 }) {
   }, [count])
 
   return <canvas ref={ref} className="bg-canvas" aria-hidden="true" />
-}
+})
 
-export function BackgroundFX({ bgAnimated, cosmosAnimated }) {
+export const BackgroundFX = memo(function BackgroundFX({ bgAnimated, cosmosAnimated }) {
   if (!bgAnimated) return null
   const stars = IS_NATIVE ? BG_STARS.slice(0, 24) : BG_STARS
   return (
@@ -113,4 +113,4 @@ export function BackgroundFX({ bgAnimated, cosmosAnimated }) {
       </div>
     </div>
   )
-}
+})

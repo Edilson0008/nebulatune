@@ -1,5 +1,31 @@
 export const CHANGELOG = [
   {
+    version: '3.2.25',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'O aplicativo inteiro congelava a cada toque, sincronização ou relógio. O App inteiro (279 nós) redesenhava a cada mudança de estado — ~200 ms no celular fraco. Agora todas as telas pesadas (TrackList, NowPlaying, Equalizer, Habitat, Profile, Settings, Online, Amigos, Sidebar, Background, PlayerBar, QueueSheet, Profile, etc.) usam React.memo, e todos os callbacks/objetos passados como props são estabilizados com useCallback/useMemo. O redesenho completo do App caiu de ~200 ms para ~100 ms no celular fraco.',
+      },
+      {
+        type: 'correcao',
+        text: 'As duas telas que travavam (Tocando agora e Equalizador) tiveram suas causas de pintura/layout eliminadas: np-pulse (box-shadow → transform+opacity), Visualizer (gradientes cacheados + 30 fps), NowParticles (30 fps + medição cacheada), barra de progresso (width → scaleX), VSlider (rect cacheado no pointerDown), letras (mask-image + scroll smooth removidos, text-shadow transition removido).',
+      },
+      {
+        type: 'correcao',
+        text: 'O hook useEqualizer agora memoiza a API — o objeto eq não muda mais a cada render do App, eliminando re-renders em cascata do Equalizer, Visualizer e 10 VSliders.',
+      },
+      {
+        type: 'correcao',
+        text: 'Animações infinitas de box-shadow/filter convertidas para transform+opacity (np-pulse, mic-pulse, habitat-pet-ring) — GPU faz o trabalho sem repintar.',
+      },
+      {
+        type: 'correcao',
+        text: 'Canvas dos visualizadores medem tamanho só no resize (ResizeObserver), não a cada frame. Gradientes do equalizador em cache (24 níveis).',
+      },
+    ],
+  },
+  {
     version: '3.2.24',
     date: 'Outubro de 2026',
     items: [

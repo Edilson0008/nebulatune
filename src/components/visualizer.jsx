@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import * as graph from '../audio/graph'
 
-export function NowParticles() {
+export const NowParticles = memo(function NowParticles() {
   const ref = useRef(null)
 
   useEffect(() => {
@@ -85,9 +85,9 @@ export function NowParticles() {
   }, [])
 
   return <canvas ref={ref} className="np-particles" aria-hidden="true" />
-}
+})
 
-export function Visualizer() {
+export const Visualizer = memo(function Visualizer() {
   const ref = useRef(null)
 
   useEffect(() => {
@@ -172,4 +172,4 @@ export function Visualizer() {
   }, [])
 
   return <canvas ref={ref} className="eq-visualizer" aria-hidden="true" />
-}
+})

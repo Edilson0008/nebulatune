@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import {
   accountConfigured,
   getRecovery,
@@ -20,7 +20,7 @@ function horaCurta(ts) {
   }
 }
 
-export function AccountModal({ onClose }) {
+export const AccountModal = memo(function AccountModal({ onClose }) {
   const session = getSession()
   const link = getRecovery()
   // Veio do e-mail de recuperação: já abre pedindo a nova senha.
@@ -334,4 +334,4 @@ export function AccountModal({ onClose }) {
       </div>
     </div>
   )
-}
+})

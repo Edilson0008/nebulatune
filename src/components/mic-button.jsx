@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 
-export function MicButton({ onResult, notify }) {
+export const MicButton = memo(function MicButton({ onResult, notify }) {
   const [listening, setListening] = useState(false)
   const recRef = useRef(null)
   const supported =
@@ -76,4 +76,4 @@ export function MicButton({ onResult, notify }) {
       </svg>
     </button>
   )
-}
+})

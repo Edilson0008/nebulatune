@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { APP_VERSION, SITE_URL } from '../app-config'
 import { blobToDataUrl, dataUrlToBlob, pickRestorableTracks } from '../backup'
 import { APK_URL, fetchLatestVersion, installUpdate, isNewer } from '../updater'
 import { fmtBytes } from '../lib/format.js'
 
-export function NavIcon({ name }) {
+export const NavIcon = memo(function NavIcon({ name }) {
   const paths = {
     home: <path d="M3 10.5 12 3l9 7.5v9.2a1.8 1.8 0 0 1-1.8 1.8H4.8A1.8 1.8 0 0 1 3 19.7z" />,
     search: <><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></>,
@@ -20,9 +20,9 @@ export function NavIcon({ name }) {
       {paths[name] || null}
     </svg>
   )
-}
+})
 
-export function ApkDownloadButton() {
+export const ApkDownloadButton = memo(function ApkDownloadButton() {
   const [size, setSize] = useState(null)
   useEffect(() => {
     fetch('./apk/nebulatune.apk', { method: 'HEAD' })
@@ -37,9 +37,9 @@ export function ApkDownloadButton() {
       Baixar APK{size ? ` · ${fmtBytes(size)}` : ''}
     </a>
   )
-}
+})
 
-export function SettingsView({ settings, api, library, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onOpenChangelog, onClearCache, cacheCleanMsg, onFreeSpace, freeSpaceMsg, account, onOpenAccount }) {
+export const SettingsView = memo(function SettingsView({ settings, api, library, isIOS, isAppInstalled, installEvt, onInstall, isNative, onImport, onShareApp, onOpenChangelog, onClearCache, cacheCleanMsg, onFreeSpace, freeSpaceMsg, account, onOpenAccount }) {
   const [storage, setStorage] = useState(null)
   const [exported, setExported] = useState(false)
   const [imported, setImported] = useState(false)
@@ -500,7 +500,7 @@ export function SettingsView({ settings, api, library, isIOS, isAppInstalled, in
       </div>
     </section>
   )
-}
+})
 
 /* ─────────────────────────────────────────────
    Temporizadores nativos (sleep timer no APK)
