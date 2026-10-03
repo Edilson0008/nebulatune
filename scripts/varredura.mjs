@@ -1750,11 +1750,11 @@ caso('habitat: o laco de particulas para quando voce sai da tela', () => {
   // num canvas solto. Isso queimava CPU e bateria pelo resto da vida do app e
   // deixava o resto do aplicativo lento.
   const codigo = fs.readFileSync(new URL('../src/components/pet-habitat-view.jsx', import.meta.url), 'utf8')
-  const bloco = codigo.slice(codigo.indexOf('const draw = (now)'), codigo.indexOf('// Time & tips'))
-  assert.ok(!/^\s*requestAnimationFrame\(draw\)/m.test(bloco),
-    'o laco de particulas nao pode pedir quadro sem guardar o id')
-  assert.ok(bloco.includes('raf = requestAnimationFrame(draw)'),
-    'o quadro precisa ser guardado para a limpeza poder cancelar')
+  const bloco = codigo.slice(codigo.indexOf('const draw = (now'), codigo.indexOf('}, [scene.key])'))
+  assert.ok(/const draw = \(now, proximo\)/.test(bloco), 'o laco tem que pedir o proximo quadro pelo agendador')
+  assert.ok(bloco.includes('criarLoop(draw)'), 'o laco de particulas tem que usar o agendador')
+  assert.ok(/agendador\.acordar\(\)/.test(bloco), 'o laco de particulas liga pelo agendador')
+  assert.ok(/agendador\.dormir\(\)/.test(bloco), 'a limpeza TEM que dormir o agendador')
 })
 
 caso('habitat: o canvas nao mede a tela a cada quadro', () => {
@@ -1762,7 +1762,7 @@ caso('habitat: o canvas nao mede a tela a cada quadro', () => {
   // inteiro 60 vezes por segundo. Como a tela monta ~290 nos, e o proprio app
   // re-renderiza, isso e o que faz a tela travar ao mexer.
   const codigo = fs.readFileSync(new URL('../src/components/pet-habitat-view.jsx', import.meta.url), 'utf8')
-  const bloco = codigo.slice(codigo.indexOf('const draw = (now)'), codigo.indexOf('// Time & tips'))
+  const bloco = codigo.slice(codigo.indexOf('const draw = (now'), codigo.indexOf('}, [scene.key])'))
   assert.ok(!bloco.includes('canvas.clientWidth') && !bloco.includes('canvas.clientHeight'),
     'o draw nao pode medir a tela a cada quadro')
 })
@@ -1772,11 +1772,23 @@ caso('habitat: a fisica da bolinha dorme em vez de acordar 60x por segundo', () 
   // "nao tem bolinha / velocidade zero" aconteciam depois de ja ter marcado o
   // proximo quadro: a bolinha parada no chao mantinha o laco acordado.
   const codigo = fs.readFileSync(new URL('../src/components/pet-habitat-view.jsx', import.meta.url), 'utf8')
-  const bloco = codigo.slice(codigo.indexOf('Física da bolinha') - 3, codigo.indexOf('Física da bolinha') + 1600)
-  const corpo = bloco.slice(bloco.indexOf('const loop = (now)'))
-  assert.ok(!/const loop = \(now\) => \{\s*raf = requestAnimationFrame\(loop\)/.test(corpo),
-    'o agendamento nao pode vir antes da checagem de movimento')
-  assert.ok(corpo.includes('raf = 0'), 'o laco precisa se desligar quando a bolinha para')
+  const bloco = codigo.slice(codigo.indexOf('Física da bolinha') - 3, codigo.indexOf('Física da bolinha') + 3200)
+  const corpo = bloco.slice(bloco.indexOf('const loop = (now'))
+  // Parar de pedir quadro e o que faz o laco dormir: nao existe mais "zerar o
+  // id", que era exatamente o que impedia a limpeza de cancelar.
+  assert.ok(!/requestAnimationFrame/.test(corpo), 'a fisica nao pode agendar quadro por conta propria')
+  // A ordem importa: o laco so pode pedir o proximo quadro DEPOIS de passar
+  // pela checagem de movimento. Se pedir antes, a bolinha parada no chao
+  // continua marcando quadro.
+  const guarda = corpo.indexOf('(v.vx === 0 && v.vy === 0)) return')
+  const agenda = corpo.indexOf('proximo()')
+  assert.ok(guarda !== -1, 'a checagem de movimento tem que existir')
+  assert.ok(agenda !== -1, 'a fisica tem que poder continuar o laco')
+  assert.ok(guarda < agenda, 'o agendamento nao pode vir antes da checagem de movimento')
+  assert.ok(corpo.includes('(v.vx === 0 && v.vy === 0)) return'),
+    'com a bolinha parada o laco tem que parar de pedir quadro')
+  assert.ok(/criarLoop\(loop\)/.test(bloco), 'a fisica da bolinha tem que usar o agendador')
+  assert.ok(/agendador\.dormir\(\)/.test(bloco), 'a limpeza tem que dormir o agendador')
   assert.ok(/ballLoopRef\.current = \(\) => \{/.test(codigo), 'e precisa existir quem acorde a bolinha')
   assert.ok(codigo.includes('ballLoopRef.current?.()'),
     'o arremesso tem que acordar a fisica, senao a bolinha nao quica mais')
@@ -1849,6 +1861,27 @@ caso('habitat: nada de backdrop-filter sobre a cena que anima', () => {
     .map((m) => m[1].replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').trim())
     .filter(Boolean)
   assert.deepEqual(comBorrão, [], `blur ainda presente no habitat: ${comBorrão.join(' | ')}`)
+})
+
+caso('habitat: nenhum laco de quadro sobrevive a saida da tela', () => {
+  // Vazamento de CPU que derrubou o APP INTEIRO, nao so a tela do habitat: a
+  // limpeza da fisica da bolinha zerava `raf` ANTES de cancelar, entao
+  // cancelava o zero e o quadro de verdade continuava rodando. Como o loop se
+  // reagenda sozinho, ele vivia 60x por segundo para sempre, forcando layout
+  // e setState depois que voce ja tinha saido do habitat. Cada bola
+  // arremessada deixava mais um loop zumbi, por isso piorava com o tempo.
+  const codigo = fs.readFileSync(new URL('../src/components/pet-habitat-view.jsx', import.meta.url), 'utf8')
+  // A regra geral: NENHUM loop da tela pode agendar quadro por conta propria.
+  // Todo mundo passa pelo agendador (`criarLoop`), que cancela antes de zerar.
+  // Se alguem escrever `requestAnimationFrame(...)` aqui de novo, e a chance
+  // de voltar o vazamento que travou o app inteiro.
+  const semComentario = codigo.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
+  assert.ok(!/requestAnimationFrame\s*\(/.test(semComentario),
+    'a tela nao pode chamar requestAnimationFrame direto: use criarLoop')
+  assert.ok(!/cancelAnimationFrame\s*\(/.test(semComentario),
+    'a tela nao pode chamar cancelAnimationFrame direto: use criarLoop')
+  assert.equal((codigo.match(/criarLoop\(/g) || []).length, 3,
+    'os tres loops (particulas, bolhas e bolinha) passam pelo agendador')
 })
 
 console.log(`\n${ok.length} ok, ${falhas} falhando`)

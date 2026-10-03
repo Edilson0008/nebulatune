@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { criarLoop } from '../lib/raf-loop.js'
 import { PetFriend } from './pet.jsx'
 import { Minigames } from './minigames.jsx'
 import { BATH_CATALOG, FOOD_CATALOG, TOY_CATALOG } from '../lib/pet.js'
@@ -872,7 +873,6 @@ userNameRef.current = userName
     const canvas = particlesCanvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
-    let raf = 0
     let startTime = performance.now()
 
     const resize = () => {
@@ -898,7 +898,7 @@ userNameRef.current = userName
     resize()
     window.addEventListener('resize', resize)
 
-    const draw = (now) => {
+    const draw = (now, proximo) => {
       const t = (now - startTime) / 1000
       ctx.clearRect(0, 0, w, hgt)
 
@@ -934,16 +934,15 @@ userNameRef.current = userName
         ctx.globalAlpha = 1
       }
 
-      // O id do quadro PRECISA ser guardado. Sem isso, `raf` continuava 0 e o
-      // `cancelAnimationFrame(raf)` da limpeza cancelava o zero: o loop
-      // continuava rodando 60x por segundo DEPOIS de você sair da tela do
-      // habitat, desenhando num canvas solto e queimando bateria/CPU pelo resto
-      // da vida do app.
-      raf = requestAnimationFrame(draw)
+      proximo()
     }
-    raf = requestAnimationFrame(draw)
+    const agendador = criarLoop(draw)
+    agendador.acordar()
     return () => {
-      cancelAnimationFrame(raf)
+      // `dormir` cancela o quadro pendente. Este loop roda enquanto a tela
+      // existe; sem isso ele continuaria desenhando num canvas solto depois
+      // que você saiu do habitat.
+      agendador.dormir()
       window.removeEventListener('resize', resize)
     }
   }, [scene.key]);
@@ -1130,9 +1129,8 @@ userNameRef.current = userName
   // Bolhas flutuando: sobem, balançam e o gatinho tenta estourar as que passam perto
   useEffect(() => {
     if (!bubbles.length) return undefined
-    let raf = 0
     let last = performance.now()
-    const loop = (now) => {
+    const loop = (now, proximo) => {
       const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000))
       last = now
       const bs = bubblesRef.current
@@ -1162,13 +1160,14 @@ userNameRef.current = userName
         fireReaction('bubbles')
       }
       if (next.length) {
-        raf = requestAnimationFrame(loop)
+        proximo()
       } else {
         finishBubbles(true)
       }
     }
-    raf = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(raf)
+    const agendador = criarLoop(loop)
+    agendador.acordar()
+    return () => agendador.dormir()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bubbles.length])
 
@@ -1181,18 +1180,16 @@ userNameRef.current = userName
   //Callbacks por segundo, o tempo inteiro, com a bolinha parada no chão.
   // Agora ele para sozinho, e quem arremessa acorda.
   useEffect(() => {
-    let raf = 0
     let last = performance.now()
-    const loop = (now) => {
+    const loop = (now, proximo) => {
       const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000))
       last = now
       const b = ballRef.current
       const v = ballVelRef.current
-      if (!b || b.dragging || !v || (v.vx === 0 && v.vy === 0)) {
-        raf = 0
-        return
-      }
-      raf = requestAnimationFrame(loop)
+      // Sem bola, arrastando, ou parada: NAO pede o proximo quadro. E o que
+      // impede a fisica de ficar rodando a toa com a bolinha no chao.
+      if (!b || b.dragging || !v || (v.vx === 0 && v.vy === 0)) return
+      proximo()
       const rect = sceneRect()
       const w = rect.width
       const h = rect.height - 96
@@ -1217,20 +1214,30 @@ userNameRef.current = userName
         v.vx = 0
         v.vy = 0
         setBall((prev) => (prev && prev.id === b.id ? { ...prev, moving: false } : prev))
-        raf = 0
         return
       }
       setBall((prev) => (prev && prev.id === b.id ? { ...prev, x, y, moving: true } : prev))
     }
     // Quem chama isto acorda a física: o arremesso e o toque na bolinha.
+    const agendador = criarLoop(loop)
     ballLoopRef.current = () => {
-      if (raf) return
       last = performance.now()
-      raf = requestAnimationFrame(loop)
+      agendador.acordar()
     }
     return () => {
-      raf = 0
-      cancelAnimationFrame(raf)
+      // O id do quadro PRECISA ser cancelado ANTES de virar 0. Zerando
+      // primeiro, o `cancelAnimationFrame(raf)` cancelava o zero e o quadro
+      // de verdade continuava vivo: como o `loop` se reagenda sozinho, a
+      // fisica da bolinha ficava rodando 60x por segundo para sempre, mesmo
+      // depois de sair do habitat — queimando CPU e forcando layout no app
+      // INTEIRO. E cada bola arremessada deixava mais um loop zumbi.
+      // ZERAR ANTES DE CANCELAR foi o que travou o app inteiro: o
+      // cancelAnimationFrame recebia 0, o quadro de verdade sobrevivia, e como
+      // o loop se reagenda sozinho ele continuava 60x por segundo para sempre
+      // (com getBoundingClientRect + setBall) DEPOIS de sair do habitat. Cada
+      // bola arremessada deixava mais um loop zumbi, por isso piorava com o
+      // tempo. O agendador cancela sempre antes de zerar.
+      agendador.dormir()
       ballLoopRef.current = null
     }
   }, [])

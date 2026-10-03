@@ -1,5 +1,19 @@
 export const CHANGELOG = [
   {
+    version: '3.2.21',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'O aplicativo inteiro voltava a travar depois de um tempo na tela do gatinho. A bolinha jogada ficava com o cálculo de física rodando escondido depois de você sair da tela: como ele se repetia sozinho, nunca parava — e ia dejando um processo dentro do outro a cada bola jogada. É por isso que o travamento não ficava só no gatinho e piorava com o tempo.',
+      },
+      {
+        type: 'correcao',
+        text: 'Os três movimentos da tela do gatinho (as partículas do cenário, as bolhas e a bolinha) agora passam por um único agendador, que garante que nada continue rodando quando você sai da tela.',
+      },
+    ],
+  },
+  {
     version: '3.2.20',
     date: 'Outubro de 2026',
     items: [
