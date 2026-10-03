@@ -124,7 +124,7 @@ export const NowPlaying = memo(function NowPlaying({
     const line = box.querySelectorAll('.np-lyric')[activeIndex]
     if (!line) return
     const top = line.offsetTop - box.clientHeight / 2 + line.clientHeight / 2
-    box.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+    box.scrollTo({ top: Math.max(0, top), behavior: 'auto' })
   }, [activeIndex])
 
   useEffect(() => {

@@ -3834,9 +3834,11 @@ button {
   padding: 6px 28px calc(26px + env(safe-area-inset-bottom));
   overflow-y: auto;
   scrollbar-width: none;
-  scroll-behavior: smooth;
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent);
-  mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent);
+  /* mask-image + scroll-behavior: smooth forçava repintura da área
+     mascarada a cada frame do scroll suave. Removido: o fade nas bordas
+     era bonito mas custava frames no celular fraco. */
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 .np-lyrics::-webkit-scrollbar {
@@ -3868,7 +3870,9 @@ button {
   text-align: center;
   color: #8f86b0;
   opacity: 0.5;
-  transition: color 0.35s, opacity 0.35s, transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1), text-shadow 0.35s;
+  /* text-shadow na transition forçava repintura a cada frame da transição.
+     O brilho na linha ativa fica no estado .active (estático), sem transição. */
+  transition: color 0.35s, opacity 0.35s, transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
   transform-origin: center;
 }
 

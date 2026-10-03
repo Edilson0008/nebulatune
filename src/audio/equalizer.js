@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { readLocal, writeLocal } from '../localstore'
 import { applySettings, BAND_COUNT } from './graph'
 
@@ -66,7 +66,7 @@ export function useEqualizer() {
     writeLocal('nt.equalizer', settings)
   }, [settings])
 
-  return {
+  const api = useMemo(() => ({
     settings,
     setBand: (i, v) =>
       setSettings((s) => {
@@ -102,5 +102,7 @@ export function useEqualizer() {
               : base.bands,
         }
       }),
-  }
+  }), [settings, setSettings])
+
+  return api
 }

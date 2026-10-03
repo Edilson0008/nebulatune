@@ -1,5 +1,23 @@
 export const CHANGELOG = [
   {
+    version: '3.2.24',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'A tela de tocando agora ainda travava nas letras: a máscara de fade (mask-image) junto com o scroll suave forçava repintura a cada frame do scroll. Removido o mask-image e o scrollBehavior smooth — o scroll agora é instantâneo.',
+      },
+      {
+        type: 'correcao',
+        text: 'A transição de text-shadow nas linhas da letra forçava repintura a cada frame da animação. Removido text-shadow da transição — o brilho da linha ativa continua, só não anima mais.',
+      },
+      {
+        type: 'correcao',
+        text: 'O equalizador recebia um objeto novo a cada render do App, fazendo tudo re-renderizar a cada toque. O hook useEqualizer agora memoiza a API — objeto estável, sem re-render desnecessário.',
+      },
+    ],
+  },
+  {
     version: '3.2.23',
     date: 'Outubro de 2026',
     items: [
