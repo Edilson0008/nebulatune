@@ -66,7 +66,7 @@ import { getRecovery, onAccount, restoreSession, getSession } from './lib/accoun
 import { ensureSids, idsToSids, mesmaMusica } from './lib/sid.js'
 import { deepEqual } from './lib/equal.js'
 import { protegerIdentidade } from './lib/identity.js'
-import { aplicarBiblioteca, applyExtras, applyPlaylists, collectLocal, donoDosDados, isolarParaConta, lerRetrato, limparRetratosEmbutidos, mergeAll, mergeCounters, mergeStrings, preservaEditionsRecentes, syncNow, takePendingSync, watchAmigos, watchCloud } from './lib/sync.js'
+import { aplicarBiblioteca, applyExtras, applyPlaylists, collectLocal, donoDosDados, isolarParaConta, lerRetrato, limparRetratosEmbutidos, mergeAll, mergeCounters, mergeStrings, preservaEditionsRecentes, syncNow, takePendingSync, watchCloud } from './lib/sync.js'
 import * as amigosMod from './lib/amigos.js'
 
 // Último portão da biblioteca: uma linha sem áudio não é uma música, é lixo de
@@ -1281,16 +1281,17 @@ function App() {
 
   // Pedidos de amizade chegando com a tela de Amigos FECHADA.
   //
-  // Antes o vigia das amizades vivia dentro da tela de Amigos: sair da aba
-  // desligava ele, e o pedido que chegava nesse meio-tempo só aparecia quando
-  // a pessoa voltava à aba — ou seja, a pessoa ficava achando que o pedido
-  // não tinha chegado. Aqui o vigia fica ligado o tempo todo e o que muda é só
-  // um contador, que a tela usa para recarregar.
-  const [amigosSinal, setAmigosSinal] = useState(0)
-  useEffect(() => {
-    if (!accountUserId) return undefined
-    return watchAmigos(() => setAmigosSinal((n) => n + 1))
-  }, [accountUserId])
+// O vigia das amizades NÃO fica mais ligado aqui. Ele morava no App e
+  // consultava o banco a cada 2 s com QUALQUER tela aberta; cada resposta dava
+  // `setAmigosSinal`, que redesenhava o App inteiro — e com ele a tela do
+  // habitat (~290 nós) — duas vezes por segundo, em qualquer canto do app.
+  // Era o que dava a sensação de travar "a cada alguns segundos".
+  //
+  // Quem precisa estar avisado é a tela de Amigos, e ela já se cobre sozinha de
+  // três formas: tem o vigia dela (só com a tela aberta), recarrega quando a aba
+  // ganha foco (um pedido que chegou enquanto você estava no habitat aparece
+  // assim que você volta) e busca ao montar. O sinal global só fazia o mesmo
+  // trabalho duas vezes.
 
   // "Online agora": enquanto o app estiver aberto, renova o visto de tempos em
   // tempos. Sem isto, quem ficava com o app aberto mais de 5 min deixava de
@@ -3247,7 +3248,6 @@ onPetAction={handlePetAction}
             <AmigosView
               account={account}
               settings={appSettings}
-              sinal={amigosSinal}
               onOpenAccount={() => setAccountOpen(true)}
               onToast={showToast}
             />

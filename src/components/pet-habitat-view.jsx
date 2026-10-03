@@ -939,17 +939,10 @@ userNameRef.current = userName
     }
   }, [scene.key]);
 
-  // Time & tips
-  useEffect(() => {
-    const id = setInterval(() => setClock(new Date()), 30000)
-    return () => clearInterval(id)
-  }, [])
-
-  useEffect(() => {
-    const id = setInterval(() => setTipIdx((i) => (i + 1) % PET_TIPS.length), 8000)
-    return () => clearInterval(id)
-  }, [])
-
+  // (O relógio do cenário e a dica do gatinho moravam aqui E mais acima,
+  // literalmente duplicados: cada um rodava em DOIS timers, e a dica virava
+  // duas vezes mais rápido do que o previsto. A cópia de cima é a que valeu;
+  // esta saiu na 3.2.19.)
 
   // Full 2D drag for cat
   // Modo afago: gatinho fica fixo e o dedo deslizando faz carinho

@@ -1,5 +1,19 @@
 export const CHANGELOG = [
   {
+    version: '3.2.19',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'A tela do gatinho parou de congelar a cada poucos segundos. O app tinha ligado uma busca de pedidos de amizade que ficava ativa mesmo com outras telas abertas: a cada 2 segundos ela redesenhava o app inteiro, e com ele a tela do gatinho. A busca agora só acontece na tela de Amigos, que continua avisa se chegar pedido enquanto você está em outro lugar.',
+      },
+      {
+        type: 'correcao',
+        text: 'A tela do gatinho tinha dois cronômetros iguais para mostrar a hora do cenário e para trocar a dica, então a dica mudava duas vezes mais rápido do que o previsto.',
+      },
+    ],
+  },
+  {
     version: '3.2.18',
     date: 'Outubro de 2026',
     items: [

@@ -61,7 +61,7 @@ function CaixaMensagem({ valor, onChange, onCancelar, onEnviar, ocupado, erro })
   )
 }
 
-export function AmigosView({ account, settings, sinal, onOpenAccount, onToast }) {
+export function AmigosView({ account, settings, onOpenAccount, onToast }) {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [codigo, setCodigo] = useState('')
@@ -141,11 +141,15 @@ export function AmigosView({ account, settings, sinal, onOpenAccount, onToast })
   //
   // Recarrega em três situações, porque são três jeitos de o pedido "chegar"
   // sem a pessoa fazer nada:
-  //  - `sinal` mudou: o vigia do App (ligado mesmo com esta aba fechada) viu
-  //    que apareceu um pedido novo;
+  //  - o vigia daqui mesmo viu mudança (só roda com esta tela aberta);
   //  - a tela ganhou foco de novo: quem manda o pedido estava com o app aberto
   //    ao lado, e voltar para cá tem que mostrar o que chegou nesse meio-tempo;
   //  - a tela montou: o primeiro carregamento.
+  //
+  // Antes existia um quarto caminho, o `sinal` vindo do App, que tinha um
+  // vigia ligado o tempo todo. Ele só fazia este mesmo trabalho duas vezes —
+  // e, com a tela do habitat aberta, ainda redesenhava o app inteiro a cada
+  // 2 s por causa disso.
   useEffect(() => {
     if (!account?.user) return undefined
     return watchAmigos(() => {
@@ -161,8 +165,7 @@ export function AmigosView({ account, settings, sinal, onOpenAccount, onToast })
   useEffect(() => {
     if (!account?.user) return
     carregar()
-    // `sinal` é o aviso de que algo mudou no banco.
-  }, [sinal, account?.user, carregar])
+  }, [account?.user, carregar])
 
   useEffect(() => {
     if (!account?.user || typeof window === 'undefined') return undefined

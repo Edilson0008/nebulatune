@@ -1782,5 +1782,35 @@ caso('habitat: a fisica da bolinha dorme em vez de acordar 60x por segundo', () 
     'o arremesso tem que acordar a fisica, senao a bolinha nao quica mais')
 })
 
+caso('app: o vigia de amigos nao fica ligado com qualquer tela aberta', () => {
+  // Este era o travamento "a cada alguns segundos": o App montava um vigia de
+  // amigos que consultava o banco a cada 2 s com QUALQUER tela aberta, e cada
+  // resposta dava setState no App — que redesenhava a tela do habitat (~290
+  // nós) duas vezes por segundo, em qualquer canto do app.
+  //
+  // Quem precisa é a tela de Amigos, e ela se cobre sozinha: vigia próprio
+  // (só com a tela aberta), recarga ao ganhar foco e busca ao montar.
+  const codigo = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  assert.ok(!/watchAmigos\(/.test(codigo), 'o App nao pode mais consultar amigos a cada 2 s')
+  assert.ok(!/watchAmigos/.test(codigo.split('import')?.find((l) => l.includes('sync.js')) || ''),
+    'nem deixar o import morto')
+  assert.ok(!/amigosSinal/.test(codigo), 'nem o contador que forçava o redesenho do app inteiro')
+  const tela = fs.readFileSync(new URL('../src/components/amigos-view.jsx', import.meta.url), 'utf8')
+  assert.ok(tela.includes('watchAmigos('), 'a tela de Amigos precisa manter o vigia dela')
+  // Só o código interessa: o nome pode aparecer em comentário, mas não pode
+  // continuar sendo prop nem dependência de efeito.
+  const semComentario = tela.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+  assert.ok(!/\bsinal\b/.test(semComentario), 'e nao deve mais depender do sinal do App')
+})
+
+caso('habitat: nenhum efeito de relogio/dica fica duplicado', () => {
+  // O setClock e o setTipIdx estavam em DOIS timers cada um: a dica do gatinho
+  // virava duas vezes mais rapido do que o previsto, e cada virada redesenhava
+  // a tela sem motivo.
+  const codigo = fs.readFileSync(new URL('../src/components/pet-habitat-view.jsx', import.meta.url), 'utf8')
+  assert.equal((codigo.match(/setClock\(new Date\(\)\)/g) || []).length, 1, 'um so relogio do cenario')
+  assert.equal((codigo.match(/setTipIdx\(\(i\)/g) || []).length, 1, 'uma so dica rodando')
+})
+
 console.log(`\n${ok.length} ok, ${falhas} falhando`)
 if (falhas) process.exit(1)
