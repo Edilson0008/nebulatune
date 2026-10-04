@@ -3192,7 +3192,11 @@ button {
     radial-gradient(38% 30% at 14% 10%, var(--npc1) 0%, transparent 70%),
     radial-gradient(34% 28% at 86% 90%, var(--npc2) 0%, transparent 70%),
     radial-gradient(30% 26% at 68% 12%, var(--npc3) 0%, transparent 74%);
-  filter: blur(30px);
+  /* SEM `filter: blur()`: esta camada ocupa a tela INTEIRA e anima transform
+     sem parar. Um blur de 30px aqui tinha de ser recalculado a cada quadro, e
+     cada quadro e uma repintura: era isso que travava o "Tocando agora" no
+     aparelho fraco. Os proprios radial-graduates ja sao suaves, entao o
+     desenho final fica o mesmo. */
   opacity: 0.3;
   animation: np-glow-drift 16s ease-in-out infinite alternate;
   will-change: transform, opacity;
@@ -3687,21 +3691,33 @@ button {
   filter: brightness(1.06);
 }
 
-.np-play.playing {
+.np-play.playing::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 0 7px rgba(0, 255, 135, 0.09);
+  transform: scale(1);
+  opacity: 1;
+  will-change: transform, opacity;
   animation: np-pulse 2.6s ease-in-out infinite;
 }
 
+/* O pulso do botao de tocar era animado em `box-shadow`. Box-shadow nao e
+   acelerado por GPU: cada quadro da animacao repinta a tela inteira, para
+   sempre, enquanto a tela estiver aberta. O mesmo desenho agora e um anel que
+   cresce e some, animado em `transform` + `opacity`, que a GPU resolve sem
+   repintar. */
 @keyframes np-pulse {
   0%,
   100% {
-    box-shadow:
-      0 12px 34px rgba(0, 255, 135, 0.4),
-      0 0 0 7px rgba(0, 255, 135, 0.08);
+    transform: scale(1);
+    opacity: 1;
   }
   50% {
-    box-shadow:
-      0 12px 40px rgba(0, 255, 135, 0.55),
-      0 0 0 14px rgba(0, 255, 135, 0.04);
+    transform: scale(1.22);
+    opacity: 0;
   }
 }
 

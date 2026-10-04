@@ -1,5 +1,31 @@
 export const CHANGELOG = [
   {
+    version: '3.2.35',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'A tela "Tocando agora" não trava mais. O brilho de fundo dela usava um desfoque de 30px em uma camada do tamanho da tela que ficava se mexendo sem parar: cada quadro era uma repintura inteira, e era isso que deixava o aparelho inteiro lento com a tela aberta.',
+      },
+      {
+        type: 'correcao',
+        text: 'O botão de tocar/pular da tela "Tocando agora" pulsava animando box-shadow, que a placa de vídeo não consegue acelerar. O mesmo desenho agora é um anel que cresce e some, que sai de graça. As animações continuam todas.',
+      },
+      {
+        type: 'correcao',
+        text: 'Tocar uma música que não tem arquivo não deixa mais o app marcado como tocando para sempre, com a tela parada e nenhum som. Agora ele avisa e devolve o play.',
+      },
+      {
+        type: 'correcao',
+        text: 'O primeiro toque em play volta a tocar na hora. Ele estava esperando o navegador reparar sozinho 500ms depois, então parecia que o botão não respondia.',
+      },
+      {
+        type: 'correcao',
+        text: 'Abrir e fechar a tela do habitat deixava um desenho de fundo rodando sozinho para sempre. Agora ele para junto com a tela.',
+      },
+    ],
+  },
+  {
     version: '3.2.34',
     date: 'Outubro de 2026',
     items: [

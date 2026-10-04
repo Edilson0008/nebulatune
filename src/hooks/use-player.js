@@ -113,7 +113,7 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
       }
     }
     const t = libAll[i]
-    if (!t) return
+    if (!t) return false
     indexRef.current = i
     setCurrentIndex(i)
 
@@ -134,7 +134,7 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
 
     if (t.src) {
       startFile(t.src, t.duration)
-      return
+      return true
     }
     if (t.audioBlob && (t.audioBlob.size || t.audioBlob.type)) {
       const src = URL.createObjectURL(t.audioBlob)
@@ -146,7 +146,7 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
       // vem da nuvem em blob. O ref acima e a fonte de verdade deste hook.
       libRef.current[i] = up
       startFile(src, t.duration)
-      return
+      return true
     }
     // NÃO existe mais o "se não achou arquivo, toca sintetizador": essa era a
     // forma como uma música que só existe na nuvem aparecia com a voz de um
@@ -159,8 +159,9 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
       modeRef.current = 'none'
       if (audioRef.current) audioRef.current.pause()
       onMissingRef.current?.(t)
-      return
+      return false
     }
+    return true
   }, [getAudio, playWithRetry, emitProgress])
 
   const randomIndex = useCallback(() => {
@@ -374,22 +375,42 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
     if (playing) {
       if (modeRef.current === 'file') getAudio().pause()
       else engine.pauseTrack()
+      playingRef.current = false
       setPlaying(false)
       return
     }
+    // `playingRef` so era sincronizado DEPOIS do render. O `playWithRetry`
+    // aborta enquanto `playingRef.current` for falso, entao o primeiro toque em
+    // play nao tocava nada: so comecava no `setInterval` de 500ms que vasculha
+    // o audio pausado. Precisa estar verdadeiro ANTES de `startIndex`.
+    playingRef.current = true
+    let comecou
     if (modeRef.current === 'file') {
       const a = getAudio()
       if (a.src) {
         graph
           .resumeContext()
           .then(() => a.play().catch(() => {}))
-      } else startIndex(indexRef.current)
+        comecou = true
+      } else {
+        comecou = startIndex(indexRef.current)
+      }
     } else if (engine.hasTrack() && engine.currentIndex() === indexRef.current + 1) {
       engine.resumeTrack()
+      comecou = true
     } else {
-      startIndex(indexRef.current)
+      comecou = startIndex(indexRef.current)
     }
-    setPlaying(true)
+    // Antes o `setPlaying(true)` era incondicional: dar play numa faixa sem
+    // arquivo deixava o app marcado como TOCANDO para sempre, com a tela de
+    // "tocando agora" parada e nenhum som. So entra em tocando quando o audio
+    // realmente comecou; caso contrario, desmarca e devolve o play.
+    if (comecou) {
+      setPlaying(true)
+    } else {
+      playingRef.current = false
+      setPlaying(false)
+    }
   }, [playing, getAudio, startIndex])
 
   const pausePlayback = useCallback(() => {

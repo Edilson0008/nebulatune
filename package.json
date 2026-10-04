@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "pretest": "vite build --ssr ssr-smoke.jsx --outDir ssr-out --emptyOutDir --logLevel error",
+    "pretest": "vite build --ssr ssr-smoke.jsx --outDir ssr-out --emptyOutDir --logLevel error && vite build --ssr ssr-raf.jsx --outDir raf-out --emptyOutDir --logLevel error",
     "test": "node --experimental-test-module-mocks --test \"*.test.mjs\" \"scripts/tests-*.mjs\"",
     "verify": "pnpm build && node verify.mjs"
   },
@@ -29,6 +29,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^5.0.4",
+    "linkedom": "0.18.13",
     "oxlint": "^1.81.0",
     "vite": "^7.3.6"
   }
