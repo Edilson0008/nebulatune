@@ -32,6 +32,13 @@ import { MOOD_KEYS, corPublicavel, usePetStats, useSettings } from './settings'
 import { APK_URL, fetchLatestVersion, installUpdate, isNewer, markUpdatePrompted, notifyUpdateAvailable, requestNotificationsPermission, wasUpdatePrompted } from './updater'
 import { leEstadoDoAlarme, sincronizaAlarmeDoGatinho } from './pet-alarm'
 import { LocalNotifications } from '@capacitor/local-notifications'
+// O plugin se chama `App`, que aqui colidiria com o componente App do arquivo.
+// O import faltava e a referencia solta (`CapacitorApp`) estourava
+// ReferenceError ao registrar o listener de appStateChange.
+import { App as CapacitorApp } from '@capacitor/app'
+// `CapShare` era usado sem import em dois lugares (compartilhar musica e
+// exportar backup): qualquer compartilhamento estourava ReferenceError.
+import { Share as CapShare } from '@capacitor/share'
 import { Cover } from './components/Cover.jsx'
 import { BackgroundFX } from './components/background.jsx'
 import { Equalizer } from './components/equalizer.jsx'
@@ -66,7 +73,7 @@ import { getRecovery, onAccount, restoreSession, getSession } from './lib/accoun
 import { ensureSids, idsToSids, mesmaMusica } from './lib/sid.js'
 import { deepEqual } from './lib/equal.js'
 import { protegerIdentidade } from './lib/identity.js'
-import { aplicarBiblioteca, applyExtras, applyPlaylists, collectLocal, donoDosDados, isolarParaConta, lerRetrato, limparRetratosEmbutidos, mergeAll, mergeCounters, mergeStrings, preservaEditionsRecentes, syncNow, takePendingSync, watchAmigos, watchCloud } from './lib/sync.js'
+import { aplicarBiblioteca, applyExtras, applyPlaylists, collectLocal, donoDosDados, isolarParaConta, lerRetrato, limparRetratosEmbutidos, mergeAll, mergeCounters, mergeStrings, preservaEditionsRecentes, syncNow, takePendingSync, watchAmigos, watchCloud, idsDeTodasAsContas } from './lib/sync.js'
 import * as amigosMod from './lib/amigos.js'
 
 // Último portão da biblioteca: uma linha sem áudio não é uma música, é lixo de

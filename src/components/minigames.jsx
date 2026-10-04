@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { readLocal, writeLocal } from '../localstore'
-import { setSfxEnabled, sfxBounce, sfxCoin, sfxHeart, sfxNota, sfxPop, sfxWeak } from '../lib/sfx.js'
+import { setSfxEnabled, sfxBounce, sfxCoin, sfxHeart, sfxNota, sfxPop, sfxThrow, sfxWeak } from '../lib/sfx.js'
 import { novoEspinhoId } from '../lib/espinho-id.js'
 import { aoIsolarConta } from '../lib/sync.js'
 

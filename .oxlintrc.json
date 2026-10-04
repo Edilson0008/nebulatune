@@ -1,9 +1,26 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["react", "oxc"],
-  "ignorePatterns": ["ssr-smoke.jsx", "ssr-out/**"],
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "ignorePatterns": [
+    "ssr-smoke.jsx",
+    "ssr-raf.jsx",
+    "ssr-out/**",
+    "raf-out/**",
+    "domtest-out/**"
+  ],
   "rules": {
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "eslint/no-undef": "error"
+  },
+  "overrides": [
+    {
+      "files": ["scripts/**", "*.test.mjs", "vite.config.js", "verify.mjs"],
+      "env": { "node": true, "browser": true, "es2024": true }
+    }
+  ]
 }

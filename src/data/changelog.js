@@ -1,5 +1,35 @@
 export const CHANGELOG = [
   {
+    version: '3.2.34',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'Esta versão volta para o código da 3.2.16, que era o último build que não travava, e traz de volta só três coisas: o tempo total ouvido no Perfil, o aviso de erro quando o pedido de amizade não sai, e o reset ao trocar ou sair de conta.',
+      },
+      {
+        type: 'correcao',
+        text: 'Ficou de fora tudo que entrou depois e freeze: as otimizações de performance, a memoização da tela inteira e as mudanças na barra de tempo.',
+      },
+      {
+        type: 'correcao',
+        text: 'Sair da conta agora esvazia a tela de verdade. Antes, o nome, a foto, a bio, as moedas e as conquistas da conta que saiu continuavam aparecendo e ainda eram gravados de volta no aparelho — quem entrava depois herdava o que não era dela.',
+      },
+      {
+        type: 'correcao',
+        text: 'Trocar de conta não apaga mais as músicas. A biblioteca de cada conta passa a ter o próprio registro, e uma sincronização no meio da troca não grava mais lista vazia por cima.',
+      },
+      {
+        type: 'correcao',
+        text: 'O erro ao enviar pedido de amizade aparece dentro da caixa de mensagem. Antes ele ficava escondido atrás da linha do perfil, e o botão seemed não funcionar.',
+      },
+      {
+        type: 'correcao',
+        text: 'A sincronização que devolvia exatamente o que já estava gravado não conta mais como edição. Isso fechava um laço que redesenhava a tela sem parar e sobrescrevia os ajustes da pessoa pelo padrão.',
+      },
+    ],
+  },
+  {
     version: '3.2.17',
     date: 'Outubro de 2026',
     items: [

@@ -140,8 +140,11 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
       const src = URL.createObjectURL(t.audioBlob)
       currentAudioUrlRef.current = src
       const up = { ...t, src }
+      // O hook recebe `library` como prop e nao tem setter: quem manda no
+      // estado da biblioteca e o App. A chamada antiga de `setLibrary` nao
+      // existia aqui e estourava ReferenceError justamente ao tocar musica que
+      // vem da nuvem em blob. O ref acima e a fonte de verdade deste hook.
       libRef.current[i] = up
-      setLibrary((prev) => prev.map((x) => (x.id === t.id ? up : x)))
       startFile(src, t.duration)
       return
     }
@@ -151,7 +154,8 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
     // (portão em `biblioteca.js` / `comAudio` no App), então chegar aqui sem
     // `src` e sem blob é dado corrompido — e dado corrompido não se ouve: só
     // avisa e segue para a próxima.
-    if (!comAudio(t)) {
+    // Mesma regra do portao da biblioteca: so tem audio o que tem arquivo.
+    if (!(t && (t.src || t.audioBlob))) {
       modeRef.current = 'none'
       if (audioRef.current) audioRef.current.pause()
       onMissingRef.current?.(t)
@@ -461,8 +465,12 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
   }, [playing, getAudio, handleEnded, playWithRetry, emitProgress])
 
   useEffect(() => {
+    // Flag local deste efeito: o codigo lia um `cancelledRef` que nunca foi
+    // declarado, entao qualquer retorno do app ao primeiro plano
+    // (visibility/pageshow) estourava ReferenceError em vez de retomar.
+    let cancelled = false
     const resume = () => {
-      if (!playingRef.current || cancelledRef.current) return
+      if (cancelled || !playingRef.current) return
       if (modeRef.current !== 'file') return
       const a = getAudio()
       if (a && a.paused && !a.ended && a.src && a.readyState >= 2) {
@@ -476,6 +484,7 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('pageshow', onShow)
     return () => {
+      cancelled = true
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('pageshow', onShow)
     }
