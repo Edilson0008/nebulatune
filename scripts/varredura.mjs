@@ -3,6 +3,7 @@
 // Sai com codigo != 0 quando algo quebra, para travar no CI.
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import path from 'node:path'
 import { agruparPorPasta, faixasDaPasta } from '../src/lib/importFolders.js'
 import { deepEqual } from '../src/lib/equal.js'
 import { protegerIdentidade } from '../src/lib/identity.js'
@@ -1709,5 +1710,62 @@ caso('tempo ouvido: uma faixa quebrada nao derruba o total', () => {
   assert.equal(r.semDuracao, 2, 'as duas quebradas sao avisadas, nao somadas em zero calado')
 })
 
+// --- nome de arquivo com maiuscula/minuscula exato -----------------------
+// O aparelho onde esse projeto foi feito tem o sistema de arquivos que nao
+// diferencia maiuscula de minuscula, entao um import escrito `cover.jsx`
+// aponta para `Cover.jsx` e funciona. No Linux (GitHub Actions) o mesmo
+// import quebra o build, e a diferenca so aparece la. Aqui todo import
+// relativo precisa bater com a escrita exata do arquivo.
+caso('todo import relativo existe com a maiuscula/minuscula exata', () => {
+  const EXTENSOES = ['', '.js', '.jsx', '.mjs', '/index.js', '/index.jsx']
+
+  const arquivos = []
+  const existentes = new Set()
+
+  const andar = (dir,Cb) => {
+    for (const entrada of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entrada.name === 'node_modules' || entrada.name.startsWith('.')) continue
+      const caminho = path.join(dir, entrada.name)
+      if (entrada.isDirectory()) andar(caminho,Cb)
+      else Cb(caminho)
+    }
+  }
+
+  const base = new URL('../', import.meta.url)
+  const dirs = ['src', 'scripts', 'android/app/src/main/assets/public']
+  for (const d of dirs) {
+    const dir = path.join(base.pathname, d)
+    if (!fs.existsSync(dir)) continue
+    if (fs.statSync(dir).isFile()) continue
+    andar(dir,(f) => {
+      if (/\.(js|jsx|mjs)$/.test(f)) arquivos.push(f)
+      if (fs.statSync(f).isFile()) existentes.add(f)
+    })
+  }
+  for (const extra of ['ssr-raf.jsx', 'ssr-smoke.jsx']) {
+    const f = path.join(base.pathname, extra)
+    if (fs.existsSync(f)) {
+      arquivos.push(f)
+      existentes.add(f)
+    }
+  }
+
+  const errados = []
+  for (const arquivo of arquivos) {
+    const codigo = fs.readFileSync(arquivo, 'utf8')
+    for (const m of codigo.matchAll(/(?:from|import)\s+['"](\.[^'"]+)['"]/g)) {
+      const alvo = path.resolve(path.dirname(arquivo), m[1])
+      if (!EXTENSOES.some((ext) => existentes.has(alvo + ext))) {
+        errados.push(`${path.basename(arquivo)} -> ${m[1]}`)
+      }
+    }
+  }
+  // Uma linha so: o `caso()` acima imprime apenas a primeira linha da mensagem.
+  assert.deepEqual(
+    errados,
+    [],
+    `import que nao bate com o nome real (no Linux o build quebra): ${errados.join(' | ')}`,
+  )
+})
+
 console.log(`\n${ok.length} ok, ${falhas} falhando`)
-if (falhas) process.exit(1)

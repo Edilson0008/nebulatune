@@ -15,7 +15,7 @@ export { TrackList } from './src/components/track-list.jsx'
 // ---instrumentacao de custo (so para os testes) ---------------------------
 // Reproduz a tela da biblioteca: uma linha por musica, com a capa de verdade.
 import { createElement, useRef } from 'react'
-import { Cover } from './src/components/cover.jsx'
+import { Cover } from './src/components/Cover.jsx'
 import { ProgressProvider } from './src/progress.jsx'
 import { useProgress } from './src/progress-context.js'
 
