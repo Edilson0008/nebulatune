@@ -142,6 +142,11 @@ export function trocarCatalogo(catalogo, retrato) {
   return catalogo
 }
 
+// Uma linha TEM áudio quando tem caminho (src) ou o blob do arquivo. É o
+// portão usado tanto pela tela quanto pelo player, então mora aqui para os
+// dois lados usarem exatamente a mesma regra.
+export const comAudio = (t) => Boolean(t && (t.src || t.audioBlob))
+
 // Quais linhas do catálogo TEM áudio neste aparelho? É o que autoriza a tela a
 // mostrar a música. A prova é o arquivo, nunca a coluna `audioMissing` (ela
 // envelhece e mente).

@@ -1,6 +1,7 @@
 node_modules
 dist
 ssr-out
+raf-out
 android/app/build
 android/build
 android/.gradle

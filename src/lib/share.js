@@ -1,5 +1,8 @@
 import { blobToDataUrl } from '../backup'
 import { Directory, Filesystem } from '@capacitor/filesystem'
+// O plugin Share nunca era importado aqui: `CapShare.share(...)` era uma
+// referência solta e estourava ReferenceError ao compartilhar um arquivo.
+import { Share as CapShare } from '@capacitor/share'
 
 export async function shareBlobNative(blob, fileName, meta) {
   const done = await shareFilesNative([{ blob, name: fileName }], meta)

@@ -40,6 +40,9 @@ export const OnlineView = memo(function OnlineView({ onlineTrack, onlinePlaying,
     }
     setSearching(true)
     setError(false)
+    // Sem esta flag, uma busca antiga que já está em voo sobrescreve o
+    // resultado da busca nova (e o `clearTimeout` não cancela o que já saiu).
+    let cancelled = false
     const id = setTimeout(() => {
       setSearching(true)
       searchAudiusTracks(value.trim()).then((list) => {
@@ -54,7 +57,10 @@ export const OnlineView = memo(function OnlineView({ onlineTrack, onlinePlaying,
         }
       })
     }, 450)
-    return () => clearTimeout(id)
+    return () => {
+      cancelled = true
+      clearTimeout(id)
+    }
   }
 
   const playItem = (item, preview) => {

@@ -17,6 +17,7 @@ import {
 import { hidratarLinha } from './lib/biblioteca'
 import {
   catalogoPronto,
+  comAudio,
   comAudioNoAparelho,
   criarCatalogo,
   guardarNoCatalogo,
@@ -32,6 +33,13 @@ import { MOOD_KEYS, corPublicavel, usePetStats, useSettings } from './settings'
 import { APK_URL, fetchLatestVersion, installUpdate, isNewer, markUpdatePrompted, notifyUpdateAvailable, requestNotificationsPermission, wasUpdatePrompted } from './updater'
 import { leEstadoDoAlarme, sincronizaAlarmeDoGatinho } from './pet-alarm'
 import { LocalNotifications } from '@capacitor/local-notifications'
+// O plugin se chama `App`, que aqui colidiria com o componente App do arquivo.
+// O import faltava e a referência solta (`CapacitorApp`) estourava
+// ReferenceError ao registrar o listener de appStateChange.
+import { App as CapacitorApp } from '@capacitor/app'
+// `CapShare` era usado sem import em dois lugares (compartilhar música e
+// exportar backup): qualquer compartilhamento estourava ReferenceError.
+import { Share as CapShare } from '@capacitor/share'
 import { Cover } from './components/Cover.jsx'
 import { BackgroundFX } from './components/background.jsx'
 import { Equalizer } from './components/equalizer.jsx'
@@ -67,13 +75,13 @@ import { getRecovery, onAccount, restoreSession, getSession } from './lib/accoun
 import { ensureSids, idsToSids, mesmaMusica } from './lib/sid.js'
 import { deepEqual } from './lib/equal.js'
 import { protegerIdentidade } from './lib/identity.js'
-import { aplicarBiblioteca, applyExtras, applyPlaylists, collectLocal, donoDosDados, isolarParaConta, lerRetrato, limparRetratosEmbutidos, mergeAll, mergeCounters, mergeStrings, preservaEditionsRecentes, syncNow, takePendingSync, watchCloud } from './lib/sync.js'
+import { aplicarBiblioteca, applyExtras, applyPlaylists, collectLocal, donoDosDados, idsDeTodasAsContas, isolarParaConta, lerRetrato, limparRetratosEmbutidos, mergeAll, mergeCounters, mergeStrings, preservaEditionsRecentes, syncNow, takePendingSync, watchCloud } from './lib/sync.js'
 import * as amigosMod from './lib/amigos.js'
 
 // Último portão da biblioteca: uma linha sem áudio não é uma música, é lixo de
 // sincronização. Fica aqui (fora do componente) para ser a mesma função em
 // qualquer ponto do app.
-const comAudio = (t) => Boolean(t && (t.src || t.audioBlob))
+
 
 /* Telas que o usuário quase sempre NÃO abre na primeira visita: entram no
    pacote só na hora de abrir. Deixa a abertura do app mais leve em aparelhos

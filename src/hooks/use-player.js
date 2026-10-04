@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as engine from '../audio/engine'
 import * as graph from '../audio/graph'
+import { comAudio } from '../lib/catalogo'
 
 export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = null) {
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -113,7 +114,7 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
       }
     }
     const t = libAll[i]
-    if (!t) return
+    if (!t) return false
     indexRef.current = i
     setCurrentIndex(i)
 
@@ -134,16 +135,20 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
 
     if (t.src) {
       startFile(t.src, t.duration)
-      return
+      return true
     }
     if (t.audioBlob && (t.audioBlob.size || t.audioBlob.type)) {
       const src = URL.createObjectURL(t.audioBlob)
       currentAudioUrlRef.current = src
       const up = { ...t, src }
+      // O hook recebe `library` como prop e nao tem setter: quem manda no
+      // estado da biblioteca e o App. Aqui basta atualizar o ref, que e a
+      // fonte de verdade deste hook (libRef). A chamada antiga de setLibrary
+      // nao existia aqui e estourava ReferenceError justamente ao tocar
+      // musica que vem da nuvem em blob.
       libRef.current[i] = up
-      setLibrary((prev) => prev.map((x) => (x.id === t.id ? up : x)))
       startFile(src, t.duration)
-      return
+      return true
     }
     // NÃO existe mais o "se não achou arquivo, toca sintetizador": essa era a
     // forma como uma música que só existe na nuvem aparecia com a voz de um
@@ -155,8 +160,9 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
       modeRef.current = 'none'
       if (audioRef.current) audioRef.current.pause()
       onMissingRef.current?.(t)
-      return
+      return false
     }
+    return true
   }, [getAudio, playWithRetry, emitProgress])
 
   const randomIndex = useCallback(() => {
@@ -370,22 +376,48 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
     if (playing) {
       if (modeRef.current === 'file') getAudio().pause()
       else engine.pauseTrack()
+      playingRef.current = false
       setPlaying(false)
       return
     }
+    // `playingRef` so era sincronizado num efeito, ou seja, DEPOIS do render.
+    // O `startIndex` abaixo chama `playWithRetry`, que aborta enquanto
+    // `playingRef.current` for falso: o primeiro toque em play nao tocava nada
+    // e so comecava no `setInterval` de 500ms que vasculha o audio pausado.
+    // Por isso o `playingRef` e ajustado no fim, junto com o `setPlaying`.
+    // Precisa estar verdadeiro ANTES de `startIndex`: `playWithRetry` aborta
+    // enquanto `playingRef.current` for falso, e esse ref so era atualizado no
+    // efeito (depois do render). Resultado: o primeiro toque em play nao
+    // tocava nada, e so comecava no `setInterval` de 500ms que vasculha o
+    // audio pausado. Se nao comecar, volta para falso no fim.
+    playingRef.current = true
+    let comecou
     if (modeRef.current === 'file') {
       const a = getAudio()
       if (a.src) {
         graph
           .resumeContext()
           .then(() => a.play().catch(() => {}))
-      } else startIndex(indexRef.current)
+        comecou = true
+      } else {
+        comecou = startIndex(indexRef.current)
+      }
     } else if (engine.hasTrack() && engine.currentIndex() === indexRef.current + 1) {
       engine.resumeTrack()
+      comecou = true
     } else {
-      startIndex(indexRef.current)
+      comecou = startIndex(indexRef.current)
     }
-    setPlaying(true)
+    // Antes o `setPlaying(true)` era incondicional: dar play numa faixa sem
+    // arquivo deixava o app marcado como TOCANDO para sempre, com a tela de
+    // "tocando agora" parada e nenhum som. Agora so entra em tocando quando o
+    // audio realmente comecou; caso contrario, desmarca e devolve o play.
+    if (comecou) {
+      setPlaying(true)
+    } else {
+      playingRef.current = false
+      setPlaying(false)
+    }
   }, [playing, getAudio, startIndex])
 
   const pausePlayback = useCallback(() => {
@@ -461,8 +493,13 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
   }, [playing, getAudio, handleEnded, playWithRetry, emitProgress])
 
   useEffect(() => {
+    // Flag local deste efeito: o código lia um `cancelledRef` que nunca foi
+    // declarado, então qualquer retorno do app ao primeiro plano (visibility/
+    // pageshow) estourava ReferenceError em vez de retomar a música.
+    let cancelled = false
     const resume = () => {
-      if (!playingRef.current || cancelledRef.current) return
+      if (cancelled) return
+      if (!playingRef.current) return
       if (modeRef.current !== 'file') return
       const a = getAudio()
       if (a && a.paused && !a.ended && a.src && a.readyState >= 2) {
@@ -476,6 +513,7 @@ export function usePlayer(library, speed = 1, onStart, sink = null, onMissing = 
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('pageshow', onShow)
     return () => {
+      cancelled = true
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('pageshow', onShow)
     }

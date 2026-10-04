@@ -919,7 +919,7 @@ userNameRef.current = userName
     raf = requestAnimationFrame(draw)
     return () => {
       cancelAnimationFrame(raf)
-      window.removeEventListener('resize', resize)
+      window.removeEventListener('resize', aoResize)
     }
   }, [scene.key]);
 

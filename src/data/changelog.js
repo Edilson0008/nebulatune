@@ -1,5 +1,35 @@
 export const CHANGELOG = [
   {
+    version: '3.2.33',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'A causa real do travamento: o service worker era gerado com a versão zerada (VERSION zerada) em TODOS os builds, porque a leitura da versão no vite.config.js só reconhecia aspas simples e o app-config.js usa aspas duplas. O precache guardava o código antigo com o prefixo nebulatune-0 e o app continuava servindo a versão velha mesmo depois de instalar o APK novo. Agora o build falha se não conseguir ler a versão.',
+      },
+      {
+        type: 'correcao',
+        text: 'Dar play numa música sem arquivo deixava o app marcado como TOCANDO para sempre: o player era avisado de que estava tocando sem nunca pedir som. A tela de "tocando agora" ficava parada, sem áudio e sem a barra andar. Agora o estado só vira "tocando" quando o áudio realmente partiu.',
+      },
+      {
+        type: 'correcao',
+        text: 'O primeiro toque em play não tocava nada: o som só começava uns 500 ms depois, quando o verificador periódico passava pelo áudio pausado. O toque em tocar agora dispara na hora.',
+      },
+      {
+        type: 'correcao',
+        text: 'Corrigido erro que derrubava o app ao trocar de cena no Habitat: o cancelamento do listener de redimensionamento usava outro nome de função e nunca era removido, deixando leituras de tela penduradas.',
+      },
+      {
+        type: 'correcao',
+        text: 'Corrigido erro ao voltar ao app depois de bloquear a tela, ao tocar música que vem da nuvem, ao compartilhar um arquivo, ao liberar espaço e ao usar os minigames com som ligado: referência a código que não existe.',
+      },
+      {
+        type: 'testes',
+        text: '25 testes novos rodam sem navegador, em cada build: contam a fila de animação quadro a quadro, tocam o caminho de áudio inteiro e conferem que abrir e fechar as telas 10 vezes não deixa animação nem relógio pendurados.',
+      },
+    ],
+  },
+  {
     version: '3.2.32',
     date: 'Outubro de 2026',
     items: [
