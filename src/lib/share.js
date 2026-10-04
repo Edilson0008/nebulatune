@@ -1,5 +1,6 @@
 import { blobToDataUrl } from '../backup'
 import { Directory, Filesystem } from '@capacitor/filesystem'
+import { Share as CapShare } from '@capacitor/share'
 
 export async function shareBlobNative(blob, fileName, meta) {
   const done = await shareFilesNative([{ blob, name: fileName }], meta)

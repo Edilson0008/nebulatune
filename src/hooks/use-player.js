@@ -146,7 +146,6 @@ export function usePlayer(library, speed = 1, onStart, sink = null) {
       currentAudioUrlRef.current = src
       const up = { ...t, src }
       libRef.current[i] = up
-      setLibrary((prev) => prev.map((x) => (x.id === t.id ? up : x)))
       startFile(src, t.duration)
       return
     }
@@ -451,8 +450,9 @@ export function usePlayer(library, speed = 1, onStart, sink = null) {
   }, [playing, getAudio, handleEnded, playWithRetry, emitProgress])
 
   useEffect(() => {
+    let cancelled = false
     const resume = () => {
-      if (!playingRef.current || cancelledRef.current) return
+      if (!playingRef.current || cancelled) return
       if (modeRef.current !== 'file') return
       const a = getAudio()
       if (a && a.paused && !a.ended && a.src && a.readyState >= 2) {
@@ -466,6 +466,7 @@ export function usePlayer(library, speed = 1, onStart, sink = null) {
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('pageshow', onShow)
     return () => {
+      cancelled = true
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('pageshow', onShow)
     }
