@@ -257,6 +257,11 @@ globalThis.AudioContext = function () {
 globalThis.webkitAudioContext = globalThis.AudioContext
 globalThis.OfflineAudioContext = globalThis.AudioContext
 
+// O `TrackList` procura quem esta rolando para poder acrescentar mais linhas.
+// No navegador isso vem de `getComputedStyle`; aqui ele responde `auto` para
+// qualquer elemento e quem tem `scrollHeight > clientHeight` vale como rolagem.
+globalThis.getComputedStyle = () => ({ overflowY: 'auto', overflowX: 'auto' })
+
 export { window, document, ctx2d }
 // --- elemento <audio> falso ---------------------------------------------
 // O player cria `new Audio()` e depende de src/play/pause/currentTime/

@@ -1,5 +1,23 @@
 export const CHANGELOG = [
   {
+    version: '3.2.36',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'A biblioteca parou de travar conforme cresce. A lista de músicas era desenhada inteira de uma vez: mil músicas viravam 23 mil nós de tela, e o aparelho levava segundos para montar e mais segundos para redesenhar quando começava uma música. Agora ela é desenhada em pedaços, uns 40 por vez, e vai aparecendo conforme você rola.',
+      },
+      {
+        type: 'correcao',
+        text: 'Medido no teste automático: com mil músicas, montar a lista caiu de 2,5 segundos para 0,15, e redesenhar quando a música muda caiu de 0,5 segundo para 0,02. O número de nós na tela deixou de depender de quantas músicas você tem.',
+      },
+      {
+        type: 'correcao',
+        text: 'É por isso que a tela ficava travada mais quanto mais música você colocava. Não era a tela "Tocando agora" que tinha problema: era a lista atrás dela, que redesenhava inteira no instante em que uma música começava.',
+      },
+    ],
+  },
+  {
     version: '3.2.35',
     date: 'Outubro de 2026',
     items: [

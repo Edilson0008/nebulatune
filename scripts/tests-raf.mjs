@@ -146,3 +146,71 @@ test('habitat: 300 quadros sem erro, fila estável e 30 fps', () => {
   assert.ok(contadorCanvas.limpar > 0, 'o habitat parou de desenhar')
   assert.ok(contadorCanvas.limpar <= 300, `desenhou ${contadorCanvas.limpar}x em 300 quadros: mais de um por quadro`)
 })
+
+// --- biblioteca grande ---------------------------------------------------
+test('biblioteca: 1.000 musicas sao desenhadas em pedacos, nao de uma vez', () => {
+  const tracks = Array.from({ length: 1000 }, (_, i) => ({
+    id: `t${i}`,
+    title: `Musica ${i}`,
+    artist: `Artista ${i}`,
+    duration: 200,
+    src: 'x',
+    cover: ['#6b5bd6', '#2a2450', '#b9a7ff'],
+  }))
+  const nada = () => {}
+  const props = {
+    tracks,
+    currentId: 't3',
+    onSelect: nada,
+    onRemove: nada,
+    onToggleFavorite: nada,
+    onQueueNext: nada,
+    onQueueAdd: nada,
+    onSearchOnline: nada,
+    onEdit: nada,
+    onShare: nada,
+    onShareCard: nada,
+    onOpenSource: nada,
+    onAddToPlaylist: nada,
+  }
+
+  // O proprio alvo do React passa a ser o container de rolagem, com altura
+  // como a tela tem no aparelho.
+  const rolagem = h.document.getElementById('raiz')
+  const definir = (nome, valor) =>
+    Object.defineProperty(rolagem, nome, { value: valor, writable: true, configurable: true })
+  definir('clientHeight', 800)
+  definir('scrollHeight', 80000)
+  definir('scrollTop', 0)
+
+  const linhas = () => h.document.querySelectorAll('.track-row').length
+
+  const root = createRoot(rolagem)
+  act(() => { root.render(createElement(mod.TrackList, props)) })
+  rodar(1)
+
+  const inicio = linhas()
+  assert.ok(inicio > 0, 'nenhuma linha desenhada')
+  assert.ok(inicio < 100, `desenhou ${inicio} linhas de 1.000 de uma vez: e o que travava a tela`)
+
+  // Musical tocando: so o currentId muda. Nao pode redesenhar a lista inteira.
+  for (let k = 0; k < 5; k += 1) {
+    act(() => { root.render(createElement(mod.TrackList, { ...props, currentId: `t${k + 50}` })) })
+  }
+  rodar(1)
+  assert.equal(linhas(), inicio, 'trocar a musica que toca nao pode acrescentar linhas')
+
+  // Rolar ate o fim: a lista cresce, em pedacos, ate mostrar tudo.
+  let grew = false
+  for (let k = 0; k < 40; k += 1) {
+    rolagem.scrollTop = rolagem.scrollHeight - rolagem.clientHeight
+    act(() => { rolagem.dispatchEvent(new h.window.Event('scroll')) })
+    if (linhas() > inicio) grew = true
+  }
+  assert.ok(grew, 'rolar ate o fim nao acrescentou nenhuma linha')
+  assert.equal(linhas(), 1000, `rolando ate o fim a lista inteira devia aparecer, veio ${linhas()}`)
+
+  act(() => root.unmount())
+  rodar(2)
+  assert.equal(pendentes(), 0, 'a lista nao pode deixar animacao pendurada')
+})
