@@ -1,6 +1,20 @@
 import { useEffect, useRef } from 'react'
 import * as graph from '../audio/graph'
 
+// These two canvases draw the full screen, at 60 frames per second, while music
+// plays. Two things used to make them expensive:
+//
+// 1. `getBoundingClientRect` / `clientWidth` read on EVERY frame. Reading the
+//    size of an element forces the browser to throw away the layout it already
+//    computed and do it again — 60 times per second, even though the size never
+//    changed. Now the size is read only when it can change (resize / rotation).
+// 2. Drawing at 60 frames per second. These are soft, slowly drifting glowy
+//    dots. At 30 frames per second they are visually indistinguishable, and it
+//    is half the work.
+
+const FPS = 30
+const MIN_DELTA = 1000 / FPS
+
 export function NowParticles() {
   const ref = useRef(null)
 
@@ -27,18 +41,33 @@ export function NowParticles() {
       phase: Math.random() * Math.PI * 2,
     }))
     let raf = 0
+    let w = 1
+    let h = 1
+    let dpr = 1
+    let ultimo = -1e9
 
-    const draw = () => {
-      raf = requestAnimationFrame(draw)
-      if (typeof document !== 'undefined' && document.hidden) return
+    const medir = () => {
       const rect = canvas.getBoundingClientRect()
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
-      const w = Math.max(1, Math.round(rect.width * dpr))
-      const h = Math.max(1, Math.round(rect.height * dpr))
+      // dpr 1: these are soft dots a few pixels wide. Twice the resolution
+      // doubles the pixels erased per frame and nobody can tell the difference.
+      dpr = 1
+      w = Math.max(1, Math.round(rect.width * dpr))
+      h = Math.max(1, Math.round(rect.height * dpr))
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w
         canvas.height = h
       }
+    }
+    medir()
+    window.addEventListener('resize', medir)
+    window.addEventListener('orientationchange', medir)
+
+    const draw = (ts) => {
+      raf = requestAnimationFrame(draw)
+      if (typeof document !== 'undefined' && document.hidden) return
+      const agora = typeof ts === 'number' ? ts : performance.now()
+      if (agora - ultimo < MIN_DELTA) return
+      ultimo = agora
       c2d.clearRect(0, 0, w, h)
       const t = performance.now() / 1000
       for (const p of parts) {
@@ -61,7 +90,11 @@ export function NowParticles() {
       }
     }
     raf = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', medir)
+      window.removeEventListener('orientationchange', medir)
+    }
   }, [])
 
   return <canvas ref={ref} className="np-particles" aria-hidden="true" />
@@ -78,18 +111,31 @@ export function Visualizer() {
     const c2d = canvas.getContext('2d')
     const data = new Uint8Array(analyser.frequencyBinCount)
     let raf = 0
+    let w = 1
+    let h = 1
+    let dpr = 1
+    let ultimo = -1e9
 
-    const draw = () => {
-      raf = requestAnimationFrame(draw)
-      if (typeof document !== 'undefined' && document.hidden) return
+    const medir = () => {
       const rect = canvas.getBoundingClientRect()
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
-      const w = Math.max(1, Math.round(rect.width * dpr))
-      const h = Math.max(1, Math.round(rect.height * dpr))
+      dpr = 1
+      w = Math.max(1, Math.round(rect.width * dpr))
+      h = Math.max(1, Math.round(rect.height * dpr))
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w
         canvas.height = h
       }
+    }
+    medir()
+    window.addEventListener('resize', medir)
+    window.addEventListener('orientationchange', medir)
+
+    const draw = (ts) => {
+      raf = requestAnimationFrame(draw)
+      if (typeof document !== 'undefined' && document.hidden) return
+      const agora = typeof ts === 'number' ? ts : performance.now()
+      if (agora - ultimo < MIN_DELTA) return
+      ultimo = agora
       analyser.getByteFrequencyData(data)
       c2d.clearRect(0, 0, w, h)
       const bars = 44
@@ -110,7 +156,11 @@ export function Visualizer() {
       }
     }
     raf = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', medir)
+      window.removeEventListener('orientationchange', medir)
+    }
   }, [])
 
   return <canvas ref={ref} className="eq-visualizer" aria-hidden="true" />

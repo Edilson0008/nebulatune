@@ -278,8 +278,29 @@ function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, mood = 
     moverPet(catPosRef.current)
   })
 
-  const sceneRect = () =>
-    habitatRef.current?.getBoundingClientRect() || { left: 0, top: 0, width: 400, height: 400 }
+  // O retangulo da cena e medido uma vez e reaproveitado. Antes cada evento de
+  // dedo media de novo, DUAS vezes (direto e dentro de `overCat`): ler o tamanho
+  // de um elemento obriga o navegador a refazer o layout, entao o arrasto pagava
+  // layout novo a cada pixel de dedo. A medida so e refeita quando a cena pode
+  // ter mudado de tamanho ou de posicao.
+  const sceneCacheRef = useRef({ left: 0, top: 0, width: 400, height: 400 })
+  const sceneRect = () => sceneCacheRef.current
+  const medirScene = useCallback(() => {
+    const el = habitatRef.current
+    if (el) sceneCacheRef.current = el.getBoundingClientRect()
+  }, [])
+
+  useEffect(() => {
+    medirScene()
+    window.addEventListener('resize', medirScene)
+    window.addEventListener('orientationchange', medirScene)
+    window.addEventListener('scroll', medirScene, true)
+    return () => {
+      window.removeEventListener('resize', medirScene)
+      window.removeEventListener('orientationchange', medirScene)
+      window.removeEventListener('scroll', medirScene, true)
+    }
+  }, [medirScene])
 
   const showHint = useCallback((msg, dur = 2400) => {
     setHint(msg)
@@ -857,25 +878,27 @@ userNameRef.current = userName
     let raf = 0
     let startTime = performance.now()
 
+    // O tamanho e medido uma vez e so refeito quando pode mudar. Antes o `draw`
+    // lia `canvas.clientWidth` a cada quadro, e essa leitura obriga o navegador a
+    // refazer o layout 60 vezes por segundo — e era justo aqui que a animacao do
+    // habitat engasgava no aparelho.
+    const dpr = window.devicePixelRatio || 1
+    let w = 400
+    let h = 400
     const resize = () => {
-      const dpr = window.devicePixelRatio || 1
       const rect = canvas.getBoundingClientRect()
-      canvas.width = (rect.width || 400) * dpr
-      canvas.height = (rect.height || 400) * dpr
+      w = rect.width || 400
+      h = rect.height || 400
+      canvas.width = w * dpr
+      canvas.height = h * dpr
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     }
-    // Initial resize with fallback
-    const initialRect = canvas.getBoundingClientRect()
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = (initialRect.width || 400) * dpr
-    canvas.height = (initialRect.height || 400) * dpr
-    ctx.scale(dpr, dpr)
+    resize()
     window.addEventListener('resize', resize)
+    window.addEventListener('orientationchange', resize)
 
     const draw = (now) => {
       const t = (now - startTime) / 1000
-      const w = canvas.clientWidth
-      const h = canvas.clientHeight
       ctx.clearRect(0, 0, w, h)
 
       const isNight = scene.key === 'noite'
@@ -920,6 +943,7 @@ userNameRef.current = userName
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
+      window.removeEventListener('orientationchange', resize)
     }
   }, [scene.key]);
 
@@ -997,6 +1021,10 @@ userNameRef.current = userName
     draggingRef.current = false
     setIsDragging(false)
     try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* sem captura */ }
+    // O retangulo vem de cache. Um toque e o momento em que ele pode estar
+    // velho (a tela girou, a cena mudou de tamanho desde o ultimo evento), entao
+    // remede aqui: uma vez por arraste, e nao a cada pixel de dedo.
+    medirScene()
     petMove(e)
   }
   const handleScenePointerMove = (e) => {

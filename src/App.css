@@ -3840,9 +3840,10 @@ button {
   padding: 6px 28px calc(26px + env(safe-area-inset-bottom));
   overflow-y: auto;
   scrollbar-width: none;
-  scroll-behavior: smooth;
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent);
-  mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent);
+  /* SEM `mask-image`: um container que rola com mascara obriga o navegador a
+     reaplicar a mascara a cada quadro de rolagem, e a letra rola sozinha o
+     tempo todo (a linha ativa puxa o scroll). O esmaecimento do fim da tela e
+     so enfeite. */
 }
 
 .np-lyrics::-webkit-scrollbar {
@@ -3850,8 +3851,6 @@ button {
 }
 
 .np-lyrics.searching {
-  -webkit-mask-image: none;
-  mask-image: none;
   padding-top: 10px;
 }
 
@@ -3874,7 +3873,9 @@ button {
   text-align: center;
   color: #8f86b0;
   opacity: 0.5;
-  transition: color 0.35s, opacity 0.35s, transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1), text-shadow 0.35s;
+  /* Sem `text-shadow` na transicao: durante a troca de linha (acontece a cada
+     ~0,5s) o navegador tinha de repintar o brilho a cada quadro da transicao. */
+  transition: color 0.35s, opacity 0.35s, transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
   transform-origin: center;
 }
 
@@ -3891,7 +3892,7 @@ button {
   opacity: 1;
   transform: scale(1.07);
   font-weight: 800;
-  text-shadow: 0 0 28px rgba(255, 255, 255, 0.3);
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.32);
 }
 
 .np-lyrics-msg {

@@ -17,7 +17,10 @@ export function SpaceParticles({ count = 16 }) {
     const ctx = cv.getContext('2d')
     if (!ctx) return undefined
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
-    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    // dpr 1 em vez de 2: sao pontinhos suaves de poucos pixels. A resolucao
+    // dobrada dobrava os pixels apagados por quadro (em tela 1080p sao ~4,6
+    // milhoes por quadro, 60x por segundo) sem diferenca visivel.
+    const dpr = 1
     const parts = Array.from({ length: count }, () => ({
       x: Math.random() * 100,
       y: Math.random() * 100,
@@ -28,30 +31,42 @@ export function SpaceParticles({ count = 16 }) {
     }))
     let raf = 0
     let running = true
+    // O tamanho e lido so quando pode mudar. Antes `cv.clientWidth` era lido a
+    // cada quadro, e ler o tamanho de um elemento obriga o navegador a refazer
+    // o layout inteiro 60 vezes por segundo.
+    let w = 1
+    let h = 1
 
     const resize = () => {
-      cv.width = Math.max(1, Math.round(cv.clientWidth * dpr))
-      cv.height = Math.max(1, Math.round(cv.clientHeight * dpr))
+      w = Math.max(1, cv.clientWidth)
+      h = Math.max(1, cv.clientHeight)
+      cv.width = Math.round(w * dpr)
+      cv.height = Math.round(h * dpr)
     }
 
+    // 30 quadros por segundo: sao pontos macios e lentos, a diferenca nao se ve,
+    // e o trabalho cai pela metade.
+    let ultimo = -1e9
     const draw = (t) => {
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      ctx.clearRect(0, 0, cv.clientWidth, cv.clientHeight)
-      const w = cv.clientWidth
-      const h = cv.clientHeight
-      for (const p of parts) {
-        p.y += p.vy
-        if (p.y < -2) {
-          p.y = 102
-          p.x = Math.random() * 100
+      const agora = typeof t === 'number' ? t : performance.now()
+      if (running && !reduce && agora - ultimo >= 1000 / 30) {
+        ultimo = agora
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        ctx.clearRect(0, 0, w, h)
+        for (const p of parts) {
+          p.y += p.vy
+          if (p.y < -2) {
+            p.y = 102
+            p.x = Math.random() * 100
+          }
+          ctx.globalAlpha = 0.22 + 0.55 * (0.5 + 0.5 * Math.sin(t * 0.001 * p.sp + p.ph))
+          ctx.fillStyle = '#bcd8f2'
+          ctx.beginPath()
+          ctx.arc((p.x / 100) * w, (p.y / 100) * h, p.r, 0, Math.PI * 2)
+          ctx.fill()
         }
-        ctx.globalAlpha = 0.22 + 0.55 * (0.5 + 0.5 * Math.sin(t * 0.001 * p.sp + p.ph))
-        ctx.fillStyle = '#bcd8f2'
-        ctx.beginPath()
-        ctx.arc((p.x / 100) * w, (p.y / 100) * h, p.r, 0, Math.PI * 2)
-        ctx.fill()
+        ctx.globalAlpha = 1
       }
-      ctx.globalAlpha = 1
       if (running && !reduce) raf = requestAnimationFrame(draw)
     }
 
