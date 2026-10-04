@@ -1819,14 +1819,21 @@ export function Minigames({ stats, soundOn = true, onFinish, onBack }) {
         </button>
         <h2>🎮 Minigames</h2>
         <div className="mg-top-right">
-          <button
-            className={`mg-trof-btn${mostrandoTrof ? ' is-on' : ''}`}
-            onClick={() => setMostrandoTrof((v) => !v)}
-            aria-label="Conquistas"
-          >🏆</button>
           <span className="mg-coins">🪙 {Number(stats?.coins) || 0}</span>
         </div>
       </header>
+
+      {/* Conquistas no meio da tela, nao no canto do cabecalho: o trofeu ficava
+          grudado na moeda, no alto, longe do olho, e era facil passar por ele. */}
+      <div className="mg-trof-centro">
+        <button
+          className={`mg-trof-pill${mostrandoTrof ? ' is-on' : ''}`}
+          onClick={() => setMostrandoTrof((v) => !v)}
+          aria-label="Conquistas"
+        >
+          🏆 Conquistas
+        </button>
+      </div>
 
       {fase === 'lista' && (
         <div className="mg-lista">

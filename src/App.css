@@ -5897,7 +5897,14 @@ button {
 }
 
 .playlist-picker-count {
-  flex-shrink: 0;
+  /* Antes era `flex-shrink: 0`: um nome de artista comprido nao encolhia, a
+     linha ficava mais larga que a tela e o modal saia cortado pela direita.
+     Aqui o nome e cortado com reticencias e o contador continua aparecendo. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--text-2);
   font-size: 12px;
   white-space: nowrap;
@@ -5910,6 +5917,10 @@ button {
 /* ---------- Importar músicas do aparelho / pasta ---------- */
 .device-import-modal {
   width: min(470px, 100%);
+  /* Teto pela largura da TELA, nao pela do Pai. O `min(470px, 100%)` sozinho
+     mede o pai, que pode ser mais largo que a tela: ai o modal cresce, fica
+     centralizado num espacio maior que a tela e sai cortado pela direita. */
+  max-width: calc(100vw - 24px);
   /* Antes a caixa crescia com a lista e passava da altura da tela: o
      `place-items: center` do fundo cortava o topo e ela parecia torta. Aqui ela
      nunca passa da tela e quem rola e so a lista. */
@@ -9263,11 +9274,20 @@ button.pet-pill {
   background: rgba(250,204,21,0.14); border: 1px solid rgba(250,204,21,0.35);
 }
 .mg-top-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.mg-trof-btn {
-  width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.07); color: #fff; font-size: 16px; cursor: pointer;
+/* Faixa das conquistas: centralizada e logo abaixo do cabecalho, em vez do
+   trofeu solto no canto ao lado da moeda. */
+.mg-trof-centro {
+  flex: none; display: flex; justify-content: center;
+  padding: 10px 14px 0;
 }
-.mg-trof-btn.is-on { border-color: #fde047; background: rgba(250,204,21,0.2); }
+.mg-trof-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.07);
+  color: #fff; font-size: 14px; font-weight: 700;
+}
+.mg-trof-pill:active { transform: scale(0.97); }
+.mg-trof-pill.is-on { border-color: #fde047; background: rgba(250,204,21,0.2); }
 .mg-trofeus {
   position: absolute; inset: 0; z-index: 95; display: flex; flex-direction: column;
   /* Espaço para a barra de notificação. Este painel é um overlay que ocupa a
