@@ -886,9 +886,13 @@ userNameRef.current = userName
         ctx.globalAlpha = 1
       }
 
-      requestAnimationFrame(draw)
+      // O agendamento precisa cair em `raf`: o cleanup abaixo so cancela o
+      // ultimo handle guardado. Sem isso, o quadro agendado aqui ficava
+      // orfao e continuava desenhando para sempre depois de sair da tela —
+      // um loop vazado por abertura do habitat.
+      raf = requestAnimationFrame(draw)
     }
-    requestAnimationFrame(draw)
+    raf = requestAnimationFrame(draw)
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
