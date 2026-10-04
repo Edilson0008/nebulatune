@@ -1,5 +1,19 @@
 export const CHANGELOG = [
   {
+    version: '3.2.31',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'Publicação corrigida: o site anunciava 3.2.27 e entregava um APK antigo porque a versão vivia espalhada. Agora src/app-config.js é a única fonte de verdade, e Android/public são sincronizados no build.',
+      },
+      {
+        type: 'melhoria',
+        text: 'Relógio da saudação isolado do resto da tela, barra de progresso e lyrics separados, equalizador só carrega quando aberto.',
+      },
+    ],
+  },
+  {
     version: '3.2.27',
     date: 'Outubro de 2026',
     items: [
