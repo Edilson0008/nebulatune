@@ -1,5 +1,27 @@
 export const CHANGELOG = [
   {
+    version: '3.2.32',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'Congelamento: o fundo e a física da bolinha agendavam requestAnimationFrame duas vezes por quadro (no começo e no fim do callback), então cada quadro gerava dois e a fila de animação DOBRAVA a cada tique. Com o tempo virava uma avalanche de callbacks que travava o app. Agora existe um único agendador por loop.',
+      },
+      {
+        type: 'correcao',
+        text: 'A física da bolinha parava de verdade quando a velocidade zera, em vez de continuar pedindo quadro a 60 fps só para dar return. O arremesso é quem religa.',
+      },
+      {
+        type: 'correcao',
+        text: 'Corrigido erro que derrubava o app 1 minuto após abrir: sobrou um intervalo de 60 s chamando um setNow que não existe mais depois do relógio ir para dentro da saudação.',
+      },
+      {
+        type: 'correcao',
+        text: 'Barra de tempo da música volta a funcionar: o componente usava classes CSS (.progress-track, .progress-fill) que não existem em lugar nenhum, então aparecia sem trilho e sem polegar. Passou a usar as classes reais e a crescer por transform, sem forçar reflow.',
+      },
+    ],
+  },
+  {
     version: '3.2.31',
     date: 'Outubro de 2026',
     items: [
