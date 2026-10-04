@@ -110,7 +110,7 @@ test('habitat: trocar de cena 10 vezes não acumula animação nem erro', () => 
   for (let volta = 0; volta < 10; volta += 1) {
     const caixa = caixaNova()
     const root = createRoot(caixa)
-    act(() => { root.render(createElement(mod.PetHabitatView, props)) })
+    act(() => { root.render(createElement(mod.PetHabitat, props)) })
     for (let f = 0; f < 10; f += 1) {
       const r = rodar(1)
       if (r.erros.length) erros.push(r.erros[0])

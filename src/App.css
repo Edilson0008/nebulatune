@@ -8282,10 +8282,13 @@ button.pet-pill {
    ===================================================================== */
 .habitat-cat-stage {
   position: absolute;
+  left: 0;
+  top: 0;
   width: 0;
   height: 0;
   z-index: 10;
-  transform: translate(-50%, -50%);
+  /* movido por JS com translate3d() durante o arrasto:GPU resolve, sem layout */
+  will-change: transform;
   pointer-events: none;
 }
 

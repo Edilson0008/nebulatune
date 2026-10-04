@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { memo, useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react'
 import { PetFriend } from './pet.jsx'
 import { Minigames } from './minigames.jsx'
 import { BATH_CATALOG, FOOD_CATALOG, TOY_CATALOG } from '../lib/pet.js'
@@ -148,9 +148,24 @@ const PET_TIPS = [
   'Estoure todas as bolhinhas antes de sumirem 🫧',
 ]
 
-export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, mood = 'neutral', userName = '', onPetAction, onFoodEaten = () => {}, onBathUsed = () => {}, onMinigame = () => {}, soundOn = true, cheer: appCheer = null, onOpenShop = () => {}, ..._pet }) {
+function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, mood = 'neutral', userName = '', onPetAction, onFoodEaten = () => {}, onBathUsed = () => {}, onMinigame = () => {}, soundOn = true, cheer: appCheer = null, onOpenShop = () => {}, ..._pet }) {
   const particlesCanvasRef = useRef(null)
   const habitatRef = useRef(null)
+  const catRef = useRef(null)
+
+  // Posicao do gato durante o arraste.
+  // Antes isso virava estado do React (`setCatPos`) a cada evento de dedo, e o
+  // gato andava com `left`/`top`. Juntando as duas coisas, cada movimentinho
+  // redesenhava a tela inteira do habitat E forcava o navegador a recalcular o
+  // layout da cena. Agora, durante o arraste, a posicao vai direto no `style`
+  // do elemento: sem render, sem layout, a GPU so moves o desenho. O estado
+  // do React so recebe a posicao final, quando o dedo solta.
+  const moverPet = (p) => {
+    const el = catRef.current
+    if (!el) return
+    const r = sceneRect()
+    el.style.transform = `translate3d(${p.x * r.width}px, ${p.y * r.height}px, 0)`
+  }
   const [clock, setClock] = useState(() => new Date())
   const [tipIdx, setTipIdx] = useState(0)
   const [actionFeedback, setActionFeedback] = useState(null)
@@ -256,6 +271,12 @@ export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, 
     if (!until) return 0
     return Math.max(0, Math.ceil((until - now) / 1000))
   }
+
+  // Roda depois de cada render: se a posicao veio do estado (toque em outro
+  // lugar, resize, comecar a tela), o `transform` e reescrito para bater.
+  useLayoutEffect(() => {
+    moverPet(catPosRef.current)
+  })
 
   const sceneRect = () =>
     habitatRef.current?.getBoundingClientRect() || { left: 0, top: 0, width: 400, height: 400 }
@@ -563,7 +584,10 @@ export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, 
     if (dragHistRef.current.length > 10) dragHistRef.current.shift()
     const mx = catPos.x * r.width
     const my = catPos.y * r.height + petSize * 0.18
-    setWatchDir((x < mx ? 'l' : 'r') + (y > my + 8 ? 'd' : ''))
+    setWatchDir((atual) => {
+      const proximo = (x < mx ? 'l' : 'r') + (y > my + 8 ? 'd' : '')
+      return proximo === atual ? atual : proximo
+    })
     const nowT = performance.now()
     if (kind === 'food') setFood((f) => (f ? { ...f, x, y } : f))
     else if (kind === 'pillow') setPillow((pl) => (pl ? { ...pl, x, y } : pl))
@@ -925,7 +949,12 @@ userNameRef.current = userName
     movedRef.current = true
     const cx = catPos.x * r.width
     const cy = catPos.y * r.height + petSize * 0.18
-    setWatchDir((x < cx ? 'l' : 'r') + (y > cy + 8 ? 'd' : ''))
+    // `setWatchDir` com o mesmo valor nao redesenha nada (o React descarta), e
+    // antes isso era um redesenho da tela inteira a cada dedo dentro do gato.
+    setWatchDir((atual) => {
+      const proximo = (x < cx ? 'l' : 'r') + (y > cy + 8 ? 'd' : '')
+      return proximo === atual ? atual : proximo
+    })
     if (overCat(x, y, 0.95)) {
       petProgRef.current += Math.min(dt, 60)
       petLastActiveRef.current = nowT
@@ -991,7 +1020,9 @@ userNameRef.current = userName
     if (!rect) return
     if (!draggingRef.current) return
     const x = (e.touches?.[0]?.clientX || e.clientX) - rect.left
-    setCatPos({ x: Math.max(0.12, Math.min(0.88, x / rect.width)), y: 0.62 })
+    const novo = { x: Math.max(0.12, Math.min(0.88, x / rect.width)), y: 0.62 }
+    catPosRef.current = novo
+    moverPet(novo)
     movedRef.current = true
   }
 
@@ -1019,6 +1050,7 @@ userNameRef.current = userName
     }
     draggingRef.current = false
     setIsDragging(false)
+    setCatPos({ ...catPosRef.current })
   }
 
   // Sai do modo afago sozinho se ficar ~10s sem nenhuma atividade
@@ -1244,7 +1276,7 @@ userNameRef.current = userName
       {/* CAMADA 10 - O Pet Virtual: mesmo gato da tela principal */}
       <div
         className={`habitat-cat-stage${watching ? ' is-watching' : ''}${watchDir.includes('l') ? ' watch-l' : ''}${watchDir.includes('r') ? ' watch-r' : ''}${watchDir.includes('d') ? ' watch-d' : ''}${eating ? ' is-eating' : ''}${petMode ? ' is-petting' : ''}${sleeping ? ' is-sleeping' : ''}`}
-        style={{ left: `${catPos.x * 100}%`, top: `${catPos.y * 100}%` }}
+        ref={catRef}
         aria-hidden="true"
       >
         <div className="habitat-cat-fit">
@@ -1538,3 +1570,8 @@ userNameRef.current = userName
     </section>
   )
 }
+
+// `memo` no envao: as telas do App mudam de estado o tempo todo (musica
+// tocando, progresso). Sem isto, cada uma delas redesenhava o habitat
+// inteiro, com tudo que tem dentro.
+export const PetHabitat = memo(PetHabitatView)

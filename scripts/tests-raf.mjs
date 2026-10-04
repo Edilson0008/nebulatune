@@ -10,7 +10,7 @@
 // requestAnimationFrame controlável, então dá para contar a fila.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createElement } from 'react'
+import { createElement, Profiler } from 'react'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
 
@@ -119,7 +119,7 @@ test('habitat: 300 quadros sem erro, fila estável e 30 fps', () => {
     onOpenShop: () => {},
   }
   const erros = []
-  act(() => { root.render(createElement(mod.PetHabitatView, base)) })
+  act(() => { root.render(createElement(mod.PetHabitat, base)) })
 
   rodar(2)
   let maximo = pendentes()
@@ -223,4 +223,55 @@ test('biblioteca: 1.000 musicas sao desenhadas em pedacos, nao de uma vez', () =
   act(() => root.unmount())
   rodar(2)
   assert.equal(pendentes(), 0, 'a lista nao pode deixar animacao pendurada')
+})
+
+// Regressão do arrasto do pet.
+//
+// O bug: cada `mousemove`/`touchmove` chamava `setCatPos`, e o gato andava com
+// `left`/`top`. Duas falhas somadas: 1 render do React inteiro por evento de
+// dedo, e forçar o navegador a refazer o layout da cena a cada passo. No
+// aparelho, arrastar o pet congelava por segundos.
+//
+// A correcao escreve `translate3d()` direto no elemento durante o arraste e
+// so entrega a posicao ao React quando o dedo solta. Este teste conta os
+// renders: o numero tem de ficar minimo, senao a travacao volta.
+test('habitat: arrastar 120 vezes nao redesenha a tela a cada passo', async () => {
+  const base = {
+    onBack: () => {},
+    stats: { energy: 100, happiness: 100, hygiene: 100 },
+    onFoodEaten: () => {}, onGameFinished: () => {}, onWash: () => {},
+  }
+  let commits = 0
+  const conta = createElement(Profiler, { id: 'h', onRender: () => { commits++ } },
+    createElement(mod.PetHabitat, base))
+  const cont = document.createElement('div')
+  document.body.appendChild(cont)
+  const root = createRoot(cont)
+  await act(async () => { root.render(conta) })
+
+  const cena = cont.querySelector('[data-scene]')
+  assert.ok(cena, 'cena do habitat nao montou')
+  cena.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 600 })
+  const ev = (tipo, x, y) => {
+    const e = new Event(tipo, { bubbles: true })
+    e.clientX = x; e.clientY = y; e.touches = [{ clientX: x, clientY: y }]
+    Object.defineProperty(e, 'target', { value: cena })
+    cena.dispatchEvent(e)
+  }
+
+  await act(async () => { ev('mousedown', 200, 372) })
+  assert.match(cena.className, /is-dragging/, 'o arrasto nem comecou: o teste nao mediu nada')
+
+  commits = 0
+  for (let i = 0; i < 120; i++) {
+    await act(async () => { ev('mousemove', 200 - i * 1.2, 372) })
+  }
+  const durante = commits
+  await act(async () => { ev('mouseup', 60, 372) })
+  await act(async () => { root.unmount() })
+  cont.remove()
+
+  assert.ok(durante <= 5,
+    `arrastar redesenhou ${durante} vezes em 120 passos (antes da correcao eram ~126); ` +
+    'a posicao tem de ir direto no style durante o arraste')
 })

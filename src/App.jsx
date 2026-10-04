@@ -94,7 +94,7 @@ const SettingsView = lazy(() =>
   import('./components/settings-view.jsx').then((m) => ({ default: m.SettingsView })),
 )
 const PetHabitatView = lazy(() =>
-  import('./components/pet-habitat-view.jsx').then((m) => ({ default: m.PetHabitatView })),
+  import('./components/pet-habitat-view.jsx').then((m) => ({ default: m.PetHabitat })),
 )
 const AccountModal = lazy(() =>
   import('./components/account-modal.jsx').then((m) => ({ default: m.AccountModal })),

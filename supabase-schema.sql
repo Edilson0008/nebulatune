@@ -117,6 +117,15 @@ create index if not exists friendships_pendentes_idx
   on public.friendships (addressee_id, status)
   where status = 'pendente';
 
+-- A lista de amigos pergunta nos DOIS lados de uma vez:
+--   or=(requester_id.eq.eu, addressee_id.eq.eu)
+-- O índice acima é parcial (só 'pendente'), então ele não serve para o outro
+-- tipo de lista: o de quem já é amigo ('ativo'). Sem este índice, o Postgres
+-- examina a tabela `friendships` inteira toda vez que a tela de amigos abre, e
+-- a lista fica lenta conforme o app cresce.
+create index if not exists friendships_addressee_idx
+  on public.friendships (addressee_id, status);
+
 alter table public.friendships enable row level security;
 
 -- Cada linha tem dois donos: quem pediu e quem recebeu. Ambos enxergam, só o

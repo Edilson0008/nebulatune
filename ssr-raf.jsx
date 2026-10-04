@@ -3,7 +3,7 @@
 // extensão que o navegador resolve mas o Node puro não.
 export { SpaceParticles } from './src/components/background.jsx'
 export { NowParticles, Visualizer } from './src/components/visualizer.jsx'
-export { PetHabitatView } from './src/components/pet-habitat-view.jsx'
+export { PetHabitat } from './src/components/pet-habitat-view.jsx'
 export { NowPlaying } from './src/components/now-playing.jsx'
 export { usePlayer } from './src/hooks/use-player.js'
 export { Equalizer } from './src/components/equalizer.jsx'
