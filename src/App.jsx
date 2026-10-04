@@ -43,6 +43,7 @@ import { AchToast, PetHabitatCard } from './components/pet.jsx'
 import { PlayerBar } from './components/player-bar.jsx'
 import { QueueSheet } from './components/queue-sheet.jsx'
 import { NavIcon } from './components/settings-view.jsx'
+import { Greeting } from './components/Greeting.jsx'
 import { TrackEdit, TrackList } from './components/track-list.jsx'
 import { useMoodDetector } from './hooks/use-mood-detector.js'
 import { useOnlinePlayer } from './hooks/use-online-player.js'
@@ -52,7 +53,7 @@ import { IS_NATIVE } from './lib/env.js'
 import { AUDIO_RE, IMAGE_RE, baseName, cleanArtist, cleanTitle, extFromImageType, extFromType, parseFileName } from './lib/filename.js'
 import { fmtBytes, formatTime, hashStr } from './lib/format.js'
 import { LYRICS_CACHE_MAX, buildLyrics, fetchLyrics, searchLyrics } from './lib/lyrics.js'
-import { BATH_CATALOG, FOOD_CATALOG, PET_GREETINGS, START_INVENTORY, TOY_CATALOG, disponivelDe, greetingForHour, juntaConsumido, random, somaConsumido } from './lib/pet.js'
+import { BATH_CATALOG, FOOD_CATALOG, PET_GREETINGS, START_INVENTORY, TOY_CATALOG, disponivelDe, juntaConsumido, random, somaConsumido } from './lib/pet.js'
 import { setMusicPlaying, sfxCoin, sfxSpawn } from './lib/sfx.js'
 import { shareBlobNative, shareFilesNative } from './lib/share.js'
 import { makeShareCard } from './lib/share-card.js'
@@ -235,7 +236,7 @@ function App() {
   const [audioDepth, setAudioDepth] = useState('')
   const [installEvt, setInstallEvt] = useState(null)
   const [isAppInstalled, setIsAppInstalled] = useState(false)
-  const [now, setNow] = useState(() => new Date())
+  
   const eq = useEqualizer()
   const { settings: appSettings, api: settingsApi } = useSettings()
   const greetIdxRef = useRef(0)
@@ -2854,9 +2855,7 @@ const shareTrack = useCallback(
           <section className="view">
             <div className="lib-head lib-head-home">
               <h1 className="greeting">
-                {appSettings.userName
-                  ? `${greetingForHour(now.getHours())}, ${appSettings.userName} ✦`
-                  : `${greetingForHour(now.getHours())} ✦`}
+                <Greeting userName={appSettings.userName} />
               </h1>
               <div className="search-wrap home-search">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">

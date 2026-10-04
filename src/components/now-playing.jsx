@@ -1,8 +1,11 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { useProgress } from '../progress-context.js'
+import { Clock } from './Clock.jsx'
+import { ProgressBar } from './ProgressBar.jsx'
+import { VirtualizedLyrics } from './VirtualizedLyrics.jsx'
+import { LazyEqualizer } from './LazyEqualizer.jsx'
 import { SPEEDS } from '../settings'
 import { Cover } from './Cover.jsx'
-import { Equalizer } from './equalizer.jsx'
 import { PetFriend } from './pet.jsx'
 import { NowParticles } from './visualizer.jsx'
 import { useLyricsTranslation } from '../hooks/use-lyrics-translation.js'
@@ -388,7 +391,7 @@ export const NowPlaying = memo(function NowPlaying({
             </button>
           </div>
           <div className="np-eq-sheet-scroll">
-            <Equalizer eq={eq} />
+            <LazyEqualizer eq={eq} open={showEq} onClose={() => setShowEq(false)} />
           </div>
         </div>
       )}
@@ -425,19 +428,13 @@ export const NowPlaying = memo(function NowPlaying({
         </div>
 
         <div className="np-timeline">
-          <span className="np-time">{formatTime(shownTime)}</span>
-          <div
-            className={`np-bar ${dragRatio !== null ? 'dragging' : ''}`}
-            ref={barRef}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-          >
-            <div className="np-bar-fill" style={{ width: `${shown * 100}%` }} />
-            <div className="np-bar-thumb" style={{ left: `${shown * 100}%` }} />
-          </div>
-          <span className="np-time">{formatTime(duration)}</span>
+          <ProgressBar
+            track={track}
+            playing={playing}
+            onSeek={onSeek}
+            onToggle={onToggle}
+            onOpen={() => setShowNowPlaying(true)}
+          />
         </div>
 
         {SPEEDS.length > 0 && (
