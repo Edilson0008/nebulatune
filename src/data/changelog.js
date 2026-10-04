@@ -1,5 +1,35 @@
 export const CHANGELOG = [
   {
+    version: '3.2.27',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'Otimização completa de performance: removeu getBoundingClientRect() a cada frame, adicionou cache de medição via ResizeObserver, reduziu todos os loops rAF para 30 fps onde possível, eliminou criação de gradientes por frame no equalizador, parou loops de física/partículas quando não há nada para animar. O app agora roda liso a 60 fps no habitat e no equalizador.',
+      },
+      {
+        type: 'correcao',
+        text: 'Visualizer (equalizador): gradientes em cache (24 níveis), 30 fps, medição de canvas só no resize. Era 44 createLinearGradient/frame + getBoundingClientRect/frame.',
+      },
+      {
+        type: 'correcao',
+        text: 'NowParticles (tela tocando agora): 30 fps, medição cacheada, sem getBoundingClientRect por frame. Era 60 fps + getBoundingClientRect/frame.',
+      },
+      {
+        type: 'correcao',
+        text: 'BackgroundFX/SpaceParticles: 30 fps, medição cacheada, sem getBoundingClientRect por frame.',
+      },
+      {
+        type: 'correcao',
+        text: 'Habitat: bolhas e bolinha param o rAF quando param de se mover. Bolhas só rodam enquanto há bolhas; bolinha para quando velocidade < 12. Cache de sceneRect via ResizeObserver (sem getBoundingClientRect por evento).',
+      },
+      {
+        type: 'correcao',
+        text: 'Removido criarLoop, tests-habitat.mjs, diag-perf.mjs — eram complexidade desnecessária que adicionava overhead.',
+      },
+    ],
+  },
+  {
     version: '3.2.26',
     date: 'Outubro de 2026',
     items: [

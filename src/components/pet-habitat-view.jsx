@@ -257,8 +257,21 @@ export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, 
     return Math.max(0, Math.ceil((until - now) / 1000))
   }
 
-  const sceneRect = () =>
-    habitatRef.current?.getBoundingClientRect() || { left: 0, top: 0, width: 400, height: 400 }
+  // Cache do rect da cena: atualizado só no resize, não a cada frame/evento.
+  const sceneRectRef = useRef({ left: 0, top: 0, width: 400, height: 400 })
+  const sceneRect = () => sceneRectRef.current
+
+  const updateSceneRect = useCallback(() => {
+    if (habitatRef.current) {
+      sceneRectRef.current = habitatRef.current.getBoundingClientRect()
+    }
+  }, [])
+
+  useEffect(() => {
+    updateSceneRect()
+    window.addEventListener('resize', updateSceneRect)
+    return () => window.removeEventListener('resize', updateSceneRect)
+  }, [updateSceneRect])
 
   const showHint = useCallback((msg, dur = 2400) => {
     setHint(msg)
@@ -833,26 +846,37 @@ userNameRef.current = userName
     let raf = 0
     let startTime = performance.now()
 
-    const resize = () => {
-      const dpr = window.devicePixelRatio || 1
-      const rect = canvas.getBoundingClientRect()
-      canvas.width = (rect.width || 400) * dpr
-      canvas.height = (rect.height || 400) * dpr
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    }
-    // Initial resize with fallback
-    const initialRect = canvas.getBoundingClientRect()
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = (initialRect.width || 400) * dpr
-    canvas.height = (initialRect.height || 400) * dpr
-    ctx.scale(dpr, dpr)
-    window.addEventListener('resize', resize)
+    const MIN_MS = 1000 / 30
+    let ultimo = 0
+    let w = 0
+    let h = 0
+    let dpr = 1
 
-    const draw = (now) => {
-      const t = (now - startTime) / 1000
-      const w = canvas.clientWidth
-      const h = canvas.clientHeight
+    const medir = () => {
+      const rect = canvas.getBoundingClientRect()
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+      const nw = Math.max(1, Math.round(rect.width * dpr))
+      const nh = Math.max(1, Math.round(rect.height * dpr))
+      if (canvas.width !== nw || canvas.height !== nh) {
+        canvas.width = nw
+        canvas.height = nh
+      }
+      w = nw
+      h = nh
+    }
+    medir()
+    const aoResize = () => medir()
+    window.addEventListener('resize', aoResize)
+
+    const draw = () => {
+      raf = requestAnimationFrame(draw)
+      if (typeof document !== 'undefined' && document.hidden) return
+      const agora = performance.now()
+      if (agora - ultimo < 1000 / 30) return
+      ultimo = agora
+      if (!w || !h) return
       ctx.clearRect(0, 0, w, h)
+      const t = performance.now() / 1000
 
       const isNight = scene.key === 'noite'
 
@@ -885,10 +909,8 @@ userNameRef.current = userName
         }
         ctx.globalAlpha = 1
       }
-
-      requestAnimationFrame(draw)
     }
-    requestAnimationFrame(draw)
+    raf = requestAnimationFrame(draw)
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
@@ -1095,6 +1117,9 @@ userNameRef.current = userName
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bubbles.length])
 
+  // Bubbles: effect only runs when there are bubbles, no infinite loop
+  // (bubbles.length === 0 stops the loop via finishBubbles)
+
   // Física da bolinha: perde velocidade e quica nas bordas da tela
   useEffect(() => {
     let raf = 0
@@ -1134,6 +1159,7 @@ userNameRef.current = userName
         return
       }
       setBall((prev) => (prev && prev.id === b.id ? { ...prev, x, y, moving: true } : prev))
+      raf = requestAnimationFrame(loop)
     }
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)

@@ -28,17 +28,32 @@ export const SpaceParticles = memo(function SpaceParticles({ count = 16 }) {
     }))
     let raf = 0
     let running = true
+    let w = 0
+    let h = 0
 
-    const resize = () => {
-      cv.width = Math.max(1, Math.round(cv.clientWidth * dpr))
-      cv.height = Math.max(1, Math.round(cv.clientHeight * dpr))
+    const medir = () => {
+      w = cv.clientWidth
+      h = cv.clientHeight
+      cv.width = Math.max(1, Math.round(w * dpr))
+      cv.height = Math.max(1, Math.round(h * dpr))
     }
+    medir()
+    const aoResize = () => medir()
+    window.addEventListener('resize', aoResize)
+
+    // 30 fps: partículas de fundo não precisam de 60 fps.
+    const MIN_MS = 1000 / 30
+    let ultimo = 0
 
     const draw = (t) => {
+      raf = requestAnimationFrame(draw)
+      if (!running || reduce) return
+      const agora = performance.now()
+      if (agora - ultimo < 1000 / 30) return
+      ultimo = agora
+      if (!w || !h) return
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      ctx.clearRect(0, 0, cv.clientWidth, cv.clientHeight)
-      const w = cv.clientWidth
-      const h = cv.clientHeight
+      ctx.clearRect(0, 0, w, h)
       for (const p of parts) {
         p.y += p.vy
         if (p.y < -2) {
@@ -54,9 +69,7 @@ export const SpaceParticles = memo(function SpaceParticles({ count = 16 }) {
       ctx.globalAlpha = 1
       if (running && !reduce) raf = requestAnimationFrame(draw)
     }
-
-    resize()
-    window.addEventListener('resize', resize)
+    medir()
     if (reduce) {
       draw(0)
     } else {
@@ -73,7 +86,7 @@ export const SpaceParticles = memo(function SpaceParticles({ count = 16 }) {
     document.addEventListener('visibilitychange', onVis)
     return () => {
       cancelAnimationFrame(raf)
-      window.removeEventListener('resize', resize)
+      window.removeEventListener('resize', aoResize)
       document.removeEventListener('visibilitychange', onVis)
     }
   }, [count])
