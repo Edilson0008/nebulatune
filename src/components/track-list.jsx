@@ -1,7 +1,31 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Cover } from './Cover.jsx'
 import { formatTime } from '../lib/format.js'
+
+// A biblioteca inteira era desenhada de uma vez: 1.000 musicas viravam 23.000
+// nos de DOM, e o React leva segundos para montar isso (e mais uns segundos
+// para redesenhar quando a musica que toca muda). Num celular fraco e o
+// suficiente para a tela parecer travada — e piora a cada musica que o
+// usuario adiciona. Aqui a lista e desenhada em pedacos: comeca com o
+// suficiente para preencher qualquer tela e vai acrescentando conforme o
+// usuario rola para baixo. O `content-visibility: auto` no CSS cuida do
+// desenho; aqui o cuidado e com o React nao criar o DOM inteiro.
+const POR_PAGINA = 40
+const MARGEM_PX = 700
+
+function acharRolagem(el) {
+  // Sem `getComputedStyle` nao da para saber quem rola: devolve null e a lista
+  // fica no comportamento antigo (tudo desenhado), que e melhor do que nada.
+  if (typeof getComputedStyle !== 'function') return null
+  let alvo = el?.parentElement
+  while (alvo) {
+    const estilo = getComputedStyle(alvo)
+    if (/(auto|scroll)/.test(estilo.overflowY) && alvo.scrollHeight > alvo.clientHeight) return alvo
+    alvo = alvo.parentElement
+  }
+  return null
+}
 
 export const TrackList = memo(function TrackList({
   tracks,
@@ -18,6 +42,39 @@ export const TrackList = memo(function TrackList({
   onOpenSource,
   onAddToPlaylist,
 }) {
+  const listaRef = useRef(null)
+  const [janela, setJanela] = useState({ lista: tracks, mostradas: POR_PAGINA })
+
+  // Outra lista (busca, filtro): volta para o comeco. Ajustar durante o render
+  // em vez de dentro de um efeito evita um render inteiro a mais.
+  if (janela.lista !== tracks) setJanela({ lista: tracks, mostradas: POR_PAGINA })
+  const mostradas = janela.mostradas
+  const mais = useCallback(
+    () => setJanela((j) => (j.mostradas >= tracks.length ? j : { ...j, mostradas: j.mostradas + POR_PAGINA })),
+    [tracks.length],
+  )
+
+  useEffect(() => {
+    const lista = listaRef.current
+    if (!lista) return undefined
+    const rolagem = acharRolagem(lista)
+    if (!rolagem) return undefined
+
+    const talvezMais = () => {
+      const { scrollTop, clientHeight, scrollHeight } = rolagem
+      // Sem altura medivel nao da para saber onde esta o fim: nesse caso
+      // mantem a lista como esta, que e o comportamento antigo.
+      if (!clientHeight || !scrollHeight) return
+      if (scrollTop + clientHeight < scrollHeight - MARGEM_PX) return
+      mais()
+    }
+
+    rolagem.addEventListener('scroll', talvezMais, { passive: true })
+    talvezMais()
+    return () => rolagem.removeEventListener('scroll', talvezMais)
+  }, [tracks.length, mais])
+
+  const visiveis = tracks.length > mostradas ? tracks.slice(0, mostradas) : tracks
   const [openMenu, setOpenMenu] = useState(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [menuPos, setMenuPos] = useState(null)
@@ -80,8 +137,8 @@ export const TrackList = memo(function TrackList({
   }
 
   return (
-    <div className="track-list">
-      {tracks.map((t, i) => (
+    <div className="track-list" ref={listaRef}>
+      {visiveis.map((t, i) => (
         <div
           key={t.id}
           className={`track-row ${t.id === currentId ? 'active' : ''}`}
