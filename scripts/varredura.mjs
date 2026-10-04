@@ -2,6 +2,7 @@
 //   node scripts/varredura.mjs
 // Sai com codigo != 0 quando algo quebra, para travar no CI.
 import assert from 'node:assert/strict'
+import { agruparPorPasta, faixasDaPasta } from '../src/lib/importFolders.js'
 import {
   juntaConsumido,
   somaConsumido,
@@ -336,6 +337,48 @@ caso('plays de uma faixa valem para o total de 100/500 plays', () => {
   const lista = getAchievements(lib, 0, { buys: 0, toys: 0, baths: 0 })
   assert.equal(lista.find((a) => a.id === 'plays100').done, true)
   assert.equal(lista.find((a) => a.id === 'plays500').done, false)
+})
+
+caso('importar do aparelho: as musicas sao separadas por pasta', () => {
+  const faixas = [
+    { id: '1', title: 'a', folder: 'Music/Rock/' },
+    { id: '2', title: 'b', folder: 'Music/Rock/' },
+    { id: '6', title: 'f', folder: 'Music/Rock/' },
+    { id: '3', title: 'c', folder: 'Download/WhatsApp Audio Notes' },
+    { id: '4', title: 'd', folder: 'Download/WhatsApp Audio Notes/' },
+    { id: '5', title: 'e', folder: '' },
+  ]
+  const { pastas, porPasta, temPasta } = agruparPorPasta(faixas)
+
+  assert.ok(temPasta, 'o aparelho informa as pastas')
+
+  // Barra no fim nao pode criar uma pasta a mais: "Music/Rock/" e "Music/Rock"
+  // sao o MESMO lugar.
+  assert.equal(pastas.length, 3, `3 pastas (veio ${pastas.map((p) => p.nome).join(', ')})`)
+  assert.equal(pastas[0].total, 3, 'a pasta maior primeiro')
+
+  // A pasta com mais musicas vem primeiro: e o que a pessoa quase sempre quer.
+  assert.equal(pastas[0].nome, 'Rock', `a pasta com mais musicas vem primeiro (veio "${pastas[0].nome}")`)
+  assert.equal(pastas[1].nome, 'WhatsApp Audio Notes', 'e depois a outra')
+  assert.equal(porPasta.get('Download/WhatsApp Audio Notes').total, 2, 'a pasta do WhatsApp tem 2 musicas')
+
+  // Mostrar uma pasta mostra SO ela.
+  const soRock = faixasDaPasta(faixas, 'Music/Rock')
+  assert.equal(soRock.length, 3, 'a pasta escolhida mostra so as musicas dela')
+  assert.ok(soRock.every((f) => f.folder.startsWith('Music/Rock')), 'nenhuma musica de fora entra')
+
+  // Todas as musicas: continua dando para importar tudo de uma vez.
+  assert.equal(faixasDaPasta(faixas, null).length, 6, 'sem pasta escolhida, vem tudo')
+})
+
+caso('importar: APK antigo sem pasta nao quebra', () => {
+  // O APK que ainda nao foi recompilado nao devolve `folder`. A tela tem que
+  // continuar mostrando tudo junto, como antes - nem erro, nem lista vazia.
+  const antigas = [{ id: '1', title: 'a' }, { id: '2', title: 'b' }]
+  const { pastas, temPasta } = agruparPorPasta(antigas)
+  assert.ok(!temPasta, 'sem pasta, a etapa de escolher pasta nao aparece')
+  assert.equal(pastas.length, 0, 'nenhuma pasta inventada')
+  assert.equal(faixasDaPasta(antigas, null).length, 2, 'as musicas todas continuam la')
 })
 
 console.log(`\n${ok.length} ok, ${falhas} falhando`)

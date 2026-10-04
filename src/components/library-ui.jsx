@@ -4,6 +4,7 @@ import { featuredCovers } from '../data/tracks'
 import { Cover } from './Cover.jsx'
 import { CHANGELOG } from '../data/changelog.js'
 import { formatTime } from '../lib/format.js'
+import { agruparPorPasta, faixasDaPasta } from '../lib/importFolders.js'
 
 export const QuickTrackGrid = memo(function QuickTrackGrid({ title = '', tracks, onPlay }) {
   if (!tracks || tracks.length === 0) return null
@@ -296,54 +297,118 @@ export function TrackPicker({ tracks, playlist, onAdd, onAddMany, onClose }) {
 
 export function DeviceImport({ tracks, selection, onToggle, onSelectAll, importing, onImport, onClose }) {
   const selCount = Object.values(selection).filter(Boolean).length
-  const list = tracks || []
+  const todas = tracks || []
+  // `pasta` = null significa "escolhendo a pasta". Um caminho significa "dentro
+  // desta pasta". Nenhum estado -> mostra as musicas direto (APK antigo, que
+  // ainda nao devolve a pasta, e a web).
+  const [pasta, setPasta] = useState(null)
+  const { pastas, temPasta } = agruparPorPasta(todas)
+  const escolhendoPasta = temPasta && pasta === null
+  // pasta === null -> tela de escolha. '' -> "Todas as músicas". O resto -> a
+  // pasta escolhida. Sem os tres casos separados, "Todas" viraria lista vazia.
+  const list = pasta === null || pasta === '' ? todas : faixasDaPasta(todas, pasta)
+  const pastaAtual = pastas.find((p) => p.caminho === pasta)
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal device-import-modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">Músicas do aparelho</h3>
-        <p className="modal-text">
-          {list.length} {list.length === 1 ? 'música encontrada' : 'músicas encontradas'}. Selecione as que deseja importar.
-        </p>
-        <div className="device-import-controls">
-          <label className="device-import-all">
-            <input
-              type="checkbox"
-              checked={list.length > 0 && selCount === list.length}
-              onChange={(e) => onSelectAll(e.target.checked)}
-            />
-            Selecionar todas ({list.length})
-          </label>
-          <span className="device-import-count">{selCount} selecionadas</span>
-        </div>
-        <div className="playlist-picker-list device-import-list">
-          {list.length === 0 && (
-            <p className="modal-text">Nenhuma música encontrada no aparelho.</p>
-          )}
-          {list.map((t) => (
-            <button key={t.id} className="playlist-picker-row" onClick={() => onToggle(t.id)}>
-              <input
-                type="checkbox"
-                checked={!!selection[t.id]}
-                onChange={() => onToggle(t.id)}
-                onClick={(e) => e.stopPropagation()}
-              />
-              <span className="playlist-picker-name">{t.title}</span>
-              <span className="playlist-picker-count">
-                {t.artist}
-                {t.duration ? ` · ${formatTime(t.duration)}` : ''}
-              </span>
-            </button>
-          ))}
-        </div>
-        <div className="modal-actions">
-          <button className="btn-ghost" disabled={importing} onClick={onClose}>
-            Cancelar
-          </button>
-          <button className="btn-primary" disabled={importing || selCount === 0} onClick={onImport}>
-            {importing ? 'Importando…' : `Importar${selCount ? ` ${selCount}` : ''} música${selCount !== 1 ? 's' : ''}`}
-          </button>
-        </div>
+        {escolhendoPasta ? (
+          <>
+            <h3 className="modal-title">Escolher pasta</h3>
+            <p className="modal-text">
+              {todas.length} {todas.length === 1 ? 'música' : 'músicas'} em {pastas.length}{' '}
+              {pastas.length === 1 ? 'pasta' : 'pastas'}. Entre numa pasta para ver só o que está nela.
+            </p>
+            <div className="playlist-picker-list device-import-list">
+              <button className="playlist-picker-row device-import-folder" onClick={() => setPasta('')}>
+                <span className="playlist-picker-name">Todas as músicas</span>
+                <span className="playlist-picker-count">{todas.length}</span>
+              </button>
+              {pastas.map((p) => (
+                <button
+                  key={p.caminho}
+                  className="playlist-picker-row device-import-folder"
+                  onClick={() => setPasta(p.caminho)}
+                >
+                  <span className="playlist-picker-name">
+                    <span className="device-import-folder-ico" aria-hidden="true">📁</span>
+                    {p.nome}
+                  </span>
+                  <span className="playlist-picker-count">{p.total}</span>
+                </button>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn-ghost" disabled={importing} onClick={onClose}>
+                Cancelar
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 className="modal-title">
+              {temPasta ? (
+                <button
+                  type="button"
+                  className="device-import-back"
+                  onClick={() => setPasta(null)}
+                  disabled={importing}
+                >
+                  ← {pastaAtual ? pastaAtual.nome : 'Todas as músicas'}
+                </button>
+              ) : (
+                'Músicas do aparelho'
+              )}
+            </h3>
+            <p className="modal-text">
+              {list.length} {list.length === 1 ? 'música encontrada' : 'músicas encontradas'}. Selecione
+              as que deseja importar.
+            </p>
+            <div className="device-import-controls">
+              <label className="device-import-all">
+                <input
+                  type="checkbox"
+                  checked={list.length > 0 && selCount === list.length}
+                  onChange={(e) => onSelectAll(e.target.checked)}
+                />
+                Selecionar todas ({list.length})
+              </label>
+              <span className="device-import-count">{selCount} selecionadas</span>
+            </div>
+            <div className="playlist-picker-list device-import-list">
+              {list.length === 0 && <p className="modal-text">Nenhuma música encontrada aqui.</p>}
+              {list.map((t) => (
+                <button key={t.id} className="playlist-picker-row" onClick={() => onToggle(t.id)}>
+                  <input
+                    type="checkbox"
+                    checked={!!selection[t.id]}
+                    onChange={() => onToggle(t.id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <span className="playlist-picker-name">{t.title}</span>
+                  <span className="playlist-picker-count">
+                    {t.artist}
+                    {t.duration ? ` · ${formatTime(t.duration)}` : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn-ghost" disabled={importing} onClick={onClose}>
+                Cancelar
+              </button>
+              <button
+                className="btn-primary"
+                disabled={importing || selCount === 0}
+                onClick={onImport}
+              >
+                {importing
+                  ? 'Importando…'
+                  : `Importar${selCount ? ` ${selCount}` : ''} música${selCount !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
