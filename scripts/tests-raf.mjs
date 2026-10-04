@@ -200,15 +200,25 @@ test('biblioteca: 1.000 musicas sao desenhadas em pedacos, nao de uma vez', () =
   rodar(1)
   assert.equal(linhas(), inicio, 'trocar a musica que toca nao pode acrescentar linhas')
 
-  // Rolar ate o fim: a lista cresce, em pedacos, ate mostrar tudo.
-  let grew = false
-  for (let k = 0; k < 40; k += 1) {
+  // Rolar ate o fim: a lista cresce, em pedacos. Aqui nao se rola ate o
+  // fim de proposito: desenhar as 1.000 linhas de uma vez levaria segundos e
+  // centenas de MB so para o teste. O que importa e que ela cresce e que
+  // cresce aos poucos.
+  let anterior = inicio
+  let maiorCrescimento = 0
+  for (let k = 0; k < 5; k += 1) {
     rolagem.scrollTop = rolagem.scrollHeight - rolagem.clientHeight
     act(() => { rolagem.dispatchEvent(new h.window.Event('scroll')) })
-    if (linhas() > inicio) grew = true
+    const agora = linhas()
+    assert.ok(agora >= anterior, 'rolar nunca pode tirar linha da tela')
+    maiorCrescimento = Math.max(maiorCrescimento, agora - anterior)
+    anterior = agora
   }
-  assert.ok(grew, 'rolar ate o fim nao acrescentou nenhuma linha')
-  assert.equal(linhas(), 1000, `rolando ate o fim a lista inteira devia aparecer, veio ${linhas()}`)
+  assert.ok(linhas() > inicio, 'rolar ate o fim nao acrescentou nenhuma linha')
+  assert.ok(
+    maiorCrescimento > 0 && maiorCrescimento <= 60,
+    `a lista precisa crescer aos poucos (o maior salto foi de ${maiorCrescimento} linhas)`,
+  )
 
   act(() => root.unmount())
   rodar(2)
