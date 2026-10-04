@@ -2549,7 +2549,6 @@ button {
 .bg-nebula {
   position: absolute;
   border-radius: 50%;
-  filter: blur(70px);
   opacity: 0.3;
   animation: nebula-drift 42s ease-in-out infinite alternate;
   will-change: transform;
@@ -2560,7 +2559,7 @@ button {
   height: 60vw;
   left: -10vw;
   top: -18vw;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.55), transparent 65%);
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.5) 0%, rgba(139, 92, 246, 0.17) 40%, transparent 74%);
 }
 
 .bg-nebula-2 {
@@ -2568,7 +2567,7 @@ button {
   height: 55vw;
   right: -8vw;
   top: 22vh;
-  background: radial-gradient(circle, rgba(34, 211, 238, 0.4), transparent 65%);
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.38) 0%, rgba(34, 211, 238, 0.12) 40%, transparent 74%);
 }
 
 .bg-nebula-3 {
@@ -2576,7 +2575,7 @@ button {
   height: 48vw;
   left: 28vw;
   bottom: -24vw;
-  background: radial-gradient(circle, rgba(255, 187, 84, 0.2), transparent 65%);
+  background: radial-gradient(circle, rgba(255, 187, 84, 0.2) 0%, rgba(255, 187, 84, 0.07) 40%, transparent 74%);
 }
 
 @keyframes nebula-drift {
@@ -2600,7 +2599,6 @@ button {
     transparent 300deg
   );
   opacity: 0.5;
-  mix-blend-mode: screen;
   animation: galaxy-spin 130s linear infinite;
 }
 
@@ -6354,7 +6352,6 @@ button {
 .bg-nebula {
   position: absolute;
   border-radius: 50%;
-  filter: blur(70px);
   opacity: 0.38;
   animation: nebula-drift 42s ease-in-out infinite alternate;
   will-change: transform;
@@ -7902,7 +7899,6 @@ button.pet-pill {
   inset: 0 0 40% 0;
   z-index: 1;
   pointer-events: none;
-  mix-blend-mode: screen;
   background:
     radial-gradient(closest-side at 20% 30%, rgba(104, 82, 220, 0.4), transparent 72%),
     radial-gradient(closest-side at 82% 26%, rgba(60, 72, 220, 0.35), transparent 72%),
