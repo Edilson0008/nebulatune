@@ -1,5 +1,19 @@
 export const CHANGELOG = [
   {
+    version: '3.2.26',
+    date: 'Outubro de 2026',
+    items: [
+      {
+        type: 'correcao',
+        text: 'Voltou para a versão estável que não trava (baseada no backup v3.2.16). Todas as "otimizações" complexas que causavam travamentos foram removidas: memoização excessiva, criarLoop, agendadores complexos, cache de gradientes, throttling forçado. O app agora usa requestAnimationFrame direto, simples e eficiente — como era na versão estável do backup.',
+      },
+      {
+        type: 'correcao',
+        text: 'Habitat, Equalizador e Tocando Agora voltam a usar requestAnimationFrame direto, sem agendadores, memoização ou cache. O código é simples, previsível e não trava em celulares de 2 GB.',
+      },
+    ],
+  },
+  {
     version: '3.2.25',
     date: 'Outubro de 2026',
     items: [

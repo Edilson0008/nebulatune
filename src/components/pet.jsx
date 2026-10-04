@@ -1,8 +1,8 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { playFanfare } from '../lib/fanfare.js'
 import { random } from '../lib/pet.js'
 
-export const PetFriend = memo(function PetFriend({
+export function PetFriend({
   size = 46,
   playing = false,
   eqEnabled = false,
@@ -612,9 +612,9 @@ const [bubblePlace, setBubblePlace] = useState({ dir: 'below', dx: 0 })
       )}
     </span>
   )
-})
+}
 
-export const PetHabitatCard = memo(function PetHabitatCard({ greeting, greetMs = 4800, stats, onShowProfile = null, onOpenHabitat = null, userName = '', ...pet }) {
+export function PetHabitatCard({ greeting, greetMs = 4800, stats, onShowProfile = null, onOpenHabitat = null, userName = '', ...pet }) {
   const fmtNum = (n) => {
     const v = n || 0
     if (v >= 100000) return `${(v / 1000).toFixed(0)}k`
@@ -681,9 +681,9 @@ export const PetHabitatCard = memo(function PetHabitatCard({ greeting, greetMs =
       </div>
     </div>
   )
-})
+}
 
-export const AchToast = memo(function AchToast({ item, soundOn, onDone }) {
+export function AchToast({ item, soundOn, onDone }) {
   useEffect(() => {
     if (!item) return undefined
     if (soundOn) playFanfare()
@@ -705,4 +705,4 @@ export const AchToast = memo(function AchToast({ item, soundOn, onDone }) {
       </span>
     </button>
   )
-})
+}

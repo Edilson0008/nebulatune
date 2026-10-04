@@ -1,21 +1,17 @@
-import { memo, useRef } from 'react'
+import { useRef } from 'react'
 import { PRESETS } from '../audio/equalizer'
 import { EQ_FREQS } from '../audio/graph'
 import { Visualizer } from './visualizer.jsx'
 
-export const VSlider = memo(function VSlider({ value, onChange, min = -12, max = 12, step = 1, label, suffix }) {
+export function VSlider({ value, onChange, min = -12, max = 12, step = 1, label, suffix }) {
   const trackRef = useRef(null)
   const draggingRef = useRef(false)
-  // Medir a trilha a cada pointermove obriga o navegador a refazer o layout a
-  // cada evento do dedo. O tamanho só muda se a janela girar — medimos uma vez.
-  const rectRef = useRef(null)
   const pct = ((value - min) / (max - min)) * 100
 
   const setFromPointer = (clientY) => {
     const el = trackRef.current
     if (!el) return
-    const r = rectRef.current
-    if (!r || !r.height) return
+    const r = el.getBoundingClientRect()
     const ratio = 1 - (clientY - r.top) / r.height
     const raw = min + Math.max(0, Math.min(1, ratio)) * (max - min)
     onChange(Math.max(min, Math.min(max, Math.round(raw / step) * step)))
@@ -32,7 +28,6 @@ export const VSlider = memo(function VSlider({ value, onChange, min = -12, max =
         onPointerDown={(e) => {
           draggingRef.current = true
           e.currentTarget.setPointerCapture?.(e.pointerId)
-          rectRef.current = trackRef.current?.getBoundingClientRect() || null
           setFromPointer(e.clientY)
         }}
         onPointerMove={(e) => {
@@ -53,9 +48,9 @@ export const VSlider = memo(function VSlider({ value, onChange, min = -12, max =
       {suffix && <span className="vslider-sub">{suffix}</span>}
     </div>
   )
-})
+}
 
-export const Equalizer = memo(function Equalizer({ eq }) {
+export function Equalizer({ eq }) {
   const { settings, setBand, setVolume, setPreampDb, applyPreset, toggle, reset } = eq
   return (
     <div className="eq">
@@ -166,4 +161,4 @@ export const Equalizer = memo(function Equalizer({ eq }) {
       </div>
     </div>
   )
-})
+}

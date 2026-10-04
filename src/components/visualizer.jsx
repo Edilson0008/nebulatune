@@ -1,7 +1,7 @@
-import { memo, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import * as graph from '../audio/graph'
 
-export const NowParticles = memo(function NowParticles() {
+export function NowParticles() {
   const ref = useRef(null)
 
   useEffect(() => {
@@ -27,35 +27,18 @@ export const NowParticles = memo(function NowParticles() {
       phase: Math.random() * Math.PI * 2,
     }))
     let raf = 0
-    let w = 0
-    let h = 0
-    let dpr = 1
-
-    const medir = () => {
-      const rect = canvas.getBoundingClientRect()
-      dpr = Math.min(window.devicePixelRatio || 1, 1.5)
-      const nw = Math.max(1, Math.round(rect.width * dpr))
-      const nh = Math.max(1, Math.round(rect.height * dpr))
-      if (canvas.width !== nw || canvas.height !== nh) {
-        canvas.width = nw
-        canvas.height = nh
-      }
-    }
-    medir()
-    const aoResize = () => medir()
-    window.addEventListener('resize', aoResize)
-
-    // 30 fps: partículas decorativas não precisam de 60 fps.
-    const MIN_MS = 1000 / 30
-    let ultimo = 0
 
     const draw = () => {
       raf = requestAnimationFrame(draw)
       if (typeof document !== 'undefined' && document.hidden) return
-      const agora = performance.now()
-      if (agora - ultimo < MIN_MS) return
-      ultimo = agora
-      if (!w || !h) return
+      const rect = canvas.getBoundingClientRect()
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+      const w = Math.max(1, Math.round(rect.width * dpr))
+      const h = Math.max(1, Math.round(rect.height * dpr))
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w
+        canvas.height = h
+      }
       c2d.clearRect(0, 0, w, h)
       const t = performance.now() / 1000
       for (const p of parts) {
@@ -78,16 +61,13 @@ export const NowParticles = memo(function NowParticles() {
       }
     }
     raf = requestAnimationFrame(draw)
-    return () => {
-      cancelAnimationFrame(raf)
-      window.removeEventListener('resize', aoResize)
-    }
+    return () => cancelAnimationFrame(raf)
   }, [])
 
   return <canvas ref={ref} className="np-particles" aria-hidden="true" />
-})
+}
 
-export const Visualizer = memo(function Visualizer() {
+export function Visualizer() {
   const ref = useRef(null)
 
   useEffect(() => {
@@ -98,55 +78,18 @@ export const Visualizer = memo(function Visualizer() {
     const c2d = canvas.getContext('2d')
     const data = new Uint8Array(analyser.frequencyBinCount)
     let raf = 0
-    let w = 0
-    let h = 0
-    let dpr = 1
-
-    const medir = () => {
-      const rect = canvas.getBoundingClientRect()
-      dpr = Math.min(window.devicePixelRatio || 1, 1.5)
-      w = Math.max(1, Math.round(rect.width * dpr))
-      h = Math.max(1, Math.round(rect.height * dpr))
-      if (canvas.width !== w || canvas.height !== h) {
-        canvas.width = w
-        canvas.height = h
-      }
-    }
-    medir()
-    // Só re-mede se a janela girar — não no scroll ou layout interno.
-    const aoResize = () => medir()
-    window.addEventListener('resize', aoResize)
-
-    // Gradientes em cache: 24 níveis de altura, criados uma vez por tamanho.
-    const NIVEIS = 24
-    let cacheH = 0
-    let cache = []
-    const gradientes = () => {
-      if (h === cacheH && cache.length) return cache
-      cacheH = h
-      cache = []
-      for (let k = 1; k <= NIVEIS; k += 1) {
-        const alt = (h * k) / NIVEIS
-        const g = c2d.createLinearGradient(0, h, 0, h - alt)
-        g.addColorStop(0, 'rgba(139, 92, 246, 0.7)')
-        g.addColorStop(1, 'rgba(34, 211, 238, 0.9)')
-        cache.push(g)
-      }
-      return cache
-    }
-
-    // 30 fps em vez de 60: olho não nota num visualizador de áudio.
-    const MIN_MS = 1000 / 30
-    let ultimo = 0
 
     const draw = () => {
       raf = requestAnimationFrame(draw)
       if (typeof document !== 'undefined' && document.hidden) return
-      const agora = performance.now()
-      if (agora - ultimo < MIN_MS) return
-      ultimo = agora
-      if (!w || !h) return
-      const grads = gradientes()
+      const rect = canvas.getBoundingClientRect()
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+      const w = Math.max(1, Math.round(rect.width * dpr))
+      const h = Math.max(1, Math.round(rect.height * dpr))
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w
+        canvas.height = h
+      }
       analyser.getByteFrequencyData(data)
       c2d.clearRect(0, 0, w, h)
       const bars = 44
@@ -159,17 +102,16 @@ export const Visualizer = memo(function Visualizer() {
         }
         const hh = Math.max(3, (peak / 255) * h * 0.92)
         const x = i * bw + bw * 0.18
-        const nivel = Math.max(0, Math.min(NIVEIS - 1, Math.round((hh / h) * NIVEIS) - 1))
-        c2d.fillStyle = grads[nivel]
+        const grad = c2d.createLinearGradient(0, h, 0, h - hh)
+        grad.addColorStop(0, 'rgba(139, 92, 246, 0.7)')
+        grad.addColorStop(1, 'rgba(34, 211, 238, 0.9)')
+        c2d.fillStyle = grad
         c2d.fillRect(x, h - hh, bw * 0.64, hh)
       }
     }
     raf = requestAnimationFrame(draw)
-    return () => {
-      cancelAnimationFrame(raf)
-      window.removeEventListener('resize', aoResize)
-    }
+    return () => cancelAnimationFrame(raf)
   }, [])
 
   return <canvas ref={ref} className="eq-visualizer" aria-hidden="true" />
-})
+}

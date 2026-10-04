@@ -124,7 +124,7 @@ export const NowPlaying = memo(function NowPlaying({
     const line = box.querySelectorAll('.np-lyric')[activeIndex]
     if (!line) return
     const top = line.offsetTop - box.clientHeight / 2 + line.clientHeight / 2
-    box.scrollTo({ top: Math.max(0, top), behavior: 'auto' })
+    box.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
   }, [activeIndex])
 
   useEffect(() => {
@@ -434,10 +434,7 @@ export const NowPlaying = memo(function NowPlaying({
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
           >
-            <div
-              className="np-bar-fill"
-              style={{ transform: `scaleX(${shown})` }}
-            />
+            <div className="np-bar-fill" style={{ width: `${shown * 100}%` }} />
             <div className="np-bar-thumb" style={{ left: `${shown * 100}%` }} />
           </div>
           <span className="np-time">{formatTime(duration)}</span>

@@ -1,5 +1,4 @@
-import { memo, useEffect, useState, useRef, useCallback } from 'react'
-import { criarLoop } from '../lib/raf-loop.js'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { PetFriend } from './pet.jsx'
 import { Minigames } from './minigames.jsx'
 import { BATH_CATALOG, FOOD_CATALOG, TOY_CATALOG } from '../lib/pet.js'
@@ -149,7 +148,7 @@ const PET_TIPS = [
   'Estoure todas as bolhinhas antes de sumirem 🫧',
 ]
 
-export const PetHabitatView = memo(function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, mood = 'neutral', userName = '', onPetAction, onFoodEaten = () => {}, onBathUsed = () => {}, onMinigame = () => {}, soundOn = true, cheer: appCheer = null, onOpenShop = () => {}, ..._pet }) {
+export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, mood = 'neutral', userName = '', onPetAction, onFoodEaten = () => {}, onBathUsed = () => {}, onMinigame = () => {}, soundOn = true, cheer: appCheer = null, onOpenShop = () => {}, ..._pet }) {
   const particlesCanvasRef = useRef(null)
   const habitatRef = useRef(null)
   const [clock, setClock] = useState(() => new Date())
@@ -173,9 +172,6 @@ export const PetHabitatView = memo(function PetHabitatView({ onBack, stats, inv 
   const interactRef = useRef(null)
   const dragHistRef = useRef([])
   const ballVelRef = useRef({ vx: 0, vy: 0 })
-  // Desliga/liga o loop de física da bolinha. Criado aqui porque o próprio loop
-  // se registra nele (ele para de se agendar sozinho quando a bolinha para).
-  const ballLoopRef = useRef(null)
   const ballRef = useRef(null)
   const foodIdRef = useRef(0)
   const ballIdRef = useRef(0)
@@ -213,15 +209,6 @@ export const PetHabitatView = memo(function PetHabitatView({ onBack, stats, inv 
   const petPtrRef = useRef(null)
   const tapSayRef = useRef(0)
   const catPosRef = useRef({ x: 0.5, y: 0.62 })
-  // Arrasto do gatinho sem React: enquanto o dedo mexe, escrevemos o
-  // deslocamento direto no style (transform = só GPU). O `left/top` só é
-  // recommitado no fim do arrasto, num único setCatPos. Antes, cada
-  // touchmove redesenhava os ~290 nós da tela.
-  const catStageRef = useRef(null)
-  const dragRectRef = useRef(null)
-  const dragPosRef = useRef(null)
-  const watchDirRef = useRef('')
-  const petRectRef = useRef(null)
   // Bolhas de sabão
   const [bubbles, setBubbles] = useState([])
   const bubblesRef = useRef([])
@@ -230,17 +217,9 @@ export const PetHabitatView = memo(function PetHabitatView({ onBack, stats, inv 
   const spongeProgRef = useRef(0)
   const spongeLastRef = useRef(0)
   const spongeSoundRef = useRef(0)
-  const [petSize] = useState(() => {
-    if (typeof window === 'undefined') return 200
-    // `innerWidth/innerHeight` podem não existir (o smoke test roda sem
-    // janela de verdade). Sem este guarda, um deles virando `undefined`
-    // transforma o `Math.min` em NaN e o `Math.max` continua NaN — aí o
-    // gatinho era desenhado com tamanho NaN e sumia da tela.
-    const w = Number(window.innerWidth)
-    const hgt = Number(window.innerHeight)
-    if (!Number.isFinite(w) || !Number.isFinite(hgt)) return 200
-    return Math.max(130, Math.min(w * 0.55, hgt * 0.28, 240))
-  })
+  const [petSize] = useState(() =>
+    typeof window === 'undefined' ? 200 : Math.max(130, Math.min(window.innerWidth * 0.55, window.innerHeight * 0.28, 240))
+  )
 
   // Computed values
   const tag = MOOD_TAGS[mood] || MOOD_TAGS.neutral
@@ -719,8 +698,6 @@ export const PetHabitatView = memo(function PetHabitatView({ onBack, stats, inv 
           }
         }
         ballVelRef.current = { vx, vy }
-        // Acorda a física: o loop fica parado enquanto a bolinha não se move.
-        ballLoopRef.current?.()
         fireReaction('play')
       } else {
         ballVelRef.current = { vx: 0, vy: 0 }
@@ -737,13 +714,8 @@ export const PetHabitatView = memo(function PetHabitatView({ onBack, stats, inv 
       const def = ACTIONS.find((a) => a.id === action)
       if (!def || !onPetAction) return
       const until = cooldowns[def.id] || 0
-      // `Date.now()` e não o `now` da tela: o relógio de cooldown só roda
-      // enquanto há cooldown valendo (ver o efeito mais abaixo), então `now`
-      // pode estar velho. Usar ele aqui faria a pessoa tocar numa ação já
-      // liberada e receber "Xs" como se ainda estivesse esperando.
-      const t = Date.now()
-      if (until && t < until) {
-        setCdToast({ label: def.label, sec: Math.max(1, Math.ceil((until - t) / 1000)) })
+      if (until && now < until) {
+        setCdToast({ label: def.label, sec: Math.max(1, Math.ceil((until - now) / 1000)) })
         clearTimeout(cdToastTimer.current)
         cdToastTimer.current = setTimeout(() => setCdToast(null), 1500)
         return
@@ -796,7 +768,7 @@ export const PetHabitatView = memo(function PetHabitatView({ onBack, stats, inv 
       onPetAction(def.action)
       fireReaction(def.id)
     },
-    [onPetAction, cooldowns, food, ball, pillow, sponge, bubbles, foodMenu, playMenu, spawnBall, spawnBubbles, spawnPillow, showHint, fireReaction, sayPet, pickPhrase, soundOn, bathMenu],
+    [onPetAction, now, cooldowns, food, ball, pillow, sponge, bubbles, foodMenu, playMenu, spawnBall, spawnBubbles, spawnPillow, showHint, fireReaction, sayPet, pickPhrase, soundOn, bathMenu],
   )
 
   useEffect(() => {
@@ -804,25 +776,10 @@ export const PetHabitatView = memo(function PetHabitatView({ onBack, stats, inv 
     return () => clearInterval(id)
   }, [])
 
-  // O relógio do cooldown é a ÚNICA coisa que lê `now`, e ele só mostra
-  // segundos inteiros. Rodar isso a cada 500ms re-renderizava os 287 nós da
-  // tela duas vezes por segundo para um número que muda uma vez por segundo:
-  // ~12ms de CPU por render, o suficiente para a tela travar num celular mais
-  // fraco. Agora o relógio só existe enquanto há cooldown valendo.
   useEffect(() => {
-    const vencendo = (t) => Object.values(cooldowns).some((until) => until && until > t)
-    const agora = Date.now()
-    if (!vencendo(agora)) return undefined
-    setNow(agora)
-    const id = setInterval(() => {
-      const t = Date.now()
-      setNow(t)
-      // Último cooldown acabou: o relógio se desliga sozinho em vez de ficar
-      // batendo no vazio para sempre.
-      if (!vencendo(t)) clearInterval(id)
-    }, 1000)
+    const id = setInterval(() => setNow(Date.now()), 500)
     return () => clearInterval(id)
-  }, [cooldowns])
+  }, [])
 
   useEffect(() => {
     ballRef.current = ball
@@ -873,6 +830,7 @@ userNameRef.current = userName
     const canvas = particlesCanvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
+    let raf = 0
     let startTime = performance.now()
 
     const resize = () => {
@@ -881,26 +839,20 @@ userNameRef.current = userName
       canvas.width = (rect.width || 400) * dpr
       canvas.height = (rect.height || 400) * dpr
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      medir()
     }
-    // O tamanho é medido uma vez (e a cada resize), e NÃO a cada quadro.
-    // Ler `clientWidth` dentro do `draw` obriga o navegador a recalcular o
-    // layout inteiro 60 vezes por segundo; como o React desta tela monta ~290
-    // nós, cada recálculo tinha que refazer tudo. Em celular isso aparece
-    // exatamente como a tela "pesada" que trava ao mexer.
-    let w = 400
-    let hgt = 400
-    const medir = () => {
-      const r = canvas.getBoundingClientRect()
-      w = r.width || 400
-      hgt = r.height || 400
-    }
-    resize()
+    // Initial resize with fallback
+    const initialRect = canvas.getBoundingClientRect()
+    const dpr = window.devicePixelRatio || 1
+    canvas.width = (initialRect.width || 400) * dpr
+    canvas.height = (initialRect.height || 400) * dpr
+    ctx.scale(dpr, dpr)
     window.addEventListener('resize', resize)
 
-    const draw = (now, proximo) => {
+    const draw = (now) => {
       const t = (now - startTime) / 1000
-      ctx.clearRect(0, 0, w, hgt)
+      const w = canvas.clientWidth
+      const h = canvas.clientHeight
+      ctx.clearRect(0, 0, w, h)
 
       const isNight = scene.key === 'noite'
 
@@ -909,7 +861,7 @@ userNameRef.current = userName
         ctx.fillStyle = '#fff'
         for (let i = 0; i < 12; i++) {
           const px = w * 0.7 + (i * 73 % 19) / 100 * w * 0.3
-          const py = hgt * 0.15 + (i * 41 % 53) / 100 * (hgt * 0.62 - hgt * 0.15)
+          const py = h * 0.15 + (i * 41 % 53) / 100 * (h * 0.62 - h * 0.15)
           const pt = (t * 0.3 + i * 0.5) % 2
           const alpha = 0.08 + Math.sin(pt * Math.PI) * 0.08
           ctx.globalAlpha = alpha
@@ -922,7 +874,7 @@ userNameRef.current = userName
         const fireflyCount = scene.key === 'noite' ? 18 : 8
         for (let i = 0; i < fireflyCount; i++) {
           const fx = (5 + (i * 43 % 89) / 100) * w / 100
-          const fy = (10 + (i * 37 % 72) / 100) * (hgt * 0.6) / 100
+          const fy = (10 + (i * 37 % 72) / 100) * (h * 0.6) / 100
           const pulse = Math.sin(t * 1.5 + i * 2) * 0.5 + 0.5
           const alpha = 0.3 + pulse * 0.4
           ctx.globalAlpha = alpha
@@ -934,30 +886,32 @@ userNameRef.current = userName
         ctx.globalAlpha = 1
       }
 
-      proximo()
+      requestAnimationFrame(draw)
     }
-    const agendador = criarLoop(draw)
-    agendador.acordar()
+    requestAnimationFrame(draw)
     return () => {
-      // `dormir` cancela o quadro pendente. Este loop roda enquanto a tela
-      // existe; sem isso ele continuaria desenhando num canvas solto depois
-      // que você saiu do habitat.
-      agendador.dormir()
+      cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
     }
   }, [scene.key]);
 
-  // (O relógio do cenário e a dica do gatinho moravam aqui E mais acima,
-  // literalmente duplicados: cada um rodava em DOIS timers, e a dica virava
-  // duas vezes mais rápido do que o previsto. A cópia de cima é a que valeu;
-  // esta saiu na 3.2.19.)
+  // Time & tips
+  useEffect(() => {
+    const id = setInterval(() => setClock(new Date()), 30000)
+    return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    const id = setInterval(() => setTipIdx((i) => (i + 1) % PET_TIPS.length), 8000)
+    return () => clearInterval(id)
+  }, [])
+
 
   // Full 2D drag for cat
   // Modo afago: gatinho fica fixo e o dedo deslizando faz carinho
   const petMove = (e) => {
     if (!petActiveRef.current) return
-    const r = petRectRef.current || sceneRect()
-    petRectRef.current = r
+    const r = sceneRect()
     const x = e.clientX - r.left
     const y = e.clientY - r.top
     const nowT = performance.now()
@@ -967,12 +921,7 @@ userNameRef.current = userName
     movedRef.current = true
     const cx = catPos.x * r.width
     const cy = catPos.y * r.height + petSize * 0.18
-    const dir = (x < cx ? 'l' : 'r') + (y > cy + 8 ? 'd' : '')
-    // so redesenha quando o OLHAR realmente muda de lado
-    if (dir !== watchDirRef.current) {
-      watchDirRef.current = dir
-      setWatchDir(dir)
-    }
+    setWatchDir((x < cx ? 'l' : 'r') + (y > cy + 8 ? 'd' : ''))
     if (overCat(x, y, 0.95)) {
       petProgRef.current += Math.min(dt, 60)
       petLastActiveRef.current = nowT
@@ -1001,7 +950,6 @@ userNameRef.current = userName
     const award = petActiveRef.current && petProgRef.current >= 900
     petActiveRef.current = false
     petPtrRef.current = null
-    petRectRef.current = null
     if (award) petReward()
   }
 
@@ -1011,7 +959,6 @@ userNameRef.current = userName
     try { e.preventDefault() } catch { /* sem preventDefault */ }
     petPtrRef.current = { id: e.pointerId }
     petActiveRef.current = true
-    petRectRef.current = habitatRef.current?.getBoundingClientRect() || null
     petLastRef.current = 0
     petLastActiveRef.current = performance.now()
     draggingRef.current = false
@@ -1036,26 +983,11 @@ userNameRef.current = userName
       if (!petPtrRef.current && petActiveRef.current) petMove(e)
       return
     }
+    const rect = habitatRef.current?.getBoundingClientRect()
+    if (!rect) return
     if (!draggingRef.current) return
-    // a medida fica presa no inicio do arrasto: medir a cada evento
-    // forca o navegador a recalcular o layout a cada toque
-    let rect = dragRectRef.current
-    if (!rect) {
-      rect = sceneRect()
-      dragRectRef.current = rect
-    }
-    if (!rect || !rect.width) return
     const x = (e.touches?.[0]?.clientX || e.clientX) - rect.left
-    const nx = Math.max(0.12, Math.min(0.88, x / rect.width))
-    const el = catStageRef.current
-    if (el) {
-      const base = catPosRef.current
-      const dx = (nx - base.x) * rect.width
-      const dy = (0.62 - base.y) * rect.height
-      el.style.transform = `translate3d(calc(-50% + ${dx}px), calc(-50% + ${dy}px), 0)`
-    }
-    dragPosRef.current = { x: nx, y: 0.62 }
-    catPosRef.current = { x: nx, y: 0.62 }
+    setCatPos({ x: Math.max(0.12, Math.min(0.88, x / rect.width)), y: 0.62 })
     movedRef.current = true
   }
 
@@ -1074,7 +1006,6 @@ userNameRef.current = userName
     if (isUi) return
     draggingRef.current = true
     movedRef.current = false
-    dragRectRef.current = habitatRef.current?.getBoundingClientRect() || null
     setIsDragging(true)
   }
   const handleDragEnd = () => {
@@ -1083,13 +1014,6 @@ userNameRef.current = userName
       return
     }
     draggingRef.current = false
-    dragRectRef.current = null
-    const el = catStageRef.current
-    if (el) el.style.transform = ''
-    // um unico setState no fim do arrasto, em vez de um por touchmove
-    const fim = dragPosRef.current
-    dragPosRef.current = null
-    if (fim) setCatPos(fim)
     setIsDragging(false)
   }
 
@@ -1129,8 +1053,9 @@ userNameRef.current = userName
   // Bolhas flutuando: sobem, balançam e o gatinho tenta estourar as que passam perto
   useEffect(() => {
     if (!bubbles.length) return undefined
+    let raf = 0
     let last = performance.now()
-    const loop = (now, proximo) => {
+    const loop = (now) => {
       const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000))
       last = now
       const bs = bubblesRef.current
@@ -1160,36 +1085,28 @@ userNameRef.current = userName
         fireReaction('bubbles')
       }
       if (next.length) {
-        proximo()
+        raf = requestAnimationFrame(loop)
       } else {
         finishBubbles(true)
       }
     }
-    const agendador = criarLoop(loop)
-    agendador.acordar()
-    return () => agendador.dormir()
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bubbles.length])
 
   // Física da bolinha: perde velocidade e quica nas bordas da tela
-  //
-  // O loop só existe enquanto a bolinha está se mexendo. Antes ele se
-  // reagendava sozinho para sempre: `requestAnimationFrame` era a PRIMEIRA
-  // linha, então os dois `return` de "não tem bolinha / velocidade zero"
-  // aconteciam DEPOIS de já ter marcado o próximo quadro. Resultado: 60
-  //Callbacks por segundo, o tempo inteiro, com a bolinha parada no chão.
-  // Agora ele para sozinho, e quem arremessa acorda.
   useEffect(() => {
+    let raf = 0
     let last = performance.now()
-    const loop = (now, proximo) => {
+    const loop = (now) => {
+      raf = requestAnimationFrame(loop)
       const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000))
       last = now
       const b = ballRef.current
+      if (!b || b.dragging) return
       const v = ballVelRef.current
-      // Sem bola, arrastando, ou parada: NAO pede o proximo quadro. E o que
-      // impede a fisica de ficar rodando a toa com a bolinha no chao.
-      if (!b || b.dragging || !v || (v.vx === 0 && v.vy === 0)) return
-      proximo()
+      if (!v || (v.vx === 0 && v.vy === 0)) return
       const rect = sceneRect()
       const w = rect.width
       const h = rect.height - 96
@@ -1218,28 +1135,8 @@ userNameRef.current = userName
       }
       setBall((prev) => (prev && prev.id === b.id ? { ...prev, x, y, moving: true } : prev))
     }
-    // Quem chama isto acorda a física: o arremesso e o toque na bolinha.
-    const agendador = criarLoop(loop)
-    ballLoopRef.current = () => {
-      last = performance.now()
-      agendador.acordar()
-    }
-    return () => {
-      // O id do quadro PRECISA ser cancelado ANTES de virar 0. Zerando
-      // primeiro, o `cancelAnimationFrame(raf)` cancelava o zero e o quadro
-      // de verdade continuava vivo: como o `loop` se reagenda sozinho, a
-      // fisica da bolinha ficava rodando 60x por segundo para sempre, mesmo
-      // depois de sair do habitat — queimando CPU e forcando layout no app
-      // INTEIRO. E cada bola arremessada deixava mais um loop zumbi.
-      // ZERAR ANTES DE CANCELAR foi o que travou o app inteiro: o
-      // cancelAnimationFrame recebia 0, o quadro de verdade sobrevivia, e como
-      // o loop se reagenda sozinho ele continuava 60x por segundo para sempre
-      // (com getBoundingClientRect + setBall) DEPOIS de sair do habitat. Cada
-      // bola arremessada deixava mais um loop zumbi, por isso piorava com o
-      // tempo. O agendador cancela sempre antes de zerar.
-      agendador.dormir()
-      ballLoopRef.current = null
-    }
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
   }, [])
 
   return (
@@ -1342,7 +1239,6 @@ userNameRef.current = userName
 
       {/* CAMADA 10 - O Pet Virtual: mesmo gato da tela principal */}
       <div
-        ref={catStageRef}
         className={`habitat-cat-stage${watching ? ' is-watching' : ''}${watchDir.includes('l') ? ' watch-l' : ''}${watchDir.includes('r') ? ' watch-r' : ''}${watchDir.includes('d') ? ' watch-d' : ''}${eating ? ' is-eating' : ''}${petMode ? ' is-petting' : ''}${sleeping ? ' is-sleeping' : ''}`}
         style={{ left: `${catPos.x * 100}%`, top: `${catPos.y * 100}%` }}
         aria-hidden="true"
@@ -1637,4 +1533,4 @@ userNameRef.current = userName
       </p>
     </section>
   )
-})
+}
