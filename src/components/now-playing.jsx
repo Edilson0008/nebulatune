@@ -1,8 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { useProgress } from '../progress-context.js'
-import { Clock } from './Clock.jsx'
 import { ProgressBar } from './ProgressBar.jsx'
-import { VirtualizedLyrics } from './VirtualizedLyrics.jsx'
 import { LazyEqualizer } from './LazyEqualizer.jsx'
 import { SPEEDS } from '../settings'
 import { Cover } from './Cover.jsx'
@@ -55,14 +53,11 @@ export const NowPlaying = memo(function NowPlaying({
   mood = 'neutral',
   userName = '',
 }) {
-  const barRef = useRef(null)
-  const draggingRef = useRef(false)
   const activeRef = useRef(null)
   const depthMenuRef = useRef(null)
   const menuRef = useRef(null)
   const lyricsRef = useRef(null)
   const sleepMenuRef = useRef(null)
-  const [dragRatio, setDragRatio] = useState(null)
   const [showEq, setShowEq] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [depthOpen, setDepthOpen] = useState(false)
@@ -109,8 +104,9 @@ export const NowPlaying = memo(function NowPlaying({
 
   const lines = lyrics?.status === 'done' ? lyrics.lines : []
   const synced = !!lyrics?.synced
+  // `elapsed` ainda e usado aqui para a letra sincronizada. O `progress` foi
+// junto com a barra: quem calcula a porcentagem agora e o <ProgressBar />.
   const { elapsed, duration } = useProgress()
-  const progress = duration ? elapsed / duration : 0
   const lyricTrans = useLyricsTranslation(lines)
   const lyricTime = elapsed - syncOffset
   let activeIndex = -1
@@ -195,35 +191,9 @@ export const NowPlaying = memo(function NowPlaying({
     setDepthOpen(false)
   }
 
-  const ratioFromX = (clientX) => {
-    const el = barRef.current
-    if (!el) return 0
-    const rect = el.getBoundingClientRect()
-    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-  }
-
-  const onPointerDown = (e) => {
-    e.preventDefault()
-    draggingRef.current = true
-    e.currentTarget.setPointerCapture?.(e.pointerId)
-    setDragRatio(ratioFromX(e.clientX))
-  }
-  const onPointerMove = (e) => {
-    if (!draggingRef.current) return
-    e.preventDefault()
-    setDragRatio(ratioFromX(e.clientX))
-  }
-  const onPointerUp = (e) => {
-    if (!draggingRef.current) return
-    draggingRef.current = false
-    const r = Math.min(0.999, ratioFromX(e.clientX))
-    setDragRatio(null)
-    onSeek(r)
-  }
-
-  const shown = dragRatio !== null ? dragRatio : progress || 0
-  const shownTime = dragRatio !== null ? dragRatio * (duration || 0) : elapsed
-
+  // A barra de tempo (e o arrasto do Seek) mora no <ProgressBar />, que tem o
+  // proprio estado. O codigo de arrasto que ficava aqui virou orfao quando o
+  // componente foi extraido.
   return (
     <div
       className={`now-playing ${searchOpen ? 'searching' : ''}`}
@@ -428,13 +398,7 @@ export const NowPlaying = memo(function NowPlaying({
         </div>
 
         <div className="np-timeline">
-          <ProgressBar
-            track={track}
-            playing={playing}
-            onSeek={onSeek}
-            onToggle={onToggle}
-            onOpen={() => setShowNowPlaying(true)}
-          />
+          <ProgressBar onSeek={onSeek} />
         </div>
 
         {SPEEDS.length > 0 && (

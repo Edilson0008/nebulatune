@@ -45,11 +45,14 @@ export const SpaceParticles = memo(function SpaceParticles({ count = 16 }) {
     const MIN_MS = 1000 / 30
     let ultimo = 0
 
-    const draw = (t) => {
-      raf = requestAnimationFrame(draw)
-      if (!running || reduce) return
+    // Desenho e agendamento sao separados de proposito: `pintar` so desenha,
+    // `loop` e o UNICO lugar que pede o proximo quadro. Agendar dentro do
+    // desenho (no comeco e no fim) fazia cada callback gerar dois callbacks,
+    // o que dobrava a fila a cada quadro e deixava callbacks orfaos apos o
+    // unmount, porque o id era sobrescrito antes de ser cancelado.
+    const pintar = (t) => {
       const agora = performance.now()
-      if (agora - ultimo < 1000 / 30) return
+      if (agora - ultimo < MIN_MS) return
       ultimo = agora
       if (!w || !h) return
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -67,20 +70,31 @@ export const SpaceParticles = memo(function SpaceParticles({ count = 16 }) {
         ctx.fill()
       }
       ctx.globalAlpha = 1
-      if (running && !reduce) raf = requestAnimationFrame(draw)
     }
-    medir()
+
+    const loop = (t) => {
+      raf = 0
+      if (!running || reduce) return
+      pintar(t)
+      raf = requestAnimationFrame(loop)
+    }
+
     if (reduce) {
-      draw(0)
+      // Sem animacao: um quadro so, e nenhum rAF pendurado.
+      ultimo = 0
+      pintar(0)
     } else {
-      raf = requestAnimationFrame(draw)
+      ultimo = 0
+      raf = requestAnimationFrame(loop)
     }
     const onVis = () => {
       running = !document.hidden
-      if (running && !reduce && !raf) raf = requestAnimationFrame(draw)
-      else if (!running && raf) {
-        cancelAnimationFrame(raf)
+      if (!running) {
+        if (raf) cancelAnimationFrame(raf)
         raf = 0
+      } else if (!raf && !reduce) {
+        ultimo = 0
+        raf = requestAnimationFrame(loop)
       }
     }
     document.addEventListener('visibilitychange', onVis)

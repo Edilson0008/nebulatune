@@ -173,6 +173,11 @@ export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, 
   const dragHistRef = useRef([])
   const ballVelRef = useRef({ vx: 0, vy: 0 })
   const ballRef = useRef(null)
+  // Religa a física da bolinha sob demanda. Antes o loop ficava agendando
+  // 60 fps desde a montagem, mesmo com a bolinha parada, so para dar early
+  // return. Aqui ele para de verdade quando a velocidade zera e quem religa
+  // e o arremesso (unico lugar que cria velocidade diferente de zero).
+  const ballKickRef = useRef(null)
   const foodIdRef = useRef(0)
   const ballIdRef = useRef(0)
   const hintTimer = useRef(null)
@@ -711,6 +716,9 @@ export function PetHabitatView({ onBack, stats, inv = {}, toys = [], bath = {}, 
           }
         }
         ballVelRef.current = { vx, vy }
+        // O loop para quando a velocidade zera, entao o arremesso e quem
+        // precisa religar a fisica.
+        ballKickRef.current?.()
         fireReaction('play')
       } else {
         ballVelRef.current = { vx: 0, vy: 0 }
@@ -844,8 +852,6 @@ userNameRef.current = userName
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     let raf = 0
-    let startTime = performance.now()
-
     const MIN_MS = 1000 / 30
     let ultimo = 0
     let w = 0
@@ -872,7 +878,7 @@ userNameRef.current = userName
       raf = requestAnimationFrame(draw)
       if (typeof document !== 'undefined' && document.hidden) return
       const agora = performance.now()
-      if (agora - ultimo < 1000 / 30) return
+      if (agora - ultimo < MIN_MS) return
       ultimo = agora
       if (!w || !h) return
       ctx.clearRect(0, 0, w, h)
@@ -1123,9 +1129,14 @@ userNameRef.current = userName
   // Física da bolinha: perde velocidade e quica nas bordas da tela
   useEffect(() => {
     let raf = 0
+    let vivo = true
     let last = performance.now()
+    // Agendamento em UM lugar so. Agendar no topo e no fim fazia cada
+    // callback gerar dois, dobrando a fila a cada quadro; o cleanup so
+    // cancelava o ultimo id e deixava callbacks orfaos rodando.
     const loop = (now) => {
-      raf = requestAnimationFrame(loop)
+      raf = 0
+      if (!vivo) return
       const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000))
       last = now
       const b = ballRef.current
@@ -1161,8 +1172,17 @@ userNameRef.current = userName
       setBall((prev) => (prev && prev.id === b.id ? { ...prev, x, y, moving: true } : prev))
       raf = requestAnimationFrame(loop)
     }
-    raf = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(raf)
+    ballKickRef.current = () => {
+      if (!vivo || raf) return
+      last = performance.now()
+      raf = requestAnimationFrame(loop)
+    }
+    return () => {
+      vivo = false
+      if (raf) cancelAnimationFrame(raf)
+      raf = 0
+      ballKickRef.current = null
+    }
   }, [])
 
   return (

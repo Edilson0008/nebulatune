@@ -746,10 +746,10 @@ function App() {
     }
   }, [])
 
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60000)
-    return () => clearInterval(id)
-  }, [])
+  // O estado `now` foi para dentro do <Greeting />, que e quem mostra a hora.
+// Este intervalo nao tem mais a quem atualizar: ele sobreviveu a refatoracao
+// e chamava um setNow inexistente, dando ReferenceError 60 s depois de abrir o
+// app. Removido.
 
   useEffect(() => {
     if (!IS_NATIVE) return undefined
