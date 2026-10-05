@@ -7,8 +7,11 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.MediaStore;
-import android.util.Base64;
 import androidx.core.content.ContextCompat;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -17,7 +20,6 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 
 @CapacitorPlugin(
@@ -144,28 +146,51 @@ public class MediaImporterPlugin extends Plugin {
                 ContentResolver resolver = getContext().getContentResolver();
                 Uri uri = ContentUris.withAppendedId(
                     MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, Long.parseLong(id));
-                JSObject out = readFile(resolver, uri);
+                JSObject out = copiarArquivo(resolver, uri, id);
                 call.resolve(out);
+            } catch (OutOfMemoryError e) {
+                call.reject("Sem memória para ler esta música. Feche outras telas e tente de novo.");
             } catch (Exception e) {
                 call.reject(e.getMessage() == null ? "Não consegui ler a música" : e.getMessage());
             }
         }).start();
     }
 
-    private JSObject readFile(ContentResolver resolver, Uri uri) throws Exception {
-        String mime = resolver.getType(uri);
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+    // Copia a música para o app em vez de devolver o conteúdo em base64.
+    //
+    // Antes, o arquivo inteiro era lido, convertido em base64 (~33% maior) e
+    // devolvido como uma string JSON pela ponte do Capacitor. Uma música de 10
+    // MB virava uma string de ~13 MB: o Android não aguenta isso. O JSON era
+    // truncado ou a ponte morria no meio, e o `catch` no JavaScript engolia a
+    // falha sem avisar — a pessoa tocava em importar, nãovia aviso nenhum e as
+    // músicas nunca entravam.
+    //
+    // Copiando o arquivo com o `copyTo` do Android, o conteúdo nunca vira
+    // string: a ponte carrega só o caminho. O JavaScript lê esse caminho
+    // direto do disco, sem passar por base64.
+    private JSObject copiarArquivo(ContentResolver resolver, Uri uri, String id) throws Exception {
+        File pasta = new File(getContext().getFilesDir(), "musicas");
+        if (!pasta.exists() && !pasta.mkdirs()) {
+            throw new IOException("Não consegui criar a pasta das músicas");
+        }
+        File destino = new File(pasta, id + ".audio");
         try (InputStream in = resolver.openInputStream(uri)) {
-            byte[] chunk = new byte[16384];
-            int n;
-            while ((n = in.read(chunk)) > 0) {
-                buffer.write(chunk, 0, n);
+            if (in == null) {
+                throw new IOException("O Android não deixou abrir esta música");
+            }
+            try (OutputStream out = new FileOutputStream(destino)) {
+                byte[] chunk = new byte[65536];
+                int n;
+                while ((n = in.read(chunk)) > 0) {
+                    out.write(chunk, 0, n);
+                }
             }
         }
-        String b64 = Base64.encodeToString(buffer.toByteArray(), Base64.NO_WRAP);
+        String mime = resolver.getType(uri);
         JSObject out = new JSObject();
-        out.put("base64", b64);
+        out.put("path", destino.getAbsolutePath());
         out.put("mime", mime == null ? "audio/mpeg" : mime);
+        out.put("size", destino.length());
         return out;
     }
 }

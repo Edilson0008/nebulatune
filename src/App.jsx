@@ -2038,13 +2038,16 @@ const shareTrack = useCallback(
     setDeviceImporting(true)
     const batch = Date.now()
     const added = []
+    let falhas = 0
     try {
       for (let i = 0; i < selected.length; i += 1) {
         const dm = selected[i]
         try {
           const res = await importDeviceTrack(dm)
-          if (!res?.base64) continue
-          const blob = dataUrlToBlob(`data:${res.mime};base64,${res.base64}`)
+          // APK novo: o plugin devolve o caminho e o blob vem lendo o arquivo.
+          // APK antigo: devolve base64 e o blob é montado na hora.
+          const blob =
+            res?.blob || dataUrlToBlob(`data:${res?.mime};base64,${res?.base64 || ''}`)
           if (!blob) continue
           const fallback = {
             id: `dev-${batch}-${i}`,
@@ -2099,12 +2102,23 @@ const shareTrack = useCallback(
             /* sem capa embutida: segue, o iTunes cobre depois */
           }
         } catch {
-          /* arquivo não lido: segue para o próximo */
+          // Antes a falha era engolida em silêncio: a pessoa tocava em
+          // importar, não saía aviso nenhum e as músicas não entravam. Agora
+          // conta para no fim e o aviso diz o que deu errado.
+          falhas += 1
         }
       }
       if (added.length) {
         setView('biblioteca')
-        showToast(`${added.length} ${added.length === 1 ? 'música importada' : 'músicas importadas'}!`)
+        const total = added.length
+        showToast(
+          falhas
+            ? `${total} ${total === 1 ? 'importada' : 'importadas'}, mas ${falhas} ${falhas === 1 ? 'não pôde ser lida' : 'não puderam ser lidas'}`
+            : `${total} ${total === 1 ? 'música importada' : 'músicas importadas'}!`,
+        )
+      } else if (falhas) {
+        // Nenhuma entrou: precisa dizer, senão parece que o botão não funciona.
+        showToast('Não consegui ler nenhuma dessas músicas')
       }
     } finally {
       setDeviceImporting(false)

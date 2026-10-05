@@ -1,7 +1,7 @@
 {
   "name": "nebulatune",
   "private": true,
-  "version": "3.2.39",
+  "version": "3.2.40",
   "type": "module",
   "scripts": {
     "dev": "vite",

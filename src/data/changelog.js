@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '3.2.40',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'Importar do aparelho volta a funcionar: a música era mandada inteira em base64 e não passava, então nada entrava sem aviso nenhum.' },
+      { type: 'correcao', text: 'A importação agora avisa quando alguma música não pôde ser lida, em vez de sumir sem falar nada.' },
+    ],
+  },
+  {
     version: '3.2.39',
     date: 'Outubro de 2026',
     items: [
