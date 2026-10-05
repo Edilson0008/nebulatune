@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '3.2.42',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'A lista da biblioteca decide se continua a mesma olhando as músicas que já estavam na tela, em vez de adivinhar pelo tamanho. É o que fazia as importadas sumirem de novo.' },
+      { type: 'diagnostico', text: 'Se a biblioteca tiver mais músicas do que a lista mostra, aparece "mostrando X de Y" no topo. Serve para o problema aparecer em vez de a gente supor.' },
+    ],
+  },
+  {
     version: '3.2.41',
     date: 'Outubro de 2026',
     items: [

@@ -10102,3 +10102,12 @@ button.pet-pill {
 }
 .crash-acoes { display: flex; gap: 10px; }
 .crash-dica { margin: 14px 0 0; font-size: 12px; line-height: 1.5; color: rgba(255,255,255,0.55); }
+
+/* Diagnóstico da lista: só aparece quando o DOM tem menos linhas que a
+   biblioteca, que é exatamente o bug que sobrou. some assim que bater. */
+.track-list-debug {
+  margin: 2px 12px 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  font-variant-numeric: tabular-nums;
+}

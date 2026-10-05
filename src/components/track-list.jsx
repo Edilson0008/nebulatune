@@ -45,45 +45,50 @@ export const TrackList = memo(function TrackList({
   const listaRef = useRef(null)
   const [janela, setJanela] = useState({ lista: tracks, mostradas: POR_PAGINA })
 
-  // A lista mudou de identidade (`tracks` é um array novo). Precisa decidir se a
-  // janela reinicia ou se era a mesma lista mudando por dentro.
+  // `tracks` é um array novo a cada mudança da biblioteca. Isso NÃO significa
+  // que é outra lista: importar músicas, salvar capa, favoritar, renomear ou
+  // REMOVER uma faixa devolvem um array novo. Reiniciar a paginação nesses casos
+  // é o que fazia as músicas recém-importadas sumirem da tela: elas entram no
+  // fim da lista, e a janela voltava para as 40 primeiras.
   //
-  // Importar músicas, salvar capa, mexer numa faixa: nada disso é uma lista nova,
-  // é a MESMA lista mudando por dentro. Recomeçar em POR_PAGINA nesses casos
-  // jogava as músicas recém-importadas para fora da tela — a pessoa importava, o
-  // contador subia e as músicas sumiam de novo assim que a capa de uma delas
-  // chegava.
+  // Em vez de adivinhar se é a mesma lista, a janela pergunta o que importa:
   //
-  // A decisão é pelo tamanho e pelo primeiro id:
-  //  - mesmo começo e cresceu => a mesma lista só ganhou músicas no fim: a janela
-  //    alcança o fim, senão as novas ficam fora da tela;
-  //  - mesmo começo e do mesmo tamanho => mudou o miolo (chegou uma capa): a
-  //    janela fica como está, não precisa renderizar a biblioteca inteira à toa;
-  //  - mesmo começo e encolheu => removeu uma música: a janela cobre o tamanho
-  //    novo, senão as últimas linhas ficam fora;
-  //  - o resto => outra lista (busca, filtro, playlist): recomeça.
+  //   "as músicas que já estavam visíveis ainda estão nesta lista?"
   //
-  // Olhar só o primeiro id não basta quando outra lista também começa pela mesma
-  // música — daí o teste de tamanho junto. Comparar posição por posição foi o que
-  // já falhou: remover do meio desloca todas as linhas e nenhuma ponta bate.
-  // Percorrer a lista inteira aqui também não serve, é o custo que a paginação
-  // existe para evitar; um id resolve.
+  // Se sim, é a mesma lista (importou, salvou capa, removeu uma do meio) e a
+  // janela CRESCE para alcançar o fim — é o que faz as novas aparecerem. Se não,
+  // é outra lista mesmo (busca, filtro, playlist): aí sim recomeça.
+  //
+  // A comparação é por PERTENCIMENTO, não por posição, e isso é o ponto: quem
+  // remove uma música do meio desloca todas as linhas, então comparar "mesma
+  // posição" dá falso negativo (o bug vem justamente daí). E não pode exigir
+  // que TODAS as antigas ainda estejam: quem apaga uma música que estava na
+  // tela derrubaria a janela junto. O que separa "mesma lista" de "outra lista"
+  // é a sobreposição — a busca é uma lista BEM menor e quase nada coincide.
+  //
+  // Custo: um conjunto com os ids da lista nova, montado uma vez a cada mudança
+  // de biblioteca. É percorrer a biblioteca, não criar o DOM dela — que é o
+  // custo caro que a paginação existe para evitar. E a lista pode ser
+  // desenhada inteira à toa sem quebrar nada: o `content-visibility: auto` no
+  // CSS é quem segura o desenho de uma biblioteca grande.
   if (janela.lista !== tracks) {
     const antes = janela.lista
     const listaAntes = Array.isArray(antes) ? antes : []
-    const mesmoComeco =
-      listaAntes.length > 0 &&
-      tracks.length > 0 &&
-      listaAntes[0]?.id === tracks[0]?.id
-    const encolheu = mesmoComeco && tracks.length < listaAntes.length
-    const cresceu = mesmoComeco && tracks.length > listaAntes.length
+    const quantasMostrava = Math.min(janela.mostradas, listaAntes.length)
+    // Os ids que estavam visíveis na tela antes desta mudança.
+    const idsVisiveis = listaAntes.slice(0, quantasMostrava).map((t) => t && t.id)
+    const idsNovos = new Set(tracks.map((t) => t && t.id))
+    const quantasSobrepoem = idsVisiveis.reduce((n, id) => n + (idsNovos.has(id) ? 1 : 0), 0)
+    // Mesma lista quando a lista cresceu, ou quando a maioria do que estava na
+    // tela continua nela (capa, favoritou, removeu uma do meio).
+    const mesmaLista =
+      quantasMostrava > 0 &&
+      (tracks.length >= listaAntes.length || quantasSobrepoem * 2 >= quantasMostrava)
     setJanela(
-      cresceu || encolheu
-        ? { lista: tracks, mostradas: tracks.length }
-        : mesmoComeco
-          ? // Mesmo tamanho, mudou o miolo: era a mesma lista, mantém a janela.
-            { lista: tracks, mostradas: Math.min(janela.mostradas, tracks.length) }
-          : { lista: tracks, mostradas: POR_PAGINA },
+      mesmaLista
+        ? // Mesma lista: a janela cobre tudo, senão as novas do fim ficam fora.
+          { lista: tracks, mostradas: tracks.length }
+        : { lista: tracks, mostradas: POR_PAGINA },
     )
   }
   const mostradas = janela.mostradas
@@ -113,6 +118,16 @@ export const TrackList = memo(function TrackList({
   }, [tracks.length, mais])
 
   const visiveis = tracks.length > mostradas ? tracks.slice(0, mostradas) : tracks
+  // Quantas linhas o DOM realmente tem, lido da própria página. É o número que
+  // importa quando a biblioteca tem N músicas mas a lista mostra menos: sem isto
+  // só dá para supor, e suposição já custou três versões aqui.
+  const [domCount, setDomCount] = useState(0)
+  useEffect(() => {
+    const lista = listaRef.current
+    if (!lista) return
+    setDomCount(lista.querySelectorAll('.track-row').length)
+  }, [visiveis])
+  const faltando = tracks.length - domCount
   const [openMenu, setOpenMenu] = useState(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [menuPos, setMenuPos] = useState(null)
@@ -176,6 +191,14 @@ export const TrackList = memo(function TrackList({
 
   return (
     <div className="track-list" ref={listaRef}>
+      {/* Quantas linhas existem de verdade. Fica visível de propósito: se a lista
+          mostrar menos do que o contador manda, o número avisa em vez de a gente
+          ficar adivinhando. some quando bate tudo, para não sujar a tela. */}
+      {faltando > 0 && (
+        <p className="track-list-debug">
+          mostrando {domCount} de {tracks.length}
+        </p>
+      )}
       {visiveis.map((t, i) => (
         <div
           key={t.id}

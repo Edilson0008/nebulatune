@@ -189,7 +189,11 @@ export function ChangelogModal({ onClose }) {
                 {entry.items.map((item, i) => (
                   <li key={i} className={`changelog-item ${item.type}`}>
                     <span className="changelog-tag">
-                      {item.type === 'correcao' ? 'Correção' : 'Novo'}
+                      {item.type === 'correcao'
+                        ? 'Correção'
+                        : item.type === 'diagnostico'
+                          ? 'Diagnóstico'
+                          : 'Novo'}
                     </span>
                     <span>{item.text}</span>
                   </li>
