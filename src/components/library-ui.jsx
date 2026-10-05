@@ -270,7 +270,7 @@ export function TrackPicker({ tracks, playlist, onAdd, onAddMany, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal track-picker-modal" onClick={(e) => e.stopPropagation()}>
         <h3 className="modal-title">Adicionar música a {playlist?.name || 'playlist'}</h3>
         {options.length > 0 && (
           <button className="btn-ghost" onClick={() => onAddMany?.(playlist.id, options.map((t) => t.id))}>

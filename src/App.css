@@ -5910,8 +5910,48 @@ button {
   white-space: nowrap;
 }
 
-.track-picker-list {
-  max-height: 60vh;
+/* ---------- Adicionar músicas a uma playlist ---------- */
+/* Mesmo problema do `.device-import-modal`, e a mesma correção. Este aqui usa
+   só `.modal`, que não tem teto de altura nem teto de largura: a lista de 60vh
+   empurrava o resto (título, botões) para fora da tela, e o `place-items: center`
+   do fundo cortava o topo e a baixo — a tela saía torta e cortada. */
+.track-picker-modal {
+  width: min(420px, 100%);
+  max-width: calc(100vw - 24px);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 40px);
+  overflow: hidden;
+}
+
+/* A lista cede para a caixa caber na tela; o resto fica parado. Sem
+   `min-height: 0` o flex não deixa ela encolher e a caixa estoura de novo. */
+.track-picker-modal .track-picker-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* O título e as ações não encolhem e o botão "Adicionar todas" não é espremido
+   num pedaço minúsculo. */
+.track-picker-modal > .modal-title,
+.track-picker-modal > .modal-actions {
+  flex: 0 0 auto;
+}
+
+/* O nome da playlist vem de quem digitou: uma palavra só, sem espaço, estoura
+   a largura da caixa e o modal sai cortado pela direita. Quebra em qualquer
+   ponto, como o nome do artista já faz na lista. */
+.track-picker-modal > .modal-title {
+  overflow-wrap: anywhere;
+}
+
+.track-picker-modal > .btn-ghost {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-bottom: 4px;
 }
 
 /* ---------- Importar músicas do aparelho / pasta ---------- */

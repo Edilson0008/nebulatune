@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '3.2.43',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'A tela de "Adicionar músicas a uma playlist" fica centralizada e cabe inteira na tela, sem sair cortada.' },
+      { type: 'correcao', text: 'Nome de playlist muito comprido não empurra mais a janela para fora da tela.' },
+    ],
+  },
+  {
     version: '3.2.42',
     date: 'Outubro de 2026',
     items: [
