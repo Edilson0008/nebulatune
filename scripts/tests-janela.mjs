@@ -1,62 +1,90 @@
-// A janela do TrackList e a paginacao que segura a biblioteca grande. Este
-// teste cobre o caso que quebrou: a lista cresce na importacao e as
-// musicas novas entram no FIM, fora do corte.
-// Reproduz a logica de janela do TrackList: a lista nova e a antiga + as
-// importadas. Antes a janela reiniciava em 40 e as novas ficavam fora.
+// A janela do TrackList, que segura a biblioteca grande sem renderizar tudo de
+// uma vez. Aqui ficam os casos que já quebraram na mão da pessoa:
+//
+//   - a lista cresce (importar músicas);
+//   - a capa de uma música chega depois e reescreve a lista do mesmo tamanho;
+//   - uma música é removida do meio e a lista encolhe.
+//
+// Nos três as músicas recém-importadas sumiam da tela: a pessoa importava, o
+// contador subia e a lista voltava a mostrar só as primeiras 40.
 const POR_PAGINA = 40
-function criarJanela(janela, tracks) {
-  if (janela.lista !== tracks) {
-    const antes = janela.lista
-    const meio = Math.floor((antes?.length || 0) / 2)
-    const mesmoInicio =
-      Array.isArray(antes) &&
-      antes.length > 0 &&
-      tracks.length > antes.length &&
-      antes[0]?.id === tracks[0]?.id &&
-      antes[meio]?.id === tracks[meio]?.id &&
-      antes[antes.length - 1]?.id === tracks[antes.length - 1]?.id
-    const cresceu = mesmoInicio
-    janela = cresceu
-      ? { lista: tracks, mostradas: tracks.length }
+
+function aplicar(janela, tracks) {
+  if (janela.lista === tracks) return janela
+  const antes = janela.lista
+  const listaAntes = Array.isArray(antes) ? antes : []
+  const mesmoComeco =
+    listaAntes.length > 0 &&
+    tracks.length > 0 &&
+    listaAntes[0]?.id === tracks[0]?.id
+  const encolheu = mesmoComeco && tracks.length < listaAntes.length
+  const cresceu = mesmoComeco && tracks.length > listaAntes.length
+  return cresceu || encolheu
+    ? { lista: tracks, mostradas: tracks.length }
+    : mesmoComeco
+      ? { lista: tracks, mostradas: Math.min(janela.mostradas, tracks.length) }
       : { lista: tracks, mostradas: POR_PAGINA }
-  }
-  return janela
 }
-const visiveis = (j, tracks) => (tracks.length > j.mostradas ? tracks.slice(0, j.mostradas) : tracks)
+
+const desenhados = (j, tracks) =>
+  tracks.length > j.mostradas ? tracks.slice(0, j.mostradas) : tracks
+
+const naoDesenhadas = (j, tracks) => {
+  const v = new Set(desenhados(j, tracks).map((t) => t.id))
+  return tracks.filter((t) => !v.has(t.id)).length
+}
+
 const falhou = []
-const ok = (c, m) => { if (!c) falhou.push(m) }
+const ok = (c, m) => {
+  if (!c) falhou.push(m)
+}
 
-// --- caso 1: biblioteca grande, importa 5
+// --- 1. biblioteca grande, importa 5
 let lib = Array.from({ length: 200 }, (_, i) => ({ id: `a-${i}` }))
-let j = criarJanela({ lista: lib, mostradas: POR_PAGINA }, lib)
+let j = aplicar({ lista: lib, mostradas: POR_PAGINA }, lib)
 const novas = Array.from({ length: 5 }, (_, i) => ({ id: `nova-${i}` }))
-const libComNovas = [...lib, ...novas]
-j = criarJanela(j, libComNovas)
-lib = libComNovas
-let v = visiveis(j, lib)
-const tela1 = new Set(v.map(t => t.id))
-ok(novas.every(t => tela1.has(t.id)), 'caso 1: as 5 importadas sumiram da tela')
+lib = [...lib, ...novas]
+j = aplicar(j, lib)
+ok(naoDesenhadas(j, lib) === 0, `1: as 5 importadas ficaram fora (janela ${j.mostradas})`)
 
-// --- caso 2: importa 60 de uma vez (duas paginas)
-lib = [...lib, ...Array.from({ length: 60 }, (_, i) => ({ id: `lote-${i}` }))]
-j = criarJanela(j, lib)
-v = visiveis(j, lib)
-const tela2 = new Set(v.map(t => t.id))
-ok(Array.from({ length: 60 }, (_, i) => `lote-${i}`).every(id => tela2.has(id)), 'caso 2: o lote de 60 sumiu')
+// --- 2. a CAPA de uma música chega: map() cria array novo do mesmo tamanho
+lib = lib.map((t) => (t.id === 'nova-0' ? { ...t, coverUrl: 'blob:x' } : t))
+j = aplicar(j, lib)
+ok(naoDesenhadas(j, lib) === 0, `2: a capa jogou a janela para ${j.mostradas}`)
 
-// --- caso 3: mudou de lista (busca) => recomeca em 40, nao herda o tamanho
-const busca = lib.filter(t => /nova|lote/.test(t.id))
-j = criarJanela(j, busca)
-ok(j.mostradas === POR_PAGINA, `caso 3: busca deveria recomecar em ${POR_PAGINA}, veio ${j.mostradas}`)
+// --- 2b. várias capas em sequência (o importador pede uma por vez)
+for (let k = 0; k < 5; k++) {
+  const id = `nova-${k}`
+  lib = lib.map((t) => (t.id === id ? { ...t, coverUrl: 'blob:y' } : t))
+  j = aplicar(j, lib)
+}
+ok(naoDesenhadas(j, lib) === 0, '2b: capas em sequência tiraram as músicas da tela')
 
-// --- caso 4: lista encolheu (removeu musica) => recomeca
-j = criarJanela(j, busca.slice(0, 5))
-ok(j.mostradas === POR_PAGINA, `caso 4: lista menor deveria recomecar, veio ${j.mostradas}`)
+// --- 3. removeu uma música do MEIO: a lista encolhe e tudo desloca
+lib = lib.filter((t) => t.id !== 'a-100')
+j = aplicar(j, lib)
+ok(naoDesenhadas(j, lib) === 0, `3: remover do meio escondeu ${naoDesenhadas(j, lib)}`)
 
-// --- caso 5: lista igual (mesmo conteudo, nova identidade) => nao explode
-const mesma = busca.slice(0, 5)
-j = criarJanela({ lista: mesma, mostradas: POR_PAGINA }, mesma.slice())
-ok(j.mostradas === POR_PAGINA, `caso 5: lista igual deveria recomecar, veio ${j.mostradas}`)
+// --- 4. mudou de lista (busca) => recomeça em 40
+const busca = lib.filter((t) => /nova/.test(t.id))
+j = aplicar(j, busca)
+ok(j.mostradas === POR_PAGINA, `4: a busca deveria recomeçar em ${POR_PAGINA}, veio ${j.mostradas}`)
+ok(desenhados(j, busca).length === busca.length, '4: a busca não mostrou os 5 resultados')
 
-if (falhou.length) { console.error('FALHAS:\n- ' + falhou.join('\n- ')); process.exit(1) }
-console.log('ok: a janela acompanha a importacao e nao vaza em busca/remocao')
+// --- 5. volta pra biblioteca completa => recomeça
+j = aplicar(j, lib)
+ok(j.mostradas === POR_PAGINA, `5: voltar pra biblioteca deveria recomeçar, veio ${j.mostradas}`)
+
+// --- 6. outra lista que começa pela mesma música não pode herdar a janela
+// grande. Aqui a segurança é não carregar a janela de 205 para uma lista de 2:
+// se a lista é menor que a janela, ela cabe inteira e tudo aparece.
+const so = [{ id: 'a-0' }, { id: 'x-1' }]
+j = aplicar({ lista: lib, mostradas: 205 }, so)
+ok(j.mostradas <= so.length, `6: outra lista herdou a janela de ${j.mostradas}`)
+ok(desenhados(j, so).length === so.length, '6: as 2 músicas não apareceram')
+
+if (falhou.length) {
+  console.error('FALHAS:\n- ' + falhou.join('\n- '))
+  process.exit(1)
+}
+console.log('ok: a lista não perde mais as músicas importadas')

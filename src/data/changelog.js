@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '3.2.41',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'As músicas importadas finalmente aparecem: a lista parava nas 40 primeiras assim que a capa de uma delas chegava.' },
+      { type: 'correcao', text: 'A lista não some mais ao renomear uma faixa ou ao remover uma música do meio da biblioteca.' },
+    ],
+  },
+  {
     version: '3.2.40',
     date: 'Outubro de 2026',
     items: [

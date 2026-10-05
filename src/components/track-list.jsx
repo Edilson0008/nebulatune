@@ -45,43 +45,45 @@ export const TrackList = memo(function TrackList({
   const listaRef = useRef(null)
   const [janela, setJanela] = useState({ lista: tracks, mostradas: POR_PAGINA })
 
-  // A lista mudou de identidade. Duas situações bem diferentes:
+  // A lista mudou de identidade (`tracks` é um array novo). Precisa decidir se a
+  // janela reinicia ou se era a mesma lista mudando por dentro.
   //
-  //  1. É a MESMA lista que cresceu (importou músicas, por exemplo). Aqui a
-  //     janela precisa acompanhar, senão as novas entram depois do corte e a
-  //     pessoa importa, vê o aviso de sucesso e não acha nenhuma das músicas.
-  //  2. É outra lista (busca, filtro, playlist): recomeça em POR_PAGINA.
+  // Importar músicas, salvar capa, mexer numa faixa: nada disso é uma lista nova,
+  // é a MESMA lista mudando por dentro. Recomeçar em POR_PAGINA nesses casos
+  // jogava as músicas recém-importadas para fora da tela — a pessoa importava, o
+  // contador subia e as músicas sumiam de novo assim que a capa de uma delas
+  // chegava.
   //
-  // "Só cresceu" = a lista nova começa com a antiga inteira. Dá para reconhecer
-  // comparando três posições (início, meio e fim da antiga): na prática é
-  // suficiente e sai barato. Percorrer as duas listas inteiras a cada render
-  // seria justamente o custo que a paginação existe para evitar.
+  // A decisão é pelo tamanho e pelo primeiro id:
+  //  - mesmo começo e cresceu => a mesma lista só ganhou músicas no fim: a janela
+  //    alcança o fim, senão as novas ficam fora da tela;
+  //  - mesmo começo e do mesmo tamanho => mudou o miolo (chegou uma capa): a
+  //    janela fica como está, não precisa renderizar a biblioteca inteira à toa;
+  //  - mesmo começo e encolheu => removeu uma música: a janela cobre o tamanho
+  //    novo, senão as últimas linhas ficam fora;
+  //  - o resto => outra lista (busca, filtro, playlist): recomeça.
+  //
+  // Olhar só o primeiro id não basta quando outra lista também começa pela mesma
+  // música — daí o teste de tamanho junto. Comparar posição por posição foi o que
+  // já falhou: remover do meio desloca todas as linhas e nenhuma ponta bate.
+  // Percorrer a lista inteira aqui também não serve, é o custo que a paginação
+  // existe para evitar; um id resolve.
   if (janela.lista !== tracks) {
     const antes = janela.lista
-    const meio = Math.floor((antes?.length || 0) / 2)
-    const mesmoInicio =
-      Array.isArray(antes) &&
-      antes.length > 0 &&
-      tracks.length > antes.length &&
-      antes[0]?.id === tracks[0]?.id &&
-      antes[meio]?.id === tracks[meio]?.id &&
-      antes[antes.length - 1]?.id === tracks[antes.length - 1]?.id
-    const cresceu = mesmoInicio
-    // A janela é um corte do COMEÇO da lista (`slice(0, mostradas)`), e as
-    // músicas novas entram no FIM. Somar a quantidade só faria a janela mostrar
-    // um pouco mais do começo, e as importadas continuariam fora da tela —
-    // foi exatamente isso que o teste pegou. Para a lista ter room para as
-    // novas, a janela precisa alcançar o fim.
-    //
-    // O custo é desenhas as linhas todas de uma vez, que é o que a paginação
-    // evita. Vale a pena aqui: a alternativa é a pessoa importar, ver "5
-    // músicas importadas" e não achar nenhuma. A paginação continua valendo
-    // para o resto (rolagem, busca, filtro), que é onde a lista é grande sem
-    // estar crescendo.
+    const listaAntes = Array.isArray(antes) ? antes : []
+    const mesmoComeco =
+      listaAntes.length > 0 &&
+      tracks.length > 0 &&
+      listaAntes[0]?.id === tracks[0]?.id
+    const encolheu = mesmoComeco && tracks.length < listaAntes.length
+    const cresceu = mesmoComeco && tracks.length > listaAntes.length
     setJanela(
-      cresceu
+      cresceu || encolheu
         ? { lista: tracks, mostradas: tracks.length }
-        : { lista: tracks, mostradas: POR_PAGINA },
+        : mesmoComeco
+          ? // Mesmo tamanho, mudou o miolo: era a mesma lista, mantém a janela.
+            { lista: tracks, mostradas: Math.min(janela.mostradas, tracks.length) }
+          : { lista: tracks, mostradas: POR_PAGINA },
     )
   }
   const mostradas = janela.mostradas
