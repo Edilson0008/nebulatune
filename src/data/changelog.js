@@ -1,5 +1,13 @@
 export const CHANGELOG = [
   {
+    version: '3.2.39',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'As músicas importadas do aparelho apareciam na biblioteca: o aviso dizia que entraram, mas elas ficavam fora da tela.' },
+      { type: 'correcao', text: 'O "Selecionar todas" do Importar do aparelho agora pega só as músicas da pasta que está aberta, e dá para juntar músicas de várias pastas sem perder o que já estava marcado.' },
+    ],
+  },
+  {
     version: '3.2.38',
     date: 'Outubro de 2026',
     items: [
