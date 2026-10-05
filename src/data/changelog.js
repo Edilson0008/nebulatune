@@ -1,5 +1,17 @@
 export const CHANGELOG = [
   {
+    version: '3.2.38',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'novo', text: 'Importar do aparelho agora separa as músicas por pasta: a tela pergunta a pasta, mostra quantas músicas tem em cada uma e deixa entrar só nela ou trazer todas.' },
+      { type: 'correcao', text: 'O Importar do aparelho não fica mais cortado pela direita: um nome de artista comprado não empurra mais a janela para fora da tela.' },
+      { type: 'ajuste', text: 'O botão de Conquistas foi para o meio da tela dos minigames, em vez de grudado na moeda no alto.' },
+      { type: 'correcao', text: 'O app não trava mais: foram removidos os efeitos que pintavam a tela inteira a cada quadro (o desfoque do fundo e o brilho da tela Tocando agora) e o arrastar do gatinho não redesenha mais a tela a cada toque.' },
+      { type: 'correcao', text: 'Voltar ao app depois de bloquear a tela não trava mais; compartilhar música e tocar música que vem da nuvem voltaram a funcionar.' },
+      { type: 'correcao', text: 'A biblioteca para de travar conforme cresce: as músicas aparecem aos poucos, em vez de todas de uma vez.' },
+    ],
+  },
+  {
     version: '3.2.16',
     date: 'Outubro de 2026',
     items: [
