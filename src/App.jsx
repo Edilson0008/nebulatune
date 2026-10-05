@@ -2121,16 +2121,20 @@ const shareTrack = useCallback(
     [],
   )
 
-  const selectAllDevice = useCallback(
-    (value) => {
-      const next = {}
-      ;(deviceMusic || []).forEach((t) => {
-        next[t.id] = value
-      })
-      setDeviceSelection(next)
-    },
-    [deviceMusic],
-  )
+  // "Selecionar todas" age só sobre a lista que está na tela (a pasta aberta).
+  // Antes ele montava a seleção do zero com TODAS as músicas do aparelho: quem
+  // entrava numa pasta para pegar as músicas dela acabava importing o celular
+  // inteiro, e o que já estava marcado em outra pasta era apagado. Agora soma
+  // sobre a seleção existente, então dá para juntar músicas de várias pastas.
+  const selectAllDevice = useCallback((value, lista) => {
+    const alvo = Array.isArray(lista) ? lista : []
+    if (!alvo.length) return
+    setDeviceSelection((prev) => {
+      const next = { ...prev }
+      for (const t of alvo) next[t.id] = value
+      return next
+    })
+  }, [])
 
   const onDrop = (e) => {
     e.preventDefault()

@@ -45,9 +45,45 @@ export const TrackList = memo(function TrackList({
   const listaRef = useRef(null)
   const [janela, setJanela] = useState({ lista: tracks, mostradas: POR_PAGINA })
 
-  // Outra lista (busca, filtro): volta para o comeco. Ajustar durante o render
-  // em vez de dentro de um efeito evita um render inteiro a mais.
-  if (janela.lista !== tracks) setJanela({ lista: tracks, mostradas: POR_PAGINA })
+  // A lista mudou de identidade. Duas situações bem diferentes:
+  //
+  //  1. É a MESMA lista que cresceu (importou músicas, por exemplo). Aqui a
+  //     janela precisa acompanhar, senão as novas entram depois do corte e a
+  //     pessoa importa, vê o aviso de sucesso e não acha nenhuma das músicas.
+  //  2. É outra lista (busca, filtro, playlist): recomeça em POR_PAGINA.
+  //
+  // "Só cresceu" = a lista nova começa com a antiga inteira. Dá para reconhecer
+  // comparando três posições (início, meio e fim da antiga): na prática é
+  // suficiente e sai barato. Percorrer as duas listas inteiras a cada render
+  // seria justamente o custo que a paginação existe para evitar.
+  if (janela.lista !== tracks) {
+    const antes = janela.lista
+    const meio = Math.floor((antes?.length || 0) / 2)
+    const mesmoInicio =
+      Array.isArray(antes) &&
+      antes.length > 0 &&
+      tracks.length > antes.length &&
+      antes[0]?.id === tracks[0]?.id &&
+      antes[meio]?.id === tracks[meio]?.id &&
+      antes[antes.length - 1]?.id === tracks[antes.length - 1]?.id
+    const cresceu = mesmoInicio
+    // A janela é um corte do COMEÇO da lista (`slice(0, mostradas)`), e as
+    // músicas novas entram no FIM. Somar a quantidade só faria a janela mostrar
+    // um pouco mais do começo, e as importadas continuariam fora da tela —
+    // foi exatamente isso que o teste pegou. Para a lista ter room para as
+    // novas, a janela precisa alcançar o fim.
+    //
+    // O custo é desenhas as linhas todas de uma vez, que é o que a paginação
+    // evita. Vale a pena aqui: a alternativa é a pessoa importar, ver "5
+    // músicas importadas" e não achar nenhuma. A paginação continua valendo
+    // para o resto (rolagem, busca, filtro), que é onde a lista é grande sem
+    // estar crescendo.
+    setJanela(
+      cresceu
+        ? { lista: tracks, mostradas: tracks.length }
+        : { lista: tracks, mostradas: POR_PAGINA },
+    )
+  }
   const mostradas = janela.mostradas
   const mais = useCallback(
     () => setJanela((j) => (j.mostradas >= tracks.length ? j : { ...j, mostradas: j.mostradas + POR_PAGINA })),

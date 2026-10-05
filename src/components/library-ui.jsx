@@ -296,7 +296,6 @@ export function TrackPicker({ tracks, playlist, onAdd, onAddMany, onClose }) {
 }
 
 export function DeviceImport({ tracks, selection, onToggle, onSelectAll, importing, onImport, onClose }) {
-  const selCount = Object.values(selection).filter(Boolean).length
   const todas = tracks || []
   // `pasta` = null significa "escolhendo a pasta". Um caminho significa "dentro
   // desta pasta". Nenhum estado -> mostra as musicas direto (APK antigo, que
@@ -308,6 +307,15 @@ export function DeviceImport({ tracks, selection, onToggle, onSelectAll, importi
   // pasta escolhida. Sem os tres casos separados, "Todas" viraria lista vazia.
   const list = pasta === null || pasta === '' ? todas : faixasDaPasta(todas, pasta)
   const pastaAtual = pastas.find((p) => p.caminho === pasta)
+  // Quantas das músicas DESTA pasta estão marcadas. A contagem vem da lista
+  // que está na tela, não do total do aparelho: quem escolhe uma pasta para
+  // pegar as músicas dela não quer a resposta contando o resto do celular.
+  const marcadasDaLista = list.filter((t) => selection?.[t.id]).length
+  const todasMarcadas = list.length > 0 && marcadasDaLista === list.length
+  // O total geral, para o botão de importar. Aqui continua valendo o aparelho
+  // inteiro de propósito: quem marcou músicas em duas pastas espera levar as
+  // duas, e é este número que diz quantas vão entrar.
+  const totalSelecionadas = Object.values(selection || {}).filter(Boolean).length
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -368,12 +376,12 @@ export function DeviceImport({ tracks, selection, onToggle, onSelectAll, importi
               <label className="device-import-all">
                 <input
                   type="checkbox"
-                  checked={list.length > 0 && selCount === list.length}
-                  onChange={(e) => onSelectAll(e.target.checked)}
+                  checked={todasMarcadas}
+                  onChange={(e) => onSelectAll(e.target.checked, list)}
                 />
-                Selecionar todas ({list.length})
+                Selecionar todas desta pasta ({list.length})
               </label>
-              <span className="device-import-count">{selCount} selecionadas</span>
+              <span className="device-import-count">{totalSelecionadas} selecionadas</span>
             </div>
             <div className="playlist-picker-list device-import-list">
               {list.length === 0 && <p className="modal-text">Nenhuma música encontrada aqui.</p>}
@@ -399,12 +407,12 @@ export function DeviceImport({ tracks, selection, onToggle, onSelectAll, importi
               </button>
               <button
                 className="btn-primary"
-                disabled={importing || selCount === 0}
+                disabled={importing || totalSelecionadas === 0}
                 onClick={onImport}
               >
                 {importing
                   ? 'Importando…'
-                  : `Importar${selCount ? ` ${selCount}` : ''} música${selCount !== 1 ? 's' : ''}`}
+                  : `Importar${totalSelecionadas ? ` ${totalSelecionadas}` : ''} música${totalSelecionadas !== 1 ? 's' : ''}`}
               </button>
             </div>
           </>
