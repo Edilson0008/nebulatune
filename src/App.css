@@ -10151,3 +10151,364 @@ button.pet-pill {
   color: rgba(255, 255, 255, 0.45);
   font-variant-numeric: tabular-nums;
 }
+
+/* ================= ELECTROGRAM BACKGROUND ================= */
+.electro-bg-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.electro-bg-fx .bg-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Brilho quente no canto superior direito (o "corpo" do Onda) */
+.electro-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(
+    1100px 480px at 85% -10%,
+    color-mix(in srgb, var(--electro-1, #8b5cf6) 24%, transparent),
+    transparent 72%
+  );
+}
+
+/* Duas orbs grandes que flutuam — cores vivas do tema. O brilho vem do
+   gradiente (não de filter: blur), porque blur em camada que se move
+   sozinho repinta a tela a cada quadro (ver tests-pintura.mjs). */
+.electro-orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform;
+  animation: electro-orb-float 18s ease-in-out infinite alternate;
+}
+
+.electro-orb-1 {
+  z-index: 1;
+  width: min(46vw, 480px);
+  height: min(46vw, 480px);
+  top: -110px;
+  left: -80px;
+  background: radial-gradient(
+    circle,
+    var(--electro-1, #8b5cf6) 0%,
+    color-mix(in srgb, var(--electro-1, #8b5cf6) 55%, transparent) 38%,
+    transparent 72%
+  );
+}
+
+.electro-orb-2 {
+  z-index: 1;
+  width: min(42vw, 440px);
+  height: min(42vw, 440px);
+  bottom: -100px;
+  right: -60px;
+  background: radial-gradient(
+    circle,
+    var(--electro-2, #c084fc) 0%,
+    color-mix(in srgb, var(--electro-2, #c084fc) 55%, transparent) 38%,
+    transparent 72%
+  );
+  animation: electro-orb-float2 22s ease-in-out infinite alternate;
+}
+
+@keyframes electro-orb-float {
+  to {
+    transform: translate(160px, 120px) scale(1.2);
+  }
+}
+
+@keyframes electro-orb-float2 {
+  to {
+    transform: translate(-180px, -100px) scale(1.15);
+  }
+}
+
+.electro-particles {
+  z-index: 4;
+}
+
+.electro-nebula {
+  position: absolute;
+  z-index: 2;
+  border-radius: 50%;
+  animation: electro-nebula-drift 40s ease-in-out infinite alternate;
+  will-change: transform;
+  opacity: var(--nebula-opacity, 0.15);
+  background: radial-gradient(circle, var(--electro-1, #8b5cf6) 0%, transparent 70%);
+}
+
+.electro-nebula-1 {
+  width: 65vw;
+  height: 65vw;
+  left: -12vw;
+  top: -20vw;
+  animation-duration: 42s;
+}
+
+.electro-nebula-2 {
+  width: 58vw;
+  height: 58vw;
+  right: -10vw;
+  top: 20vh;
+  animation-duration: 38s;
+  animation-delay: -10s;
+  background: radial-gradient(circle, var(--electro-2, #c084fc) 0%, transparent 70%);
+}
+
+.electro-nebula-3 {
+  width: 50vw;
+  height: 50vw;
+  left: 25vw;
+  bottom: -25vw;
+  animation-duration: 45s;
+  animation-delay: -20s;
+}
+
+@keyframes electro-nebula-drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(8vw, 5vh) scale(1.15);
+  }
+}
+
+.electro-stars {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+}
+
+.electro-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #f4f2ff;
+  box-shadow: 0 0 6px 1px rgba(244, 242, 255, 0.55);
+  opacity: 0.2;
+  animation-name: electro-twinkle;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes electro-twinkle {
+  0%, 100% {
+    opacity: 0.12;
+    transform: scale(0.7);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+
+/* Flash de batida - tela inteira */
+.electro-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease-out;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--electro-1, #8b5cf6) 45%, transparent) 0%,
+    transparent 70%
+  );
+}
+
+.electro-flash.active {
+  opacity: 1;
+  transition: opacity 0.15s ease-out, opacity 0.4s ease-in;
+}
+
+/* Anel de batida - expande do centro */
+.electro-ring {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.3);
+  transition: transform 0.9s ease-out, opacity 0.9s ease-out;
+  border: 2px solid var(--electro-2, #c084fc);
+  border-radius: 50%;
+  box-shadow: 
+    0 0 20px var(--electro-2, #c084fc),
+    inset 0 0 20px var(--electro-2, #c084fc);
+  margin: 20vh auto;
+  width: 60vh;
+  height: 60vh;
+  max-width: 80vw;
+  max-height: 80vw;
+}
+
+.electro-ring.active {
+  opacity: 0.8;
+  transform: scale(1.8);
+}
+
+/* Modo low-power: desliga efeitos pesados */
+.low-power .electro-bg-fx,
+.low-power .electro-bg-fx .bg-canvas {
+  display: none !important;
+}
+
+.low-power .electro-star,
+.low-power .electro-nebula {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .electro-star,
+  .electro-nebula,
+  .electro-orb,
+  .electro-ring {
+    animation: none !important;
+    transition: none !important;
+  }
+  .electro-flash {
+    transition: none !important;
+  }
+}
+
+/* ==== Efeitos visuais do Onda (só visual, sem mexer no layout) ==== */
+.np-cover {
+  /* Pulsação mais discreta e mais curta: brilho menor, bem mais transparente.
+     A capa "respira" mais devagar, menos brilhante e a aura some mais rápido. */
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.55),
+    0 0 calc(24px + var(--b, 0) * 22px) color-mix(in srgb, var(--npc1) calc(6% + var(--b, 0) * 10%), transparent),
+    0 0 calc(44px + var(--b, 0) * 24px) color-mix(in srgb, var(--npc3) calc(7% + var(--b, 0) * 8%), transparent);
+  transform: perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 0.15s;
+}
+.fx-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  border: 2px solid var(--accent-2);
+  box-shadow: 0 0 18px var(--accent-2);
+  pointer-events: none;
+  animation: fx-ring 0.9s ease-out forwards;
+}
+@keyframes fx-ring { to { transform: scale(1.7); opacity: 0; } }
+.fx-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: inset 0 0 130px color-mix(in srgb, var(--accent) 50%, transparent);
+  transition: opacity 0.6s;
+}
+.fx-flash.on { opacity: 1; transition: none; }
+.fx-rip {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--accent-2) 60%, transparent);
+  transform: scale(0);
+  animation: fx-rip 0.6s ease-out forwards;
+}
+@keyframes fx-rip { to { transform: scale(18); opacity: 0; } }
+.play-btn, .btn-primary { position: relative; overflow: hidden; }
+.np-play { overflow: hidden; }
+
+.np-bar-fill {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.np-bar-thumb {
+  box-shadow: 0 0 12px var(--accent-2), 0 0 0 3px var(--accent), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.np-play {
+  background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--accent-2) 80%, #fff) 0%, var(--accent) 60%, color-mix(in srgb, var(--accent) 70%, #000) 100%);
+  color: #fff;
+  box-shadow: 0 12px 34px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 0 7px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.is-playing .np-play.playing { animation: fx-pulse 1.8s infinite; }
+.play-btn {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.is-playing .play-btn.paused { animation: fx-pulse-sm 1.8s infinite; }
+@keyframes fx-pulse {
+  0% { box-shadow: 0 12px 34px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
+  100% { box-shadow: 0 12px 34px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 0 18px transparent; }
+}
+@keyframes fx-pulse-sm {
+  0% { box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
+  100% { box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 0 12px transparent; }
+}
+.track-row.active {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent), 0 0 22px -6px var(--accent);
+}
+.eq-visualizer {
+  cursor: pointer;
+  box-shadow: inset 0 0 30px -12px var(--accent);
+}
+.low-power .fx-flash, .low-power .fx-ring, .low-power .fx-rip { display: none !important; }
+.low-power .np-play, .low-power .play-btn { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .np-play.playing, .play-btn.paused, .fx-ring, .fx-rip { animation: none !important; }
+  .np-cover { transform: none; }
+}
+
+.settings-select {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+.settings-select option { background: #161226; color: #e7e0f2; }
+
+/* ==== Tela "Tocando agora": rolar até a letra ====
+   Quando a capa + controles ocupam a tela inteira, as letras ficavam
+   espremidas num pedaço minúsculo e a tela não rolava (overflow hidden).
+   Agora a tela rola; o topo fica fixo no lugar (sticky) e as letras sempre
+   têm um pedaço visível (min-height) com rolagem interna para a letra
+   sincronizada. O painel do equalizador vira fixo para continuar cobrindo a
+   tela mesmo com a rolagem ativa. */
+.now-playing {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.np-top {
+  position: sticky;
+  top: 0;
+  flex-shrink: 0;
+  z-index: 6;
+  background: linear-gradient(180deg, rgba(14, 11, 26, 0.94) 0%, rgba(14, 11, 26, 0.82) 74%, rgba(14, 11, 26, 0));
+}
+
+.np-main {
+  flex-shrink: 0;
+}
+
+.np-lyrics {
+  flex: 1 0 auto;
+  min-height: 34vh;
+  max-height: 58vh;
+}
+
+.np-eq-sheet {
+  position: fixed;
+  inset: 0;
+}

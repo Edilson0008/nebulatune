@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '3.2.44',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'novo', text: 'O espectrograma da parte de baixo saiu da tela: o fundo do app ficou mais limpo e mais leve.' },
+      { type: 'novo', text: 'A luz que pulsa em volta da capa agora respira bem mais devagar e mais suave, sem apagar e acender forte.' },
+      { type: 'correcao', text: 'As partículas do fundo agora gastam menos processamento do aparelho, sem perder a animação.' },
+    ],
+  },
+  {
     version: '3.2.43',
     date: 'Outubro de 2026',
     items: [

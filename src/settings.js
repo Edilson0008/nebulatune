@@ -74,6 +74,8 @@ const DEFAULTS = {
   cosmosAnimated: true,
   petSound: true,
   lowPower: false,
+  fxReactive: true,
+  rainbow: false,
 }
 
 function merge(raw) {
@@ -95,6 +97,25 @@ export function useSettings() {
   useEffect(() => {
     document.documentElement.classList.toggle('low-power', settings.lowPower === true)
   }, [settings.lowPower])
+
+  // Cores vivas: o tema gira sozinho pelas cores. Ao desligar, volta ao tema escolhido.
+  const rainbow = settings.rainbow === true && settings.lowPower !== true
+  useEffect(() => {
+    if (!rainbow) return undefined
+    const st = document.documentElement.style
+    let hue = 0
+    const id = setInterval(() => {
+      hue = (hue + 1.5) % 360
+      st.setProperty('--accent', `hsl(${hue} 100% 64%)`)
+      st.setProperty('--accent-2', `hsl(${(hue + 70) % 360} 100% 62%)`)
+    }, 80)
+    return () => {
+      clearInterval(id)
+      const a = resolveAccent({ accent: accentKey, customAccent: customAccentValue })
+      st.setProperty('--accent', a.accent)
+      st.setProperty('--accent-2', a.accent2)
+    }
+  }, [rainbow, accentKey, customAccentValue])
 
   useEffect(() => {
     writeLocal('nt.settings', settings)

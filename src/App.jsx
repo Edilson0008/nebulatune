@@ -10,14 +10,16 @@ import { importDeviceTrack, scanDeviceTracks } from './mediaImport'
 import { PET_NEEDS_INFO, pickNeedNudge, pickPetNudge } from './petNudges'
 import { ProgressProvider } from './progress'
 import { MOOD_KEYS, corPublicavel, usePetStats, useSettings } from './settings'
+import { setPlayState } from './lib/play-state.js'
 import { APK_URL, fetchLatestVersion, installUpdate, isNewer, markUpdatePrompted, notifyUpdateAvailable, requestNotificationsPermission, wasUpdatePrompted } from './updater'
 import { leEstadoDoAlarme, sincronizaAlarmeDoGatinho } from './pet-alarm'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { App as CapacitorApp } from '@capacitor/app'
 import { Share as CapShare } from '@capacitor/share'
 import { Cover } from './components/Cover.jsx'
-import { BackgroundFX } from './components/background.jsx'
+import { ElectrogramBackground } from './components/ElectrogramBackground.jsx'
 import { Equalizer } from './components/equalizer.jsx'
+import { FxLayer } from './components/fx-layer.jsx'
 import { ChangelogModal, DeviceImport, NameModal, PlaylistPicker, QuickTrackGrid, Sidebar, TrackPicker } from './components/library-ui.jsx'
 import { MediaSessionBridge } from './components/media-session-bridge.jsx'
 import { MicButton } from './components/mic-button.jsx'
@@ -30,6 +32,7 @@ import { TrackEdit, TrackList } from './components/track-list.jsx'
 import { useMoodDetector } from './hooks/use-mood-detector.js'
 import { useOnlinePlayer } from './hooks/use-online-player.js'
 import { usePlayer } from './hooks/use-player.js'
+import { useAudioAnalysis } from './hooks/use-audio-analysis.js'
 import { fetchItunesCover, makeThumb, compartilharCapa } from './lib/cover.js'
 import { IS_NATIVE } from './lib/env.js'
 import { AUDIO_RE, IMAGE_RE, baseName, cleanArtist, cleanTitle, extFromImageType, extFromType, parseFileName } from './lib/filename.js'
@@ -1152,6 +1155,12 @@ function App() {
   )
   const mood = useMoodDetector({ playing: !!playing, sig: track?.id })
   const displayPlaying = onlineActive ? onlinePlaying : playing
+  const { bass, beat } = useAudioAnalysis(displayPlaying)
+  // Estado real de reprodução para os efeitos (visualizador e FxLayer): eles
+  // não podem usar engine.isPlaying(), que só acompanha a demo sintetizada.
+  useEffect(() => {
+    setPlayState(!!displayPlaying)
+  }, [displayPlaying])
   const displayToggle = onlineActive ? toggleOnline : toggle
   const displaySeek = onlineActive ? seekOnline : seek
   const recentRow = useMemo(
@@ -2192,8 +2201,15 @@ const shareTrack = useCallback(
       <Sidebar view={view} setView={setView} onPickFiles={() => fileInputRef.current?.click()} />
 
       {!appSettings.lowPower && (
-        <BackgroundFX bgAnimated={appSettings.bgAnimated} cosmosAnimated={appSettings.cosmosAnimated} />
+        <ElectrogramBackground
+          bgAnimated={appSettings.bgAnimated}
+          cosmosAnimated={appSettings.cosmosAnimated}
+          playing={displayPlaying}
+          bass={bass}
+          beat={beat}
+        />
       )}
+      {!appSettings.lowPower && appSettings.fxReactive !== false && <FxLayer />}
 
       <input
         ref={fileInputRef}

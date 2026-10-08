@@ -3,6 +3,7 @@ import { APP_VERSION, SITE_URL } from '../app-config'
 import { blobToDataUrl, dataUrlToBlob, pickRestorableTracks } from '../backup'
 import { APK_URL, fetchLatestVersion, installUpdate, isNewer } from '../updater'
 import { fmtBytes } from '../lib/format.js'
+import { VizModeRow } from './viz-mode-row.jsx'
 
 export function NavIcon({ name }) {
   const paths = {
@@ -308,6 +309,38 @@ export function SettingsView({ settings, api, library, isIOS, isAppInstalled, in
             <span className="eq-switch-knob" />
           </button>
         </div>
+
+        <div className="settings-row">
+          <div className="settings-info">
+            <span className="settings-label">Efeitos ao ritmo</span>
+            <span className="settings-desc">Capa pulsa com os graves, anel e flash nas batidas, capa em 3D e ondas nos botões.</span>
+          </div>
+          <button
+            className={`eq-switch ${settings.fxReactive !== false ? 'on' : ''}`}
+            role="switch"
+            aria-checked={settings.fxReactive !== false}
+            onClick={() => api.set('fxReactive', settings.fxReactive === false)}
+          >
+            <span className="eq-switch-knob" />
+          </button>
+        </div>
+
+        <div className="settings-row">
+          <div className="settings-info">
+            <span className="settings-label">Cores vivas</span>
+            <span className="settings-desc">As cores do tema mudam sozinhas, em ciclo.</span>
+          </div>
+          <button
+            className={`eq-switch ${settings.rainbow ? 'on' : ''}`}
+            role="switch"
+            aria-checked={!!settings.rainbow}
+            onClick={() => api.set('rainbow', !settings.rainbow)}
+          >
+            <span className="eq-switch-knob" />
+          </button>
+        </div>
+
+        <VizModeRow />
       </div>
 
       <div className="settings-card">
