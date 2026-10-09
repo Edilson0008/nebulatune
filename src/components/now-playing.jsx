@@ -119,16 +119,14 @@ export const NowPlaying = memo(function NowPlaying({
   }
 
   // A letra segue a música ("rola sozinho") centrando a linha ativa em tempo
-  // real, igual ao 3.2.43: o acompanhamento acontece sempre, sem desligar por
-  // toque — no 3.2.45 qualquer toque na área da letra (até para pular de linha)
-  // parava a rolagem automática e a letra sumia para baixo.
+  // real. Usa scrollIntoView(block:'center') com ajuste SECO (behavior:'auto',
+  // não 'smooth'): suavizar a cada troca de linha atrasa no aparelho fraco e a
+  // linha ativa ia ficando cada vez mais para baixo do centro da caixa.
   useEffect(() => {
-    const box = lyricsRef.current
-    if (activeIndex < 0 || !box) return
-    const line = box.querySelectorAll('.np-lyric')[activeIndex]
+    if (activeIndex < 0) return
+    const line = lyricsRef.current?.querySelectorAll('.np-lyric')[activeIndex]
     if (!line) return
-    const top = line.offsetTop - box.clientHeight / 2 + line.clientHeight / 2
-    box.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+    line.scrollIntoView({ block: 'center', behavior: 'auto' })
   }, [activeIndex])
 
   useEffect(() => {
@@ -418,7 +416,7 @@ export const NowPlaying = memo(function NowPlaying({
           />
         </div>
         <div className="np-cover">
-          <Cover colors={track.cover} image={track.coverUrl} size="min(56vw, 260px)" radius={22} />
+          <Cover colors={track.cover} image={track.coverUrl} size="clamp(150px, 46vw, 240px)" radius={22} />
         </div>
 
         <div className="np-info">

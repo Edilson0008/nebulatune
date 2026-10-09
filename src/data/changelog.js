@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '3.2.47',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'A letra do karaokê ficava lá embaixo da tela: a rolagem suave atrasava no aparelho e a linha ativa ia descendo para fora do centro da caixa. Agora a linha ativa é centralizada de forma firme (sem o atraso) e, em telas mais baixas, o topo do "Tocando agora" fica mais compacto para a letra ganhar espaço e chegar mais perto do meio da tela.' },
+    ],
+  },
+  {
     version: '3.2.46',
     date: 'Outubro de 2026',
     items: [
