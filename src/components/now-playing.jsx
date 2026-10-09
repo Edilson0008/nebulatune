@@ -118,15 +118,20 @@ export const NowPlaying = memo(function NowPlaying({
     }
   }
 
-  // A letra segue a música ("rola sozinho") centrando a linha ativa em tempo
-  // real. Usa scrollIntoView(block:'center') com ajuste SECO (behavior:'auto',
-  // não 'smooth'): suavizar a cada troca de linha atrasa no aparelho fraco e a
-  // linha ativa ia ficando cada vez mais para baixo do centro da caixa.
+  // A letra segue a música ("rola sozinha") com a linha ativa branca ancorada
+  // pertinho do TOPO da caixa: a pessoa lê de cima para baixo e não é obrigada
+  // a olhar a letra lá embaixo. Ajuste seco (behavior:'auto', sem smooth, que
+  // atrasava e "puxava" o conteúdo para baixo). Sem folga gigante acima da
+  // primeira linha — o começo da letra já aparece no topo, não abaixo do troço
+  // da caixa.
   useEffect(() => {
     if (activeIndex < 0) return
-    const line = lyricsRef.current?.querySelectorAll('.np-lyric')[activeIndex]
+    const box = lyricsRef.current
+    if (!box) return
+    const line = box.querySelectorAll('.np-lyric')[activeIndex]
     if (!line) return
-    line.scrollIntoView({ block: 'center', behavior: 'auto' })
+    const topo = Math.max(0, line.offsetTop - box.clientHeight * 0.12)
+    box.scrollTo({ top: topo, behavior: 'auto' })
   }, [activeIndex])
 
   useEffect(() => {
@@ -416,7 +421,7 @@ export const NowPlaying = memo(function NowPlaying({
           />
         </div>
         <div className="np-cover">
-          <Cover colors={track.cover} image={track.coverUrl} size="clamp(150px, 46vw, 240px)" radius={22} />
+          <Cover colors={track.cover} image={track.coverUrl} size="min(56vw, 260px)" radius={22} />
         </div>
 
         <div className="np-info">

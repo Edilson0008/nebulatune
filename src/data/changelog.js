@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '3.2.48',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'A letra do karaokê agora fica branca (a que está rolando) lá em cima da caixa, rolndo sozinha e sincronizada: você lê de cima para baixo, sem ser obrigado a olhar a letra no rodapé. Também removi a folga que empurrava o começo da letra para fora da tela e o ajuste deixou de puxar o conteúdo para baixo.' },
+    ],
+  },
+  {
     version: '3.2.47',
     date: 'Outubro de 2026',
     items: [

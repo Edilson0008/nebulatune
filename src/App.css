@@ -3829,12 +3829,10 @@ button {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  /* Folga vertical de verdade para a primeira e a última linha alcançarem o
-     meio da tela. Antes era `30% 0`: em CSS, porcentagem em padding VERTICAL é
-     calculada sobre a LARGURA, não a altura — com isso a primeira linha e a
-     última nunca chegavam ao centro em tempo real e a letra ativa ficava presa
-     no limite de baixo da caixa. */
-  padding: min(45vh, 320px) 0;
+  /* Sem folga gigante: a linha ativa fica ancorada perto do TOPO da caixa e a
+     lista precisa só de um respiro mínimo. A folga enorme empurrava o começo
+     da letra para fora da tela (a pessoa era obrigada a ver lá embaixo). */
+  padding: 6px 0 10px;
 }
 
 .np-lyric {
@@ -4099,35 +4097,6 @@ button {
 
   .np-eq-sheet-scroll {
     padding: 0 16px 24px;
-  }
-}
-
-/* Telas mais baixas (celulares em retrato): o topo fica mais compacto para
-   a caixa da letra ficar mais alta — assim a linha ativa fica centralizada
-   mais perto do meio da tela, em vez de lá embaixo. */
-@media (max-height: 850px) {
-  .np-top {
-    padding: 8px 16px;
-    padding-top: calc(8px + env(safe-area-inset-top));
-  }
-
-  .np-main {
-    gap: 9px;
-    padding-top: 2px;
-    padding-bottom: 6px;
-  }
-
-  .np-title {
-    margin-bottom: 2px;
-  }
-
-  .np-sync {
-    padding: 9px 14px 9px;
-    gap: 7px;
-  }
-
-  .np-lyrics {
-    padding-top: 2px;
   }
 }
 
