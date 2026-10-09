@@ -118,9 +118,28 @@ export const NowPlaying = memo(function NowPlaying({
     }
   }
 
+  // O app segue a música ("rola sozinho") centrando a linha ativa. Assim que a
+  // pessoa segura a rolagem para ler antes, o app PARA de puxar e respeita até
+  // a próxima faixa — o componente remonta a cada troca de música, então o
+  // acompanhamento volta sozinho num caso e no outro sem preservar estado.
+  const seguindoRef = useRef(true)
   useEffect(() => {
     const box = lyricsRef.current
-    if (activeIndex < 0 || !box) return
+    if (!box) return undefined
+    const parar = () => {
+      seguindoRef.current = false
+    }
+    box.addEventListener('pointerdown', parar)
+    box.addEventListener('wheel', parar, { passive: true })
+    return () => {
+      box.removeEventListener('pointerdown', parar)
+      box.removeEventListener('wheel', parar)
+    }
+  }, [])
+
+  useEffect(() => {
+    const box = lyricsRef.current
+    if (activeIndex < 0 || !box || !seguindoRef.current) return
     const line = box.querySelectorAll('.np-lyric')[activeIndex]
     if (!line) return
     const top = line.offsetTop - box.clientHeight / 2 + line.clientHeight / 2

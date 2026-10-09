@@ -1,5 +1,14 @@
 export const CHANGELOG = [
   {
+    version: '3.2.45',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'A letra volta a acompanhar a música centrada no meio da tela, em tempo real. Antes ela travava presa no limite de baixo quando a faixa chegava ao fim.' },
+      { type: 'correcao', text: 'Se você segurar a letra para ler antes, o app não fica mais puxando a rolagem de volta para acompanhar — ele volta a acompanhar sozinho na próxima música.' },
+      { type: 'novo', text: 'As auras que pulsavam em volta da capa do "Tocando agora" foram removidas: a capa não fica mais respirando com os graves nem soltando anéis de batida.' },
+    ],
+  },
+  {
     version: '3.2.44',
     date: 'Outubro de 2026',
     items: [

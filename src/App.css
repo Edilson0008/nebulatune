@@ -3180,37 +3180,6 @@ button {
   animation: np-in 0.28s ease;
 }
 
-.now-playing::before {
-  content: '';
-  position: absolute;
-  inset: -12%;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(38% 30% at 14% 10%, var(--npc1) 0%, transparent 70%),
-    radial-gradient(34% 28% at 86% 90%, var(--npc2) 0%, transparent 70%),
-    radial-gradient(30% 26% at 68% 12%, var(--npc3) 0%, transparent 74%);
-  /* SEM `filter: blur()`: esta camada ocupa a tela INTEIRA e anima transform
-     sem parar. Um blur de 30px aqui tinha de ser recalculado a cada quadro, e
-     cada quadro e uma repintura: era isso que travava o "Tocando agora" no
-     aparelho fraco. Os proprios radial-graduates ja sao suaves, entao o
-     desenho final fica o mesmo. */
-  opacity: 0.3;
-  animation: np-glow-drift 16s ease-in-out infinite alternate;
-  will-change: transform, opacity;
-}
-
-@keyframes np-glow-drift {
-  0% {
-    transform: translate3d(-1.6%, -1.2%, 0) scale(1.04);
-    opacity: 0.26;
-  }
-  100% {
-    transform: translate3d(1.6%, 1.4%, 0) scale(1.14);
-    opacity: 0.44;
-  }
-}
-
 @keyframes np-in {
   from {
     opacity: 0;
@@ -3422,10 +3391,7 @@ button {
 .np-cover {
   position: relative;
   border-radius: 24px;
-  box-shadow:
-    0 28px 70px rgba(0, 0, 0, 0.55),
-    0 0 60px color-mix(in srgb, var(--npc1) 16%, transparent),
-    0 0 110px color-mix(in srgb, var(--npc3) 18%, transparent);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.55);
   line-height: 0;
   flex-shrink: 0;
   animation: np-cover-in 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -3863,7 +3829,12 @@ button {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 30% 0;
+  /* Folga vertical de verdade para a primeira e a última linha alcançarem o
+     meio da tela. Antes era `30% 0`: em CSS, porcentagem em padding VERTICAL é
+     calculada sobre a LARGURA, não a altura — com isso a primeira linha e a
+     última nunca chegavam ao centro em tempo real e a letra ativa ficava presa
+     no limite de baixo da caixa. */
+  padding: min(45vh, 320px) 0;
 }
 
 .np-lyric {
@@ -4085,10 +4056,7 @@ button {
   }
 
   .np-cover {
-    box-shadow:
-      0 20px 56px rgba(0, 0, 0, 0.55),
-      0 0 56px rgba(0, 255, 135, 0.16),
-      0 0 100px rgba(139, 92, 246, 0.22);
+    box-shadow: 0 20px 56px rgba(0, 0, 0, 0.55);
   }
 
   .np-controls {
@@ -10382,25 +10350,13 @@ button.pet-pill {
 
 /* ==== Efeitos visuais do Onda (só visual, sem mexer no layout) ==== */
 .np-cover {
-  /* Pulsação mais discreta e mais curta: brilho menor, bem mais transparente.
-     A capa "respira" mais devagar, menos brilhante e a aura some mais rápido. */
-  box-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.55),
-    0 0 calc(24px + var(--b, 0) * 22px) color-mix(in srgb, var(--npc1) calc(6% + var(--b, 0) * 10%), transparent),
-    0 0 calc(44px + var(--b, 0) * 24px) color-mix(in srgb, var(--npc3) calc(7% + var(--b, 0) * 8%), transparent);
+  /* Sem aura pulsante na capa: só a sombra profunda que dá profundidade.
+     (O brilho que "respirava" com os graves usava var(--b) e o anel de batida
+     usava .fx-ring — ambos removidos: a capa ficava pulsando o tempo todo.) */
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
   transform: perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
   transition: transform 0.15s;
 }
-.fx-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 24px;
-  border: 2px solid var(--accent-2);
-  box-shadow: 0 0 18px var(--accent-2);
-  pointer-events: none;
-  animation: fx-ring 0.9s ease-out forwards;
-}
-@keyframes fx-ring { to { transform: scale(1.7); opacity: 0; } }
 .fx-flash {
   position: fixed;
   inset: 0;
@@ -10459,10 +10415,10 @@ button.pet-pill {
   cursor: pointer;
   box-shadow: inset 0 0 30px -12px var(--accent);
 }
-.low-power .fx-flash, .low-power .fx-ring, .low-power .fx-rip { display: none !important; }
+.low-power .fx-flash, .low-power .fx-rip { display: none !important; }
 .low-power .np-play, .low-power .play-btn { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
-  .np-play.playing, .play-btn.paused, .fx-ring, .fx-rip { animation: none !important; }
+  .np-play.playing, .play-btn.paused, .fx-rip { animation: none !important; }
   .np-cover { transform: none; }
 }
 
