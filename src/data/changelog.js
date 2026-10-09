@@ -1,5 +1,12 @@
 export const CHANGELOG = [
   {
+    version: '3.2.46',
+    date: 'Outubro de 2026',
+    items: [
+      { type: 'correcao', text: 'A letra volta a seguir a música sozinha de verdade: na 3.2.45, qualquer toque na área da letra (até para pular de linha) desligava o acompanhamento automático e a letra continuava descendo para fora da tela. Agora ela segue sempre, igual às versões antigas, centrada no meio da tela em tempo real.' },
+    ],
+  },
+  {
     version: '3.2.45',
     date: 'Outubro de 2026',
     items: [
